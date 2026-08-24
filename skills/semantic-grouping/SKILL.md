@@ -1,0 +1,25 @@
+---
+name: semantic-grouping
+description: Group a Git commit range into review-oriented semantic changes using the semantic-diff CLI. Use when creating or updating a coverage-complete groups.json for this repository; do not use it to rewrite Git history.
+---
+
+# Semantic Grouping
+
+Create `groups.json` as a derived review layer. Preserve commits and repository history. Let the CLI extract and validate facts; use semantic judgment only for grouping, titles, summaries, and review order.
+
+## Workflow
+
+1. Run `semantic-diff commits <base>..<head> --json` to understand the change narrative.
+2. Run `semantic-diff fragments <base>..<head> --json` to get the lightweight inventory. Do not load the complete diff up front.
+3. Infer tentative concerns from commit subjects, paths, and ranges. Inspect only relevant fragments with `semantic-diff show <id> --json`. The `fragments` command must run first because `show` reads its latest inventory.
+4. Create a small number of cohesive groups. Assign each fragment one primary membership even when it relates to several concerns. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
+5. Write version 1 JSON with exact resolved `base_sha` and `head_sha`, unique group IDs, concise titles and summaries, optional numeric review order, and `fragment_ids`.
+6. Run `semantic-diff validate groups.json --json`. Do not report completion until it succeeds. Investigate every unknown, duplicate, or unassigned fragment; use a fallback group only after reasonable inspection.
+
+The required shape is:
+
+```json
+{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"Explains the review concern.","order":1,"fragment_ids":["F-..."]}]}
+```
+
+Every extracted fragment must occur exactly once across all groups.
