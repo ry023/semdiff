@@ -22,8 +22,9 @@ type FragmentView struct {
 	LowerContextHTML template.HTML
 }
 type FileView struct {
-	Path      string
-	Fragments []FragmentView
+	Path       string
+	HeaderHTML template.HTML
+	Fragments  []FragmentView
 }
 type GroupView struct {
 	ID, Title, Summary string
@@ -57,23 +58,20 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 	allFiles := map[string]bool{}
 	for _, group := range g.Groups {
 		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, Order: group.Order}
-		fileMap := map[string][]FragmentView{}
+		fileMap := map[string][]model.DiffFragment{}
 		var paths []string
 		for _, id := range group.FragmentIDs {
 			f := byID[id]
 			if _, ok := fileMap[f.Path]; !ok {
 				paths = append(paths, f.Path)
 			}
-			fileMap[f.Path] = append(fileMap[f.Path], buildFragmentView(f, fileContents[f.Path], byPath[f.Path]))
+			fileMap[f.Path] = append(fileMap[f.Path], f)
 			allFiles[f.Path] = true
 			gv.FragmentCount++
 		}
 		sort.Strings(paths)
 		for _, path := range paths {
-			sort.SliceStable(fileMap[path], func(i, j int) bool {
-				return fragmentStart(fileMap[path][i].DiffFragment) < fragmentStart(fileMap[path][j].DiffFragment)
-			})
-			gv.Files = append(gv.Files, FileView{Path: path, Fragments: fileMap[path]})
+			gv.Files = append(gv.Files, buildFileView(path, fileMap[path], fileContents[path], byPath[path]))
 		}
 		p.Groups = append(p.Groups, gv)
 		p.FragmentCount += gv.FragmentCount
@@ -156,6 +154,42 @@ func buildFragmentView(f model.DiffFragment, content string, siblings []model.Di
 	return view
 }
 
+func buildFileView(path string, fragments []model.DiffFragment, content string, siblings []model.DiffFragment) FileView {
+	sort.SliceStable(fragments, func(i, j int) bool {
+		return fragmentStart(fragments[i]) < fragmentStart(fragments[j])
+	})
+	file := FileView{Path: path}
+	for _, fragment := range fragments {
+		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, siblings))
+	}
+	if len(file.Fragments) == 0 {
+		return file
+	}
+	file.HeaderHTML = file.Fragments[0].HeaderHTML
+	for i := range file.Fragments {
+		file.Fragments[i].HeaderHTML = ""
+	}
+	globalIndex := map[string]int{}
+	for i, fragment := range siblings {
+		globalIndex[fragment.ID] = i
+	}
+	lines := sourceLines(content)
+	for i := 1; i < len(file.Fragments); i++ {
+		previous := &file.Fragments[i-1]
+		current := &file.Fragments[i]
+		if globalIndex[current.ID] != globalIndex[previous.ID]+1 {
+			continue
+		}
+		start := fragmentStart(previous.DiffFragment) - 1 + fragmentLines(previous.DiffFragment)
+		end := fragmentStart(current.DiffFragment) - 1
+		start = max(0, min(start, len(lines)))
+		end = max(start, min(end, len(lines)))
+		previous.LowerContextHTML = expandableGap(lines[start:end])
+		current.UpperContextHTML = ""
+	}
+	return file
+}
+
 func expandableContext(lines []string, direction string) template.HTML {
 	if len(lines) == 0 {
 		return ""
@@ -177,6 +211,23 @@ func expandableContext(lines []string, direction string) template.HTML {
 	if direction == "up" {
 		out.WriteString(`<button class="expand-lines" type="button" data-direction="up">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
 	}
+	out.WriteString(`</span>`)
+	return template.HTML(out.String())
+}
+
+func expandableGap(lines []string) template.HTML {
+	if len(lines) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString(`<span class="context-expand context-gap">`)
+	out.WriteString(`<button class="expand-lines" type="button" data-direction="down">↓ Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
+	for _, line := range lines {
+		out.WriteString(`<span class="context-hidden" hidden> `)
+		out.WriteString(template.HTMLEscapeString(line))
+		out.WriteString(`</span>`)
+	}
+	out.WriteString(`<button class="expand-lines" type="button" data-direction="up">↑ Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
 	out.WriteString(`</span>`)
 	return template.HTML(out.String())
 }

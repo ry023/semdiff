@@ -70,10 +70,20 @@ func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
 	if len(fragments) != 2 {
 		t.Fatalf("got %d fragments, want 2", len(fragments))
 	}
-	if !strings.Contains(string(fragments[0].LowerContextHTML), "Show 15 lines below") {
-		t.Fatalf("first fragment crossed the next fragment boundary: %q", fragments[0].LowerContextHTML)
+	gap := string(fragments[0].LowerContextHTML)
+	if !strings.Contains(gap, "Show 15 lines below") || !strings.Contains(gap, "Show 15 lines above") {
+		t.Fatalf("fragments do not share a bidirectional context gap: %q", gap)
 	}
-	if !strings.Contains(string(fragments[1].UpperContextHTML), "Show 15 lines above") {
-		t.Fatalf("second fragment crossed the previous fragment boundary: %q", fragments[1].UpperContextHTML)
+	if fragments[1].UpperContextHTML != "" {
+		t.Fatalf("second fragment duplicated the shared context gap: %q", fragments[1].UpperContextHTML)
+	}
+	handler, err := Handler(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
+	if got := strings.Count(response.Body.String(), "<pre>"); got != 1 {
+		t.Fatalf("same-file fragments rendered in %d diff views, want 1", got)
 	}
 }
