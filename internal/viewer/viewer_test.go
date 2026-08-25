@@ -26,6 +26,9 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, "Semantic Changes") || !strings.Contains(body, "Start here") {
 		t.Fatal("missing viewer content")
 	}
+	if !strings.Contains(body, `data-view="unified"`) || !strings.Contains(body, `data-view="split"`) || !strings.Contains(body, "semdiff-view") {
+		t.Fatal("missing page-wide unified/split view controls")
+	}
 	fragment := p.Groups[0].Files[0].Fragments[0]
 	upper, lower := string(fragment.UpperContextHTML), string(fragment.LowerContextHTML)
 	if !strings.Contains(upper, "Show 4 lines above") || !strings.Contains(lower, "Show 13 lines below") {
@@ -66,11 +69,14 @@ func TestColorPatchDoesNotAddBlankRows(t *testing.T) {
 
 func TestColorPatchLineNumbers(t *testing.T) {
 	html := string(colorPatch("@@ -7,2 +7,2 @@\n-old\n+new\n context\n"))
-	if strings.Count(html, `<span class="line-number">7</span>`) != 2 {
+	if strings.Count(html, `<span class="line-number unified-cell">7</span>`) != 2 {
 		t.Fatalf("deletion and addition should use line 7: %q", html)
 	}
-	if !strings.Contains(html, `<span class="line-number">8</span>`) {
+	if !strings.Contains(html, `<span class="line-number unified-cell">8</span>`) {
 		t.Fatalf("context line should advance to line 8: %q", html)
+	}
+	if !strings.Contains(html, `<span class="line-number split-cell old-number">7</span>`) || !strings.Contains(html, `<span class="line-number split-cell new-number">7</span>`) {
+		t.Fatalf("split view should contain old and new line numbers: %q", html)
 	}
 }
 

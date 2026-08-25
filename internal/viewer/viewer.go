@@ -190,16 +190,37 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 	return file
 }
 
-func appendDiffRow(out *strings.Builder, line, class, lineNumber string, hidden bool) {
+func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber string, hidden bool) {
 	out.WriteString(`<span class="diff-row ` + class)
 	if hidden {
 		out.WriteString(` context-hidden" hidden>`)
 	} else {
 		out.WriteString(`">`)
 	}
-	out.WriteString(`<span class="line-number">` + lineNumber + `</span><span class="line-code">`)
-	out.WriteString(template.HTMLEscapeString(line))
-	out.WriteString(`</span></span>`)
+	unifiedNumber := newNumber
+	if unifiedNumber == "" {
+		unifiedNumber = oldNumber
+	}
+	escaped := template.HTMLEscapeString(line)
+	out.WriteString(`<span class="line-number unified-cell">` + unifiedNumber + `</span><span class="line-code unified-cell">`)
+	out.WriteString(escaped)
+	out.WriteString(`</span>`)
+	if oldNumber == "" && newNumber == "" {
+		out.WriteString(`<span class="split-wide">` + escaped + `</span>`)
+	} else {
+		oldCode, newCode := "", ""
+		switch class {
+		case "add":
+			newCode = escaped
+		case "del":
+			oldCode = escaped
+		default:
+			oldCode, newCode = escaped, escaped
+		}
+		out.WriteString(`<span class="line-number split-cell old-number">` + oldNumber + `</span><span class="line-code split-cell old-code">` + oldCode + `</span>`)
+		out.WriteString(`<span class="line-number split-cell new-number">` + newNumber + `</span><span class="line-code split-cell new-code">` + newCode + `</span>`)
+	}
+	out.WriteString(`</span>`)
 }
 
 func expandableContext(lines []string, firstLine int, direction string) template.HTML {
@@ -216,7 +237,8 @@ func expandableContext(lines []string, firstLine int, direction string) template
 		out.WriteString(`<button class="expand-lines" type="button" data-direction="down">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
 	}
 	for i, line := range lines {
-		appendDiffRow(&out, " "+line, "ctx", strconv.Itoa(firstLine+i), true)
+		number := strconv.Itoa(firstLine + i)
+		appendDiffRow(&out, " "+line, "ctx", number, number, true)
 	}
 	if direction == "up" {
 		out.WriteString(`<button class="expand-lines" type="button" data-direction="up">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
@@ -233,7 +255,8 @@ func expandableGap(lines []string, firstLine int) template.HTML {
 	out.WriteString(`<span class="context-expand context-gap">`)
 	out.WriteString(`<button class="expand-lines" type="button" data-direction="down">↓ Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
 	for i, line := range lines {
-		appendDiffRow(&out, " "+line, "ctx", strconv.Itoa(firstLine+i), true)
+		number := strconv.Itoa(firstLine + i)
+		appendDiffRow(&out, " "+line, "ctx", number, number, true)
 	}
 	out.WriteString(`<button class="expand-lines" type="button" data-direction="up">↑ Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
 	out.WriteString(`</span>`)
@@ -248,7 +271,7 @@ func colorPatch(patch string) template.HTML {
 	var out strings.Builder
 	oldLine, newLine, inHunk := 0, 0, false
 	for _, line := range strings.Split(patch, "\n") {
-		class, number := "ctx", ""
+		class, oldNumber, newNumber := "ctx", "", ""
 		switch {
 		case strings.HasPrefix(line, "@@ "):
 			class = "hunk"
@@ -257,17 +280,17 @@ func colorPatch(patch string) template.HTML {
 		case strings.HasPrefix(line, "diff "):
 			class = "meta"
 		case inHunk && strings.HasPrefix(line, "+"):
-			class, number = "add", strconv.Itoa(newLine)
+			class, newNumber = "add", strconv.Itoa(newLine)
 			newLine++
 		case inHunk && strings.HasPrefix(line, "-"):
-			class, number = "del", strconv.Itoa(oldLine)
+			class, oldNumber = "del", strconv.Itoa(oldLine)
 			oldLine++
 		case inHunk && strings.HasPrefix(line, " "):
-			number = strconv.Itoa(newLine)
+			oldNumber, newNumber = strconv.Itoa(oldLine), strconv.Itoa(newLine)
 			oldLine++
 			newLine++
 		}
-		appendDiffRow(&out, line, class, number, false)
+		appendDiffRow(&out, line, class, oldNumber, newNumber, false)
 	}
 	return template.HTML(out.String())
 }
