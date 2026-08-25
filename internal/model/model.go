@@ -26,12 +26,18 @@ type Commit struct {
 }
 
 type SemanticGroup struct {
-	ID          string              `json:"id"`
-	Title       string              `json:"title"`
-	Summary     string              `json:"summary"`
-	Order       *int                `json:"order,omitempty"`
-	Fragments   []FragmentReference `json:"fragments,omitempty"`
-	FragmentIDs []string            `json:"fragment_ids,omitempty"`
+	ID             string              `json:"id"`
+	Title          string              `json:"title"`
+	Summary        string              `json:"summary"`
+	Order          *int                `json:"order,omitempty"`
+	FileCategories []FileCategory      `json:"file_categories,omitempty"`
+	Fragments      []FragmentReference `json:"fragments,omitempty"`
+	FragmentIDs    []string            `json:"fragment_ids,omitempty"`
+}
+
+type FileCategory struct {
+	Path     string `json:"path"`
+	Category string `json:"category"`
 }
 
 // FragmentReference is the semantic annotation attached to a fragment in a

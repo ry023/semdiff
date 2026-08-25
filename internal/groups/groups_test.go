@@ -31,6 +31,36 @@ func TestValidateDescribedFragments(t *testing.T) {
 	}
 }
 
+func TestValidateFileCategories(t *testing.T) {
+	inv := model.Inventory{BaseSHA: "aaa", HeadSHA: "bbb", Fragments: []model.DiffFragment{{ID: "F1", Path: "src/a.ts"}, {ID: "F2", Path: "src/a.ts"}, {ID: "F3", Path: "src/a.test.ts"}}}
+	g := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "g", Title: "Group", FileCategories: []model.FileCategory{{Path: "src/a.ts", Category: "logic"}, {Path: "src/a.test.ts", Category: "test"}}, FragmentIDs: []string{"F1", "F2", "F3"}}}}
+	report := ValidateReport(g, inv)
+	if len(report.Errors) != 0 || len(report.Warnings) != 0 {
+		t.Fatalf("valid file categories produced report: %+v", report)
+	}
+
+	g.Groups[0].FileCategories = []model.FileCategory{{Path: "src/a.ts", Category: "logic"}, {Path: "src/a.ts", Category: "test"}}
+	report = ValidateReport(g, inv)
+	if !contains(report.Errors, "is repeated in group") || !contains(report.Errors, "has no file category for src/a.test.ts") {
+		t.Fatalf("missing category errors: %+v", report.Errors)
+	}
+
+	legacy := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "legacy", Title: "Legacy", FragmentIDs: []string{"F1", "F2", "F3"}}}}
+	report = ValidateReport(legacy, inv)
+	if len(report.Errors) != 0 || !contains(report.Warnings, "has no file_categories") {
+		t.Fatalf("legacy category warning missing: %+v", report)
+	}
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if strings.Contains(value, want) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestValidateFailures(t *testing.T) {
 	tests := []struct {
 		name   string

@@ -10,11 +10,14 @@ import (
 
 func TestBuildAndHandler(t *testing.T) {
 	one, two := 1, 2
-	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, FragmentIDs: []string{"F2"}}, {ID: "first", Title: "First", Summary: "Start here\nMore context.", Order: &one, Fragments: []model.FragmentReference{{ID: "F1", Description: "Explains the <safe> change."}}}}}
+	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, FragmentIDs: []string{"F2"}}, {ID: "first", Title: "First", Summary: "Start here\nMore context.", Order: &one, FileCategories: []model.FileCategory{{Path: "a.go", Category: "logic"}}, Fragments: []model.FragmentReference{{ID: "F1", Description: "Explains the <safe> change."}}}}}
 	inv := model.Inventory{Fragments: []model.DiffFragment{{ID: "F1", Path: "a.go", NewStart: 5, NewLines: 3, Patch: "diff --git a/a.go b/a.go\n@@ -5,3 +5,3 @@\n-unsafe <tag>\n+safe\n context\n"}, {ID: "F2", Path: "b.go", Patch: "patch\n"}}}
 	p := Build(g, inv, map[string]string{"a.go": strings.Repeat("source line\n", 20)})
 	if p.Groups[0].ID != "first" || p.FileCount != 2 || p.FragmentCount != 2 {
 		t.Fatalf("unexpected page: %+v", p)
+	}
+	if len(p.Groups[0].Categories) != 1 || p.Groups[0].Categories[0].Name != "logic" || len(p.Groups[0].Categories[0].Files) != 1 {
+		t.Fatalf("unexpected group categories: %+v", p.Groups[0].Categories)
 	}
 	h, err := Handler(p)
 	if err != nil {
@@ -34,6 +37,15 @@ func TestBuildAndHandler(t *testing.T) {
 	}
 	if !strings.Contains(body, ".summary code{padding:2px 5px;border:1px solid var(--line)") {
 		t.Fatal("inline Markdown code has no visual styling")
+	}
+	if !strings.Contains(body, `<details class="category">`) || strings.Contains(body, `<details class="category" open>`) || !strings.Contains(body, `class="category-icon logic"`) || !strings.Contains(body, `<svg viewBox="0 0 24 24"`) {
+		t.Fatal("categorized file sections are not rendered collapsed with a standard icon")
+	}
+	if !strings.Contains(body, ".category-icon{display:inline-flex;width:18px;height:18px;margin-right:7px;vertical-align:-4px;color:#8b949e}") {
+		t.Fatal("category icons should use a shared neutral color")
+	}
+	if !strings.Contains(body, ".category>summary .count{float:none;display:inline;margin-left:10px;font-size:12px}") {
+		t.Fatal("category file count should follow the category title")
 	}
 	if !strings.Contains(body, "Explains the &lt;safe&gt; change.") {
 		t.Fatal("missing or unsafe fragment description")
@@ -89,8 +101,14 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, "while(hunk&&!hunk.classList.contains('hunk'))") || !strings.Contains(body, "hunk.remove()") {
 		t.Fatal("upper expansion does not remove the stale hunk header")
 	}
-	if strings.Contains(body, `<details class="group" open>`) || !strings.Contains(body, `<details class="group">`) || !strings.Contains(body, `<details class="file">`) {
-		t.Fatalf("groups and files should be collapsed by default: %s", body)
+	if !strings.Contains(body, `<details class="group" open>`) {
+		t.Fatal("groups should be open by default")
+	}
+	if strings.Contains(body, `<details class="category" open>`) {
+		t.Fatal("categories should be collapsed by default")
+	}
+	if strings.Contains(body, `<details class="file" open>`) {
+		t.Fatal("files should be collapsed by default")
 	}
 	if strings.Contains(body, "unsafe <tag>") || !strings.Contains(body, "unsafe &lt;tag&gt;") {
 		t.Fatal("patch was not safely escaped")
@@ -153,6 +171,29 @@ func TestRenderMarkdown(t *testing.T) {
 	}
 	if strings.Contains(html, "<script>") {
 		t.Fatalf("raw HTML must not be executable: %s", html)
+	}
+}
+
+func TestCategoryViewsUseRequestedOrder(t *testing.T) {
+	files := []FileView{{Path: "a.ts"}, {Path: "b.tsx"}, {Path: "c.yml"}, {Path: "d.go"}, {Path: "e.test.ts"}, {Path: "f.md"}, {Path: "g.ts"}}
+	declared := []model.FileCategory{
+		{Path: "a.ts", Category: "logic"},
+		{Path: "b.tsx", Category: "component"},
+		{Path: "c.yml", Category: "config"},
+		{Path: "d.go", Category: "implementation"},
+		{Path: "e.test.ts", Category: "test"},
+		{Path: "f.md", Category: "unknown"},
+		{Path: "g.ts", Category: "custom"},
+	}
+	views := buildCategoryViews(files, declared)
+	want := []string{"logic", "component", "config", "implementation", "test", "unknown", "custom"}
+	if len(views) != len(want) {
+		t.Fatalf("got %d categories, want %d: %+v", len(views), len(want), views)
+	}
+	for i, category := range views {
+		if category.Name != want[i] {
+			t.Errorf("category %d = %q, want %q", i, category.Name, want[i])
+		}
 	}
 }
 

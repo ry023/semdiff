@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ry023/semdiff/internal/categories"
 	"github.com/ry023/semdiff/internal/gitdiff"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
@@ -30,8 +31,9 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-	  semdiff commits <base>..<head> [--json]
+	semdiff commits <base>..<head> [--json]
 	  semdiff fragments <base>..<head> [--json]
+	  semdiff classify <base>..<head> [--json]
 	  semdiff show <fragment-id> [--json]
 	  semdiff validate <groups-file> [--json]
 	  semdiff view <groups-file> [--addr 127.0.0.1:8080]`)
@@ -93,6 +95,32 @@ func run(ctx context.Context, args []string) error {
 			fmt.Printf("%s  %s  -%d,%d +%d,%d\n", f.ID, f.Path, f.OldStart, f.OldLines, f.NewStart, f.NewLines)
 		}
 		return nil
+	case "classify":
+		fs := flag.NewFlagSet("classify", flag.ContinueOnError)
+		jsonOut := fs.Bool("json", false, "JSON output")
+		positional, err := parseInterspersed(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(positional) != 1 {
+			return errors.New("classify requires <base>..<head>")
+		}
+		inv, err := r.Fragments(ctx, positional[0])
+		if err != nil {
+			return err
+		}
+		paths := make([]string, 0, len(inv.Fragments))
+		for _, fragment := range inv.Fragments {
+			paths = append(paths, fragment.Path)
+		}
+		suggestions := categories.ClassifyPaths(paths)
+		if *jsonOut {
+			return printJSON(suggestions)
+		}
+		for _, suggestion := range suggestions {
+			fmt.Printf("%s  %s\n", suggestion.Path, suggestion.Category)
+		}
+		return nil
 	case "show":
 		fs := flag.NewFlagSet("show", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
@@ -127,9 +155,7 @@ func run(ctx context.Context, args []string) error {
 		if len(positional) != 1 {
 			return errors.New("validate requires <groups-file>")
 		}
-		g, inv, problems, err := loadAndValidate(ctx, r, positional[0])
-		_ = g
-		_ = inv
+		g, inv, report, err := loadAndValidate(ctx, r, positional[0])
 		if err != nil {
 			return err
 		}
@@ -139,17 +165,24 @@ func run(ctx context.Context, args []string) error {
 				FragmentCount int      `json:"fragment_count"`
 				GroupCount    int      `json:"group_count"`
 				Errors        []string `json:"errors"`
-			}{len(problems) == 0, len(inv.Fragments), len(g.Groups), problems}
+				Warnings      []string `json:"warnings"`
+			}{len(report.Errors) == 0, len(inv.Fragments), len(g.Groups), report.Errors, report.Warnings}
 			_ = printJSON(result)
-		} else if len(problems) == 0 {
+		} else if len(report.Errors) == 0 {
+			for _, warning := range report.Warnings {
+				fmt.Fprintln(os.Stderr, "warning:", warning)
+			}
 			fmt.Printf("valid: %d fragments assigned exactly once across %d groups\n", len(inv.Fragments), len(g.Groups))
 		} else {
-			for _, p := range problems {
+			for _, warning := range report.Warnings {
+				fmt.Fprintln(os.Stderr, "warning:", warning)
+			}
+			for _, p := range report.Errors {
 				fmt.Fprintln(os.Stderr, "-", p)
 			}
 		}
-		if len(problems) > 0 {
-			return fmt.Errorf("validation failed with %d error(s)", len(problems))
+		if len(report.Errors) > 0 {
+			return fmt.Errorf("validation failed with %d error(s)", len(report.Errors))
 		}
 		return nil
 	case "view":
@@ -162,12 +195,15 @@ func run(ctx context.Context, args []string) error {
 		if len(positional) != 1 {
 			return errors.New("view requires <groups-file>")
 		}
-		g, inv, problems, err := loadAndValidate(ctx, r, positional[0])
+		g, inv, report, err := loadAndValidate(ctx, r, positional[0])
 		if err != nil {
 			return err
 		}
-		if len(problems) > 0 {
-			return fmt.Errorf("groups file is invalid: %s", strings.Join(problems, "; "))
+		if len(report.Errors) > 0 {
+			return fmt.Errorf("groups file is invalid: %s", strings.Join(report.Errors, "; "))
+		}
+		for _, warning := range report.Warnings {
+			log.Printf("warning: %s", warning)
 		}
 		paths := make([]string, 0, len(inv.Fragments))
 		for _, fragment := range inv.Fragments {
@@ -262,14 +298,14 @@ func loadCache() (model.Inventory, error) {
 	err = json.Unmarshal(b, &inv)
 	return inv, err
 }
-func loadAndValidate(ctx context.Context, r gitdiff.Runner, path string) (model.GroupsFile, model.Inventory, []string, error) {
+func loadAndValidate(ctx context.Context, r gitdiff.Runner, path string) (model.GroupsFile, model.Inventory, groups.ValidationReport, error) {
 	g, err := groups.Load(path)
 	if err != nil {
-		return g, model.Inventory{}, nil, err
+		return g, model.Inventory{}, groups.ValidationReport{}, err
 	}
 	inv, err := r.Fragments(ctx, g.BaseSHA+".."+g.HeadSHA)
 	if err != nil {
-		return g, inv, nil, err
+		return g, inv, groups.ValidationReport{}, err
 	}
-	return g, inv, groups.Validate(g, inv), nil
+	return g, inv, groups.ValidateReport(g, inv), nil
 }

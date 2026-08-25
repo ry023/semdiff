@@ -265,6 +265,7 @@ Agentは以下を担当します。
 * Group titleを付ける
 * Group summaryを書く
 * 各DiffFragmentをGroupへ割り当てる
+* `semdiff classify` の機械分類を確認し、Group内のファイルカテゴリを決定する
 * 必要ならレビュー順序を決める
 * 分類困難な変更を適切なfallback groupへ分類する
 
@@ -303,15 +304,17 @@ Skillでは、おおむね以下の手順を指示してください。
 ```text
 1. commit一覧を確認する
 2. DiffFragment inventoryを取得する
-3. commit message / path / fragment metadataから変更全体の概要を把握する
-4. 必要なfragmentだけshowする
-5. 必要に応じてcontext / relatedを使う
-6. 仮のSemantic Groupを作成する
-7. 全fragmentをGroupへ割り当てる
-8. groups.jsonをvalidateする
-9. 未割当fragmentがあれば再調査する
-10. それでも分類不能ならfallback groupへ分類する
-11. validate成功後にgroups.jsonを確定する
+3. `semdiff classify <base>..<head> --json` でパスベースのカテゴリ候補を取得する
+4. commit message / path / fragment metadataから変更全体の概要を把握する
+5. 必要なfragmentだけshowする
+6. 必要に応じてcontext / relatedを使う
+7. 仮のSemantic Groupを作成する
+8. 全fragmentをGroupへ割り当てる
+9. Groupごとに関連ファイルのカテゴリを確定する
+10. groups.jsonをvalidateする
+11. 未割当fragmentがあれば再調査する
+12. それでも分類不能ならfallback groupへ分類する
+13. validate成功後にgroups.jsonを確定する
 ```
 
 Agentが最初から全patchをコンテキストへ読み込まないことを重視してください。
@@ -443,6 +446,7 @@ MVPでは以下を実装してください。
 * Group title
 * Group summary
 * Group単位の展開/折りたたみ
+* Group内のfile category見出し（カテゴリ単位で折りたたみ、初期状態は展開）
 * file path表示
 * unified diff表示
 * fragment数
@@ -481,6 +485,9 @@ Agentが生成するSemantic Groupデータのschemaを明確に定義してく�
       "title": "Introduce OrderStatus",
       "summary": "Introduce the new domain concept.",
       "order": 1,
+      "file_categories": [
+        {"path": "src/domain.ts", "category": "logic"}
+      ],
       "fragments": [
         {"id": "F001", "description": "Defines the new domain concept."},
         {"id": "F004", "description": "Exposes the concept through the API."}
@@ -494,6 +501,7 @@ Agentが生成するSemantic Groupデータのschemaを明確に定義してく�
 
 * `base_sha` / `head_sha` が現在のfragment inventoryと一致する
 * Group IDが一意
+* `file_categories`がある場合、Groupに関連する各ファイルがちょうど1回だけ出現する
 * fragment IDが存在する
 * 新しい `fragments` 形式では各fragmentの `description` が空でない
 * すべてのfragmentがちょうど1回だけ出現する
@@ -631,6 +639,9 @@ skills/
 * unknown fragment ID
 * duplicate Group ID
 * base/head mismatch
+* `file_categories`未記載は既存ファイル互換のwarningとし、新規生成時は解消する
+
+基本カテゴリは `implementation`、`test`、`component`、`logic`、`config`、`unknown` とする。カテゴリ名はenumで固定せず、`docs`、`style`、`migration`などの自由記述も許可する。`semdiff classify`はパス、ファイル名、拡張子、ディレクトリ構造だけから基本カテゴリの叩き台を生成し、最終判断はAgentが行う。
 
 ### Viewer
 

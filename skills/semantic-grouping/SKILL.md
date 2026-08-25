@@ -11,18 +11,24 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 
 1. Run `semdiff commits <base>..<head> --json` to understand the change narrative.
 2. Run `semdiff fragments <base>..<head> --json` to get the lightweight inventory. Do not load the complete diff up front.
-3. Infer tentative concerns from commit subjects, paths, and ranges. Inspect only relevant fragments with `semdiff show <id> --json`. The `fragments` command must run first because `show` reads its latest inventory.
-4. Create a small number of cohesive groups. Assign each fragment one primary membership even when it relates to several concerns. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
-5. Write version 1 JSON with exact resolved `base_sha` and `head_sha`, unique group IDs, concise titles, multi-sentence review summaries, optional numeric review order, and described `fragments` references.
-6. Run `semdiff validate groups.json --json`. Do not report completion until it succeeds. Investigate every unknown, duplicate, or unassigned fragment; use a fallback group only after reasonable inspection.
+3. Run `semdiff classify <base>..<head> --json` to create a path-based category draft. Treat its categories as mechanical suggestions only; it does not inspect file contents or commit intent.
+4. Infer tentative concerns from commit subjects, paths, ranges, and the category draft. Inspect only relevant fragments with `semdiff show <id> --json`. The `fragments` command must run first because `show` reads its latest inventory.
+5. Create a small number of cohesive groups. Assign each fragment one primary membership even when it relates to several concerns. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
+6. For every file referenced by a group's fragments, write exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content. Categories are free text; use the basic vocabulary when it fits and labels such as `docs`, `style`, or `migration` when it does not. A file may have different categories in different Groups when its role differs.
+7. Write version 1 JSON with exact resolved `base_sha` and `head_sha`, unique group IDs, concise titles, multi-sentence review summaries, optional numeric review order, complete `file_categories`, and described `fragments` references.
+8. Run `semdiff validate groups.json --json`. Do not report completion until it succeeds without errors or category warnings. Investigate every unknown, duplicate, or unassigned fragment; use a fallback group only after reasonable inspection.
 
 The required shape is:
 
 ```json
-{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","order":1,"fragments":[{"id":"F-...","description":"Adds the domain type used by the new workflow."}]}]}
+{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"F-...","description":"Adds the domain type used by the new workflow."}]}]}
 ```
 
-Every extracted fragment must occur exactly once across all groups and every `fragments` entry must have a non-empty `description`. Legacy files using `fragment_ids` remain readable, but new output must use `fragments`.
+Every extracted fragment must occur exactly once across all groups and every `fragments` entry must have a non-empty `description`. Every file referenced by a Group must occur exactly once in that Group's `file_categories`. Legacy files using `fragment_ids` or omitting `file_categories` remain readable, but new output must use `fragments` and complete `file_categories`.
+
+The `classify` command only uses file paths, names, extensions, and directory structure. It intentionally has no confidence score or semantic rationale. Treat its output as a draft: the final category should describe the file's role in that Group, based on the commit narrative and relevant code when the mechanical guess is insufficient.
+
+The default category vocabulary is `implementation` for general source code, `test` for tests, `component` for UI components, `logic` for UI-independent logic, `config` for configuration and dependency metadata, and `unknown` when the path does not establish a useful role. These are conventions rather than an enum; use a more precise free-form category when needed.
 
 ## Fragment descriptions
 
