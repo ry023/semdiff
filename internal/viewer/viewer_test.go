@@ -29,7 +29,11 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, "Explains the &lt;safe&gt; change.") {
 		t.Fatal("missing or unsafe fragment description")
 	}
-	summaryStart := strings.Index(body, "<summary><h3>a.go</h3>")
+	fileHeading := strings.Index(body, "<h3>a.go</h3>")
+	if fileHeading < 0 {
+		t.Fatal("missing file heading")
+	}
+	summaryStart := strings.LastIndex(body[:fileHeading], "<summary>")
 	descriptionAt := strings.Index(body, "Explains the &lt;safe&gt; change.")
 	if summaryStart < 0 {
 		t.Fatal("missing file summary")
@@ -40,6 +44,12 @@ func TestBuildAndHandler(t *testing.T) {
 	}
 	if strings.Count(body, "Explains the &lt;safe&gt; change.") != 2 {
 		t.Fatal("fragment description should appear in both the file summary and expanded diff")
+	}
+	if !strings.Contains(body, `class="file-status-icon updated"`) || !strings.Contains(body, `class="stat-add">+1`) || !strings.Contains(body, `class="stat-del">-1`) {
+		t.Fatal("missing file status or line-change statistics")
+	}
+	if strings.Count(body, `class="diffstat-block `) != 10 {
+		t.Fatal("each file should render a five-block diffstat")
 	}
 	if !strings.Contains(body, `data-view="unified"`) || !strings.Contains(body, `data-view="split"`) || !strings.Contains(body, "semdiff-view") {
 		t.Fatal("missing page-wide unified/split view controls")
@@ -69,6 +79,43 @@ func TestBuildAndHandler(t *testing.T) {
 	}
 	if strings.Contains(body, "unsafe <tag>") || !strings.Contains(body, "unsafe &lt;tag&gt;") {
 		t.Fatal("patch was not safely escaped")
+	}
+}
+
+func TestDiffstatBlocks(t *testing.T) {
+	tests := []struct {
+		additions, deletions int
+		want                 string
+	}{
+		{102, 84, "added,added,deleted,deleted,neutral"},
+		{8, 31, "added,deleted,deleted,deleted,neutral"},
+		{172, 0, "added,added,added,added,added"},
+		{0, 0, "neutral,neutral,neutral,neutral,neutral"},
+	}
+	for _, tt := range tests {
+		if got := strings.Join(diffstatBlocks(tt.additions, tt.deletions), ","); got != tt.want {
+			t.Errorf("diffstatBlocks(%d, %d) = %q, want %q", tt.additions, tt.deletions, got, tt.want)
+		}
+	}
+}
+
+func TestFileStatusAndLineCounts(t *testing.T) {
+	tests := []struct {
+		name, patch, status, icon string
+		additions, deletions      int
+	}{
+		{"new", "diff --git a/new.go b/new.go\nnew file mode 100644\n--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,2 @@\n+one\n+two\n", "new", "+", 2, 0},
+		{"updated", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "updated", "~", 1, 1},
+		{"deleted", "diff --git a/old.go b/old.go\ndeleted file mode 100644\n--- a/old.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", "deleted", "−", 0, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fragment := model.DiffFragment{ID: "F1", Path: "a.go", Patch: tt.patch}
+			file := buildFileView("a.go", []model.DiffFragment{fragment}, "", []model.DiffFragment{fragment})
+			if file.Status != tt.status || file.StatusIcon != tt.icon || file.Additions != tt.additions || file.Deletions != tt.deletions {
+				t.Fatalf("unexpected file metadata: %+v", file)
+			}
+		})
 	}
 }
 

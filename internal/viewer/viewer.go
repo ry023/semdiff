@@ -24,6 +24,11 @@ type FragmentView struct {
 }
 type FileView struct {
 	Path       string
+	Status     string
+	StatusIcon string
+	Additions  int
+	Deletions  int
+	Diffstat   []string
 	HeaderHTML template.HTML
 	Fragments  []FragmentView
 }
@@ -166,7 +171,24 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 	sort.SliceStable(fragments, func(i, j int) bool {
 		return fragmentStart(fragments[i]) < fragmentStart(fragments[j])
 	})
-	file := FileView{Path: path}
+	file := FileView{Path: path, Status: "updated", StatusIcon: "~"}
+	for _, fragment := range siblings {
+		if strings.Contains(fragment.Patch, "new file mode ") || strings.Contains(fragment.Patch, "--- /dev/null") {
+			file.Status, file.StatusIcon = "new", "+"
+		}
+		if strings.Contains(fragment.Patch, "deleted file mode ") || strings.Contains(fragment.Patch, "+++ /dev/null") {
+			file.Status, file.StatusIcon = "deleted", "−"
+		}
+		for _, line := range strings.Split(fragment.Patch, "\n") {
+			switch {
+			case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+				file.Additions++
+			case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
+				file.Deletions++
+			}
+		}
+	}
+	file.Diffstat = diffstatBlocks(file.Additions, file.Deletions)
 	for _, fragment := range fragments {
 		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, siblings))
 	}
@@ -196,6 +218,30 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 		current.UpperContextHTML = ""
 	}
 	return file
+}
+
+func diffstatBlocks(additions, deletions int) []string {
+	const blockCount = 5
+	blocks := make([]string, 0, blockCount)
+	total := additions + deletions
+	if total == 0 {
+		for len(blocks) < blockCount {
+			blocks = append(blocks, "neutral")
+		}
+		return blocks
+	}
+	addedBlocks := additions * blockCount / total
+	deletedBlocks := deletions * blockCount / total
+	for range addedBlocks {
+		blocks = append(blocks, "added")
+	}
+	for range deletedBlocks {
+		blocks = append(blocks, "deleted")
+	}
+	for len(blocks) < blockCount {
+		blocks = append(blocks, "neutral")
+	}
+	return blocks
 }
 
 func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber string, hidden bool) {
