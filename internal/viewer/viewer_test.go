@@ -26,11 +26,14 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, "Semantic Changes") || !strings.Contains(body, "Start here") {
 		t.Fatal("missing viewer content")
 	}
-	if !strings.Contains(body, "Start here\nMore context.") {
+	if !strings.Contains(body, "Start here<br") || !strings.Contains(body, "More context.") {
 		t.Fatal("group summary line break was not rendered")
 	}
 	if !strings.Contains(body, ".summary{color:var(--muted);margin:8px 0 0 24px;white-space:pre-line}") {
 		t.Fatal("group summary line breaks are not preserved in the viewer")
+	}
+	if !strings.Contains(body, ".summary code{padding:2px 5px;border:1px solid var(--line)") {
+		t.Fatal("inline Markdown code has no visual styling")
 	}
 	if !strings.Contains(body, "Explains the &lt;safe&gt; change.") {
 		t.Fatal("missing or unsafe fragment description")
@@ -138,6 +141,18 @@ func TestColorPatchDoesNotAddBlankRows(t *testing.T) {
 	}
 	if strings.Count(html, `<span class="diff-row`) != 2 {
 		t.Fatalf("got unexpected rendered rows: %q", html)
+	}
+}
+
+func TestRenderMarkdown(t *testing.T) {
+	html := string(renderMarkdown("# Heading\n\n**important** and `foobar`\n\n- first\n- second\n\n<script>alert(1)</script>"))
+	for _, want := range []string{"<h1>Heading</h1>", "<strong>important</strong>", "<code>foobar</code>", "<li>first</li>", "<li>second</li>"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("rendered markdown is missing %q: %s", want, html)
+		}
+	}
+	if strings.Contains(html, "<script>") {
+		t.Fatalf("raw HTML must not be executable: %s", html)
 	}
 }
 

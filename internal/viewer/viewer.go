@@ -1,6 +1,7 @@
 package viewer
 
 import (
+	"bytes"
 	"embed"
 	"html/template"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/yuin/goldmark"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
 //go:embed index.html
@@ -34,6 +37,7 @@ type FileView struct {
 }
 type GroupView struct {
 	ID, Title, Summary string
+	SummaryHTML        template.HTML
 	Order              *int
 	Files              []FileView
 	FragmentCount      int
@@ -63,7 +67,7 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 	p := Page{BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 	allFiles := map[string]bool{}
 	for _, group := range g.Groups {
-		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, Order: group.Order}
+		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, SummaryHTML: renderMarkdown(group.Summary), Order: group.Order}
 		fileMap := map[string][]model.DiffFragment{}
 		descriptions := map[string]string{}
 		var paths []string
@@ -100,6 +104,15 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 	})
 	p.FileCount = len(allFiles)
 	return p
+}
+
+func renderMarkdown(source string) template.HTML {
+	var rendered bytes.Buffer
+	markdown := goldmark.New(goldmark.WithRendererOptions(goldmarkhtml.WithHardWraps()))
+	if err := markdown.Convert([]byte(source), &rendered); err != nil {
+		return template.HTML(template.HTMLEscapeString(source))
+	}
+	return template.HTML(rendered.String())
 }
 
 func fragmentStart(f model.DiffFragment) int {
