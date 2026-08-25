@@ -38,19 +38,31 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, ".summary code{padding:2px 5px;border:1px solid var(--line)") {
 		t.Fatal("inline Markdown code has no visual styling")
 	}
+	if !strings.Contains(body, ".summary code{padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:#1f2630;color:#8b949e;") {
+		t.Fatal("inline Markdown code should use a neutral gray color")
+	}
 	if !strings.Contains(body, `<details class="category">`) || strings.Contains(body, `<details class="category" open>`) || !strings.Contains(body, `class="category-icon logic"`) || !strings.Contains(body, `<svg viewBox="0 0 24 24"`) {
 		t.Fatal("categorized file sections are not rendered collapsed with a standard icon")
 	}
 	if !strings.Contains(body, ".category-icon{display:inline-flex;width:18px;height:18px;margin-right:7px;vertical-align:-4px;color:#8b949e}") {
 		t.Fatal("category icons should use a shared neutral color")
 	}
-	if !strings.Contains(body, ".category>summary .count{float:none;display:inline;margin-left:10px;font-size:12px}") {
-		t.Fatal("category file count should follow the category title")
+	if !strings.Contains(body, ".category-stats{display:inline-flex;gap:10px;margin-left:10px;font-size:12px}.category-stat.added{color:#3fb950}.category-stat.updated{color:#d29922}.category-stat.deleted{color:#f85149}") {
+		t.Fatal("category file status counts should be styled by status")
+	}
+	if !strings.Contains(body, ".file-status-icon.updated{color:#d29922}") {
+		t.Fatal("updated file icons should use the update yellow")
+	}
+	if !strings.Contains(body, `<span class="category-stat updated">1 files updated</span>`) || strings.Contains(body, `class="category-stat added"`) || strings.Contains(body, `class="category-stat deleted"`) {
+		t.Fatal("category file status counts should omit zero statuses")
+	}
+	if !strings.Contains(body, ".file h3{display:inline;font:400 14px ui-monospace,monospace;margin:0;color:var(--text)}.file-path{font-weight:400}.file-name{font-weight:700}") {
+		t.Fatal("file paths should be regular white text with bold file names")
 	}
 	if !strings.Contains(body, "Explains the &lt;safe&gt; change.") {
 		t.Fatal("missing or unsafe fragment description")
 	}
-	fileHeading := strings.Index(body, "<h3>a.go</h3>")
+	fileHeading := strings.Index(body, "<h3><span class=\"file-name\">a.go</span></h3>")
 	if fileHeading < 0 {
 		t.Fatal("missing file heading")
 	}
@@ -134,21 +146,42 @@ func TestDiffstatBlocks(t *testing.T) {
 
 func TestFileStatusAndLineCounts(t *testing.T) {
 	tests := []struct {
-		name, patch, status, icon string
-		additions, deletions      int
+		name, patch, status, iconFragment string
+		additions, deletions              int
 	}{
-		{"new", "diff --git a/new.go b/new.go\nnew file mode 100644\n--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,2 @@\n+one\n+two\n", "new", "+", 2, 0},
-		{"updated", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "updated", "~", 1, 1},
-		{"deleted", "diff --git a/old.go b/old.go\ndeleted file mode 100644\n--- a/old.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", "deleted", "−", 0, 2},
+		{"new", "diff --git a/new.go b/new.go\nnew file mode 100644\n--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,2 @@\n+one\n+two\n", "new", "M12 18v-6", 2, 0},
+		{"updated", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "updated", "m10.4 12.6", 1, 1},
+		{"deleted", "diff --git a/old.go b/old.go\ndeleted file mode 100644\n--- a/old.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", "deleted", "M9 15h6", 0, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fragment := model.DiffFragment{ID: "F1", Path: "a.go", Patch: tt.patch}
 			file := buildFileView("a.go", []model.DiffFragment{fragment}, "", []model.DiffFragment{fragment})
-			if file.Status != tt.status || file.StatusIcon != tt.icon || file.Additions != tt.additions || file.Deletions != tt.deletions {
+			if file.Status != tt.status || !strings.Contains(string(file.StatusIcon), tt.iconFragment) || file.Additions != tt.additions || file.Deletions != tt.deletions {
 				t.Fatalf("unexpected file metadata: %+v", file)
 			}
+			if !strings.Contains(string(file.StatusIcon), `<svg viewBox="0 0 24 24"`) {
+				t.Fatalf("status icon is not an inline SVG: %s", file.StatusIcon)
+			}
 		})
+	}
+}
+
+func TestFileViewSplitsDirectoryAndName(t *testing.T) {
+	fragment := model.DiffFragment{ID: "F1", Path: "web/src/Button.tsx", Patch: "diff --git a/web/src/Button.tsx b/web/src/Button.tsx\n"}
+	file := buildFileView(fragment.Path, []model.DiffFragment{fragment}, "", []model.DiffFragment{fragment})
+	if file.Directory != "web/src/" || file.Name != "Button.tsx" {
+		t.Fatalf("unexpected path split: directory=%q name=%q", file.Directory, file.Name)
+	}
+	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{ID: "g", Title: "Group", FragmentIDs: []string{"F1"}}}}, model.Inventory{Fragments: []model.DiffFragment{fragment}})
+	handler, err := Handler(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
+	if !strings.Contains(response.Body.String(), `<h3><span class="file-path">web/src/</span><span class="file-name">Button.tsx</span></h3>`) {
+		t.Fatal("nested file heading did not render separate path and name spans")
 	}
 }
 
@@ -194,6 +227,19 @@ func TestCategoryViewsUseRequestedOrder(t *testing.T) {
 		if category.Name != want[i] {
 			t.Errorf("category %d = %q, want %q", i, category.Name, want[i])
 		}
+	}
+}
+
+func TestCategoryViewsCountFileStatuses(t *testing.T) {
+	files := []FileView{
+		{Path: "added.ts", Status: "new"},
+		{Path: "updated.ts", Status: "updated"},
+		{Path: "deleted.ts", Status: "deleted"},
+		{Path: "also-added.ts", Status: "new"},
+	}
+	views := buildCategoryViews(files, []model.FileCategory{{Path: "added.ts", Category: "logic"}, {Path: "updated.ts", Category: "logic"}, {Path: "deleted.ts", Category: "logic"}, {Path: "also-added.ts", Category: "logic"}})
+	if len(views) != 1 || views[0].Added != 2 || views[0].Updated != 1 || views[0].Deleted != 1 {
+		t.Fatalf("unexpected category status counts: %+v", views)
 	}
 }
 

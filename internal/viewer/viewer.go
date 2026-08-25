@@ -5,6 +5,7 @@ import (
 	"embed"
 	"html/template"
 	"net/http"
+	pathpkg "path"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,8 +29,10 @@ type FragmentView struct {
 }
 type FileView struct {
 	Path       string
+	Directory  string
+	Name       string
 	Status     string
-	StatusIcon string
+	StatusIcon template.HTML
 	Additions  int
 	Deletions  int
 	Diffstat   []string
@@ -50,6 +53,9 @@ type CategoryView struct {
 	IconClass string
 	Standard  bool
 	Files     []FileView
+	Added     int
+	Updated   int
+	Deleted   int
 }
 type Page struct {
 	BaseSHA, HeadSHA         string
@@ -161,7 +167,18 @@ func buildCategoryViews(files []FileView, declared []model.FileCategory) []Categ
 	result := make([]CategoryView, 0, len(categoryNames))
 	for _, name := range categoryNames {
 		icon, iconClass, standard := categoryIcon(name)
-		result = append(result, CategoryView{Name: name, Icon: icon, IconClass: iconClass, Standard: standard, Files: byName[name]})
+		category := CategoryView{Name: name, Icon: icon, IconClass: iconClass, Standard: standard, Files: byName[name]}
+		for _, file := range category.Files {
+			switch file.Status {
+			case "new":
+				category.Added++
+			case "deleted":
+				category.Deleted++
+			default:
+				category.Updated++
+			}
+		}
+		result = append(result, category)
 	}
 	return result
 }
@@ -286,13 +303,19 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 	sort.SliceStable(fragments, func(i, j int) bool {
 		return fragmentStart(fragments[i]) < fragmentStart(fragments[j])
 	})
-	file := FileView{Path: path, Status: "updated", StatusIcon: "~"}
+	directory, name := pathpkg.Dir(path), pathpkg.Base(path)
+	if directory == "." {
+		directory = ""
+	} else {
+		directory += "/"
+	}
+	file := FileView{Path: path, Directory: directory, Name: name, Status: "updated"}
 	for _, fragment := range siblings {
 		if strings.Contains(fragment.Patch, "new file mode ") || strings.Contains(fragment.Patch, "--- /dev/null") {
-			file.Status, file.StatusIcon = "new", "+"
+			file.Status = "new"
 		}
 		if strings.Contains(fragment.Patch, "deleted file mode ") || strings.Contains(fragment.Patch, "+++ /dev/null") {
-			file.Status, file.StatusIcon = "deleted", "−"
+			file.Status = "deleted"
 		}
 		for _, line := range strings.Split(fragment.Patch, "\n") {
 			switch {
@@ -303,6 +326,7 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 			}
 		}
 	}
+	file.StatusIcon = fileStatusIcon(file.Status)
 	file.Diffstat = diffstatBlocks(file.Additions, file.Deletions)
 	for _, fragment := range fragments {
 		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, siblings))
@@ -333,6 +357,17 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 		current.UpperContextHTML = ""
 	}
 	return file
+}
+
+func fileStatusIcon(status string) template.HTML {
+	switch status {
+	case "new":
+		return lucideIcon(`<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 2v7h7"/><path d="M12 18v-6"/><path d="M9 15h6"/>`)
+	case "deleted":
+		return lucideIcon(`<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 2v7h7"/><path d="M9 15h6"/>`)
+	default:
+		return lucideIcon(`<path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v16"/><path d="M14 2v5h5"/><path d="m10.4 12.6 2.9 2.9L19 9.8"/>`)
+	}
 }
 
 func diffstatBlocks(additions, deletions int) []string {
