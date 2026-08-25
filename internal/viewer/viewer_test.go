@@ -31,10 +31,10 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(upper, "Show 4 lines above") || !strings.Contains(lower, "Show 13 lines below") {
 		t.Fatalf("missing directional context controls: upper=%q lower=%q", upper, lower)
 	}
-	if strings.Index(upper, `class="context-hidden"`) > strings.Index(upper, `class="expand-lines"`) {
+	if strings.Index(upper, "context-hidden") > strings.Index(upper, `class="expand-lines"`) {
 		t.Fatal("upper expansion rows must be before their button")
 	}
-	if strings.Index(lower, `class="expand-lines"`) > strings.Index(lower, `class="context-hidden"`) {
+	if strings.Index(lower, `class="expand-lines"`) > strings.Index(lower, "context-hidden") {
 		t.Fatal("lower expansion rows must be after their button")
 	}
 	if !strings.Contains(body, ".context-hidden[hidden]{display:none!important}") {
@@ -56,8 +56,18 @@ func TestColorPatchDoesNotAddBlankRows(t *testing.T) {
 	if strings.Contains(html, "</span>\n") {
 		t.Fatalf("colorPatch added a newline after a block: %q", html)
 	}
-	if strings.Count(html, "<span class=\"") != 2 {
+	if strings.Count(html, `<span class="diff-row`) != 2 {
 		t.Fatalf("got unexpected rendered rows: %q", html)
+	}
+}
+
+func TestColorPatchLineNumbers(t *testing.T) {
+	html := string(colorPatch("@@ -7,2 +7,2 @@\n-old\n+new\n context\n"))
+	if strings.Count(html, `<span class="line-number">7</span>`) != 2 {
+		t.Fatalf("deletion and addition should use line 7: %q", html)
+	}
+	if !strings.Contains(html, `<span class="line-number">8</span>`) {
+		t.Fatalf("context line should advance to line 8: %q", html)
 	}
 }
 

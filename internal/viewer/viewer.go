@@ -149,8 +149,8 @@ func buildFragmentView(f model.DiffFragment, content string, siblings []model.Di
 	}
 	upperStart = max(0, min(upperStart, start))
 	lowerEnd = max(end, min(lowerEnd, len(lines)))
-	view.UpperContextHTML = expandableContext(lines[upperStart:start], "up")
-	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], "down")
+	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperStart+1, "up")
+	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], end+1, "down")
 	return view
 }
 
@@ -184,13 +184,25 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 		end := fragmentStart(current.DiffFragment) - 1
 		start = max(0, min(start, len(lines)))
 		end = max(start, min(end, len(lines)))
-		previous.LowerContextHTML = expandableGap(lines[start:end])
+		previous.LowerContextHTML = expandableGap(lines[start:end], start+1)
 		current.UpperContextHTML = ""
 	}
 	return file
 }
 
-func expandableContext(lines []string, direction string) template.HTML {
+func appendDiffRow(out *strings.Builder, line, class, lineNumber string, hidden bool) {
+	out.WriteString(`<span class="diff-row ` + class)
+	if hidden {
+		out.WriteString(` context-hidden" hidden>`)
+	} else {
+		out.WriteString(`">`)
+	}
+	out.WriteString(`<span class="line-number">` + lineNumber + `</span><span class="line-code">`)
+	out.WriteString(template.HTMLEscapeString(line))
+	out.WriteString(`</span></span>`)
+}
+
+func expandableContext(lines []string, firstLine int, direction string) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
@@ -203,10 +215,8 @@ func expandableContext(lines []string, direction string) template.HTML {
 	if direction == "down" {
 		out.WriteString(`<button class="expand-lines" type="button" data-direction="down">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
 	}
-	for _, line := range lines {
-		out.WriteString(`<span class="context-hidden" hidden> `)
-		out.WriteString(template.HTMLEscapeString(line))
-		out.WriteString(`</span>`)
+	for i, line := range lines {
+		appendDiffRow(&out, " "+line, "ctx", strconv.Itoa(firstLine+i), true)
 	}
 	if direction == "up" {
 		out.WriteString(`<button class="expand-lines" type="button" data-direction="up">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
@@ -215,17 +225,15 @@ func expandableContext(lines []string, direction string) template.HTML {
 	return template.HTML(out.String())
 }
 
-func expandableGap(lines []string) template.HTML {
+func expandableGap(lines []string, firstLine int) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
 	var out strings.Builder
 	out.WriteString(`<span class="context-expand context-gap">`)
 	out.WriteString(`<button class="expand-lines" type="button" data-direction="down">↓ Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
-	for _, line := range lines {
-		out.WriteString(`<span class="context-hidden" hidden> `)
-		out.WriteString(template.HTMLEscapeString(line))
-		out.WriteString(`</span>`)
+	for i, line := range lines {
+		appendDiffRow(&out, " "+line, "ctx", strconv.Itoa(firstLine+i), true)
 	}
 	out.WriteString(`<button class="expand-lines" type="button" data-direction="up">↑ Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
 	out.WriteString(`</span>`)
@@ -233,42 +241,50 @@ func expandableGap(lines []string) template.HTML {
 }
 
 func colorPatch(patch string) template.HTML {
-	// The template escapes each line before these trusted presentation wrappers are added.
-	escaped := template.HTMLEscapeString(patch)
-	lines := []byte(escaped)
-	out := make([]byte, 0, len(lines)+128)
-	start := 0
-	for i := 0; i <= len(lines); i++ {
-		if i == len(lines) && start == len(lines) {
-			break
-		}
-		if i < len(lines) && lines[i] != '\n' {
-			continue
-		}
-		line := lines[start:i]
-		class := "ctx"
-		if len(line) > 0 {
-			if line[0] == '+' && !(len(line) > 2 && string(line[:3]) == "+++") {
-				class = "add"
-			}
-			if line[0] == '-' && !(len(line) > 2 && string(line[:3]) == "---") {
-				class = "del"
-			}
-			if line[0] == '@' {
-				class = "hunk"
-			}
-			if string(line[:min(5, len(line))]) == "diff " {
-				class = "meta"
-			}
-		}
-		out = append(out, []byte(`<span class="`+class+`">`)...)
-		out = append(out, line...)
-		// Each span is a block, so a literal newline here would create an
-		// additional blank row inside the preformatted diff.
-		out = append(out, []byte("</span>")...)
-		start = i + 1
+	patch = strings.TrimSuffix(patch, "\n")
+	if patch == "" {
+		return ""
 	}
-	return template.HTML(out)
+	var out strings.Builder
+	oldLine, newLine, inHunk := 0, 0, false
+	for _, line := range strings.Split(patch, "\n") {
+		class, number := "ctx", ""
+		switch {
+		case strings.HasPrefix(line, "@@ "):
+			class = "hunk"
+			oldLine, newLine = hunkStarts(line)
+			inHunk = true
+		case strings.HasPrefix(line, "diff "):
+			class = "meta"
+		case inHunk && strings.HasPrefix(line, "+"):
+			class, number = "add", strconv.Itoa(newLine)
+			newLine++
+		case inHunk && strings.HasPrefix(line, "-"):
+			class, number = "del", strconv.Itoa(oldLine)
+			oldLine++
+		case inHunk && strings.HasPrefix(line, " "):
+			number = strconv.Itoa(newLine)
+			oldLine++
+			newLine++
+		}
+		appendDiffRow(&out, line, class, number, false)
+	}
+	return template.HTML(out.String())
+}
+
+func hunkStarts(header string) (int, int) {
+	fields := strings.Fields(header)
+	if len(fields) < 3 {
+		return 0, 0
+	}
+	return rangeStart(fields[1]), rangeStart(fields[2])
+}
+
+func rangeStart(field string) int {
+	field = strings.TrimLeft(field, "+-")
+	field = strings.SplitN(field, ",", 2)[0]
+	start, _ := strconv.Atoi(field)
+	return start
 }
 
 func Handler(page Page) (http.Handler, error) {
