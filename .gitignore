@@ -1,2 +1,5 @@
+/.semdiff/
+/semdiff
+# Ignore caches and binaries produced by versions before the CLI was renamed.
 /.semantic-diff/
 /semantic-diff

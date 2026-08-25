@@ -126,28 +126,28 @@ Web Viewer
 
 Git repositoryからcommit rangeとdiffを取得し、DiffFragmentへ変換するGo CLIを実装してください。
 
-CLI名は仮に `semantic-diff` とします。
+CLI名は `semdiff` とします。
 
 最低限、以下の操作を提供してください。
 
 ```bash
-semantic-diff commits <base>..<head>
+semdiff commits <base>..<head>
 
-semantic-diff fragments <base>..<head>
+semdiff fragments <base>..<head>
 
-semantic-diff show <fragment-id>
+semdiff show <fragment-id>
 
-semantic-diff validate <groups-file>
+semdiff validate <groups-file>
 
-semantic-diff view <groups-file>
+semdiff view <groups-file>
 ```
 
 必要なら以下も追加して構いません。
 
 ```bash
-semantic-diff context <fragment-id>
+semdiff context <fragment-id>
 
-semantic-diff related <fragment-id>
+semdiff related <fragment-id>
 ```
 
 Agent Skillから使うため、各コマンドはJSON出力をサポートしてください。
@@ -155,7 +155,7 @@ Agent Skillから使うため、各コマンドはJSON出力をサポートし�
 例えば、
 
 ```bash
-semantic-diff fragments origin/main..HEAD --json
+semdiff fragments origin/main..HEAD --json
 ```
 
 のような形です。
@@ -210,7 +210,7 @@ Agentが全diffを一度にコンテキストへ読み込まなくて済むよ�
 例:
 
 ```bash
-semantic-diff show F001 --json
+semdiff show F001 --json
 ```
 
 ```json
@@ -253,7 +253,7 @@ Agentに巨大な `git log -p` や全diffを最初から丸ごと渡し、Markdo
 
 **決定的・機械的な処理はCLI、意味判断はAgent**という責務分離にしてください。
 
-Agent SkillをMarkdownで用意し、Agentが `semantic-diff` CLIを使って段階的に探索するよう指示してください。
+Agent SkillをMarkdownで用意し、Agentが `semdiff` CLIを使って段階的に探索するよう指示してください。
 
 ### Agentの責務
 
@@ -328,7 +328,7 @@ Agentが最初から全patchをコンテキストへ読み込まないことを�
 
 未所属も重複所属もvalidation errorです。
 
-Agentの判断だけに任せず、`semantic-diff validate` で機械的に検証してください。
+Agentの判断だけに任せず、`semdiff validate` で機械的に検証してください。
 
 例えば、
 
@@ -457,7 +457,7 @@ GitHub API連携やレビューコメント投稿は不要です。
 例えば、
 
 ```bash
-semantic-diff view groups.json
+semdiff view groups.json
 ```
 
 でHTTP serverを起動し、ブラウザで閲覧できるようにしてください。
@@ -556,7 +556,7 @@ Git repository
        |
        +--> existing Git / Entire workflow
        |
-       +--> semantic-diff
+       +--> semdiff
                 |
                 +--> DiffFragments
                 +--> Semantic Groups
@@ -583,7 +583,7 @@ Go projectとして自然な構成にしてください。
 
 ```text
 cmd/
-  semantic-diff/
+  semdiff/
 
 internal/
   git/
@@ -669,7 +669,7 @@ Web ViewerでSemantic Group単位にdiff表示
 最低限、以下が動作する状態にしてください。
 
 ```bash
-semantic-diff fragments origin/main..HEAD --json
+semdiff fragments origin/main..HEAD --json
 ```
 
 でDiffFragment一覧を取得できる。
@@ -677,7 +677,7 @@ semantic-diff fragments origin/main..HEAD --json
 手書きまたはAgent生成の `groups.json` に対して、
 
 ```bash
-semantic-diff validate groups.json
+semdiff validate groups.json
 ```
 
 がcoverageとschemaを検証できる。
@@ -685,7 +685,7 @@ semantic-diff validate groups.json
 さらに、
 
 ```bash
-semantic-diff view groups.json
+semdiff view groups.json
 ```
 
 でローカルWeb Viewerが起動し、

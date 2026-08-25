@@ -30,11 +30,11 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  semantic-diff commits <base>..<head> [--json]
-  semantic-diff fragments <base>..<head> [--json]
-  semantic-diff show <fragment-id> [--json]
-  semantic-diff validate <groups-file> [--json]
-  semantic-diff view <groups-file> [--addr 127.0.0.1:8080]`)
+	  semdiff commits <base>..<head> [--json]
+	  semdiff fragments <base>..<head> [--json]
+	  semdiff show <fragment-id> [--json]
+	  semdiff validate <groups-file> [--json]
+	  semdiff view <groups-file> [--addr 127.0.0.1:8080]`)
 }
 
 func run(ctx context.Context, args []string) error {
@@ -224,7 +224,7 @@ func printJSON(v any) error {
 	return e.Encode(v)
 }
 func cachePath() (string, error) {
-	root, err := filepath.Abs(".semantic-diff")
+	root, err := filepath.Abs(".semdiff")
 	if err != nil {
 		return "", err
 	}
