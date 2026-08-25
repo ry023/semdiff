@@ -29,6 +29,18 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, "Explains the &lt;safe&gt; change.") {
 		t.Fatal("missing or unsafe fragment description")
 	}
+	summaryStart := strings.Index(body, "<summary><h3>a.go</h3>")
+	descriptionAt := strings.Index(body, "Explains the &lt;safe&gt; change.")
+	if summaryStart < 0 {
+		t.Fatal("missing file summary")
+	}
+	summaryEnd := strings.Index(body[summaryStart:], "</summary>")
+	if summaryEnd < 0 || descriptionAt < summaryStart || descriptionAt >= summaryStart+summaryEnd {
+		t.Fatal("fragment description is not visible in the collapsed file summary")
+	}
+	if strings.Count(body, "Explains the &lt;safe&gt; change.") != 2 {
+		t.Fatal("fragment description should appear in both the file summary and expanded diff")
+	}
 	if !strings.Contains(body, `data-view="unified"`) || !strings.Contains(body, `data-view="split"`) || !strings.Contains(body, "semdiff-view") {
 		t.Fatal("missing page-wide unified/split view controls")
 	}
