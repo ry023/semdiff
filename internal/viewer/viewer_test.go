@@ -10,8 +10,8 @@ import (
 
 func TestBuildAndHandler(t *testing.T) {
 	one, two := 1, 2
-	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, FragmentIDs: []string{"F2"}}, {ID: "first", Title: "First", Summary: "Start here\nMore context.", Order: &one, FileCategories: []model.FileCategory{{Path: "a.go", Category: "logic"}}, Fragments: []model.FragmentReference{{ID: "F1", Description: "Explains the <safe> change."}}}}}
-	inv := model.Inventory{Fragments: []model.DiffFragment{{ID: "F1", Path: "a.go", NewStart: 5, NewLines: 3, Patch: "diff --git a/a.go b/a.go\n@@ -5,3 +5,3 @@\n-unsafe <tag>\n+safe\n context\n"}, {ID: "F2", Path: "b.go", Patch: "patch\n"}}}
+	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, Fragments: []model.Fragment{{ID: "F2", Path: "b.go"}}}, {ID: "first", Title: "First", Summary: "Start here\nMore context.", Order: &one, FileCategories: []model.FileCategory{{Path: "a.go", Category: "logic"}}, Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "Explains the <safe> change."}}}}}
+	inv := model.FragmentSet{Fragments: []model.MaterializedFragment{{ID: "F1", Path: "a.go", NewStart: 5, NewLines: 3, Patch: "diff --git a/a.go b/a.go\n@@ -5,3 +5,3 @@\n-unsafe <tag>\n+safe\n context\n"}, {ID: "F2", Path: "b.go", Patch: "patch\n"}}}
 	p := Build(g, inv, map[string]string{"a.go": strings.Repeat("source line\n", 20)})
 	if p.Groups[0].ID != "first" || p.FileCount != 2 || p.FragmentCount != 2 {
 		t.Fatalf("unexpected page: %+v", p)
@@ -127,6 +127,14 @@ func TestBuildAndHandler(t *testing.T) {
 	}
 }
 
+func TestFormatRangesPreservesDiscontiguousDefinition(t *testing.T) {
+	fragment := model.Fragment{FileMetadata: true, Ranges: []model.FragmentRange{
+		{Old: &model.Range{Start: 10, Lines: 2}, New: &model.Range{Start: 10, Lines: 4}},
+		{New: &model.Range{Start: 40, Lines: 3}},
+	}}
+	if got, want := formatRanges(fragment), "-10,2 +10,4; -∅ +40,3; metadata"; got != want { t.Fatalf("got %q, want %q", got, want) }
+}
+
 func TestDiffstatBlocks(t *testing.T) {
 	tests := []struct {
 		additions, deletions int
@@ -155,8 +163,8 @@ func TestFileStatusAndLineCounts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fragment := model.DiffFragment{ID: "F1", Path: "a.go", Patch: tt.patch}
-			file := buildFileView("a.go", []model.DiffFragment{fragment}, "", []model.DiffFragment{fragment})
+			fragment := model.MaterializedFragment{ID: "F1", Path: "a.go", Patch: tt.patch}
+			file := buildFileView("a.go", []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment})
 			if file.Status != tt.status || !strings.Contains(string(file.StatusIcon), tt.iconFragment) || file.Additions != tt.additions || file.Deletions != tt.deletions {
 				t.Fatalf("unexpected file metadata: %+v", file)
 			}
@@ -168,12 +176,12 @@ func TestFileStatusAndLineCounts(t *testing.T) {
 }
 
 func TestFileViewSplitsDirectoryAndName(t *testing.T) {
-	fragment := model.DiffFragment{ID: "F1", Path: "web/src/Button.tsx", Patch: "diff --git a/web/src/Button.tsx b/web/src/Button.tsx\n"}
-	file := buildFileView(fragment.Path, []model.DiffFragment{fragment}, "", []model.DiffFragment{fragment})
+	fragment := model.MaterializedFragment{ID: "F1", Path: "web/src/Button.tsx", Patch: "diff --git a/web/src/Button.tsx b/web/src/Button.tsx\n"}
+	file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment})
 	if file.Directory != "web/src/" || file.Name != "Button.tsx" {
 		t.Fatalf("unexpected path split: directory=%q name=%q", file.Directory, file.Name)
 	}
-	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{ID: "g", Title: "Group", FragmentIDs: []string{"F1"}}}}, model.Inventory{Fragments: []model.DiffFragment{fragment}})
+	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{ID: "g", Title: "Group", Fragments: []model.Fragment{{ID: "F1", Path: fragment.Path}}}}}, model.FragmentSet{Fragments: []model.MaterializedFragment{fragment}})
 	handler, err := Handler(page)
 	if err != nil {
 		t.Fatal(err)
@@ -257,10 +265,10 @@ func TestColorPatchLineNumbers(t *testing.T) {
 }
 
 func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
-	f1 := model.DiffFragment{ID: "F1", Path: "a.go", NewStart: 10, NewLines: 5, Patch: "@@ -10,5 +10,5 @@\n-old\n+new\n"}
-	f2 := model.DiffFragment{ID: "F2", Path: "a.go", NewStart: 30, NewLines: 5, Patch: "@@ -30,5 +30,5 @@\n-old\n+new\n"}
-	group := model.GroupsFile{Groups: []model.SemanticGroup{{ID: "g", Title: "Group", FragmentIDs: []string{"F1", "F2"}}}}
-	page := Build(group, model.Inventory{Fragments: []model.DiffFragment{f1, f2}}, map[string]string{"a.go": strings.Repeat("line\n", 50)})
+	f1 := model.MaterializedFragment{ID: "F1", Path: "a.go", NewStart: 10, NewLines: 5, Patch: "@@ -10,5 +10,5 @@\n-old\n+new\n"}
+	f2 := model.MaterializedFragment{ID: "F2", Path: "a.go", NewStart: 30, NewLines: 5, Patch: "@@ -30,5 +30,5 @@\n-old\n+new\n"}
+	group := model.GroupsFile{Groups: []model.SemanticGroup{{ID: "g", Title: "Group", Fragments: []model.Fragment{{ID: "F1", Path: "a.go"}, {ID: "F2", Path: "a.go"}}}}}
+	page := Build(group, model.FragmentSet{Fragments: []model.MaterializedFragment{f1, f2}}, map[string]string{"a.go": strings.Repeat("line\n", 50)})
 	fragments := page.Groups[0].Files[0].Fragments
 	if len(fragments) != 2 {
 		t.Fatalf("got %d fragments, want 2", len(fragments))

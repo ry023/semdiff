@@ -20,8 +20,9 @@ import (
 var assets embed.FS
 
 type FragmentView struct {
-	model.DiffFragment
+	model.MaterializedFragment
 	Description      string
+	RangeLabel       string
 	HeaderHTML       template.HTML
 	HunkHTML         template.HTML
 	UpperContextHTML template.HTML
@@ -63,13 +64,13 @@ type Page struct {
 	FragmentCount, FileCount int
 }
 
-func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]string) Page {
+func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]string) Page {
 	var fileContents map[string]string
 	if len(contents) > 0 {
 		fileContents = contents[0]
 	}
-	byID := map[string]model.DiffFragment{}
-	byPath := map[string][]model.DiffFragment{}
+	byID := map[string]model.MaterializedFragment{}
+	byPath := map[string][]model.MaterializedFragment{}
 	for _, f := range inv.Fragments {
 		byID[f.ID] = f
 		byPath[f.Path] = append(byPath[f.Path], f)
@@ -83,10 +84,11 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 	allFiles := map[string]bool{}
 	for _, group := range g.Groups {
 		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, SummaryHTML: renderMarkdown(group.Summary), Order: group.Order}
-		fileMap := map[string][]model.DiffFragment{}
+		fileMap := map[string][]model.MaterializedFragment{}
 		descriptions := map[string]string{}
+		rangeLabels := map[string]string{}
 		var paths []string
-		for _, reference := range group.FragmentReferences() {
+		for _, reference := range group.Fragments {
 			id := reference.ID
 			f := byID[id]
 			if _, ok := fileMap[f.Path]; !ok {
@@ -94,6 +96,7 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 			}
 			fileMap[f.Path] = append(fileMap[f.Path], f)
 			descriptions[id] = reference.Description
+			rangeLabels[id] = formatRanges(reference)
 			allFiles[f.Path] = true
 			gv.FragmentCount++
 		}
@@ -102,6 +105,7 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 			file := buildFileView(path, fileMap[path], fileContents[path], byPath[path])
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
+				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
 			}
 			gv.Files = append(gv.Files, file)
 		}
@@ -120,6 +124,24 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 	})
 	p.FileCount = len(allFiles)
 	return p
+}
+
+func formatRanges(fragment model.Fragment) string {
+	var parts []string
+	for _, span := range fragment.Ranges {
+		oldSide, newSide := "∅", "∅"
+		if span.Old != nil {
+			oldSide = strconv.Itoa(span.Old.Start) + "," + strconv.Itoa(span.Old.Lines)
+		}
+		if span.New != nil {
+			newSide = strconv.Itoa(span.New.Start) + "," + strconv.Itoa(span.New.Lines)
+		}
+		parts = append(parts, "-"+oldSide+" +"+newSide)
+	}
+	if fragment.FileMetadata {
+		parts = append(parts, "metadata")
+	}
+	return strings.Join(parts, "; ")
 }
 
 func buildCategoryViews(files []FileView, declared []model.FileCategory) []CategoryView {
@@ -234,14 +256,14 @@ func renderMarkdown(source string) template.HTML {
 	return template.HTML(rendered.String())
 }
 
-func fragmentStart(f model.DiffFragment) int {
+func fragmentStart(f model.MaterializedFragment) int {
 	if f.NewLines > 0 {
 		return f.NewStart
 	}
 	return f.OldStart
 }
 
-func fragmentLines(f model.DiffFragment) int {
+func fragmentLines(f model.MaterializedFragment) int {
 	if f.NewLines > 0 {
 		return f.NewLines
 	}
@@ -269,9 +291,9 @@ func sourceLines(content string) []string {
 	return lines
 }
 
-func buildFragmentView(f model.DiffFragment, content string, siblings []model.DiffFragment) FragmentView {
+func buildFragmentView(f model.MaterializedFragment, content string, siblings []model.MaterializedFragment) FragmentView {
 	header, hunk := splitPatch(f.Patch)
-	view := FragmentView{DiffFragment: f, HeaderHTML: colorPatch(header), HunkHTML: colorPatch(hunk)}
+	view := FragmentView{MaterializedFragment: f, HeaderHTML: colorPatch(header), HunkHTML: colorPatch(hunk)}
 	lines := sourceLines(content)
 	start := fragmentStart(f) - 1
 	if start < 0 || start > len(lines) {
@@ -299,7 +321,7 @@ func buildFragmentView(f model.DiffFragment, content string, siblings []model.Di
 	return view
 }
 
-func buildFileView(path string, fragments []model.DiffFragment, content string, siblings []model.DiffFragment) FileView {
+func buildFileView(path string, fragments []model.MaterializedFragment, content string, siblings []model.MaterializedFragment) FileView {
 	sort.SliceStable(fragments, func(i, j int) bool {
 		return fragmentStart(fragments[i]) < fragmentStart(fragments[j])
 	})
@@ -349,8 +371,8 @@ func buildFileView(path string, fragments []model.DiffFragment, content string, 
 		if globalIndex[current.ID] != globalIndex[previous.ID]+1 {
 			continue
 		}
-		start := fragmentStart(previous.DiffFragment) - 1 + fragmentLines(previous.DiffFragment)
-		end := fragmentStart(current.DiffFragment) - 1
+		start := fragmentStart(previous.MaterializedFragment) - 1 + fragmentLines(previous.MaterializedFragment)
+		end := fragmentStart(current.MaterializedFragment) - 1
 		start = max(0, min(start, len(lines)))
 		end = max(start, min(end, len(lines)))
 		previous.LowerContextHTML = expandableGap(lines[start:end], start+1)

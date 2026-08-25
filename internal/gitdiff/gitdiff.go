@@ -83,28 +83,236 @@ func (r Runner) Commits(ctx context.Context, rangeSpec string) ([]model.Commit, 
 
 var hunkRE = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
-func (r Runner) Fragments(ctx context.Context, rangeSpec string) (model.Inventory, error) {
+func (r Runner) Changes(ctx context.Context, rangeSpec string) (model.ChangeMap, error) {
 	base, head, err := ParseRange(rangeSpec)
 	if err != nil {
-		return model.Inventory{}, err
+		return model.ChangeMap{}, err
 	}
 	baseSHA, err := r.Resolve(ctx, base)
 	if err != nil {
-		return model.Inventory{}, err
+		return model.ChangeMap{}, err
 	}
 	headSHA, err := r.Resolve(ctx, head)
 	if err != nil {
-		return model.Inventory{}, err
+		return model.ChangeMap{}, err
 	}
-	b, err := r.git(ctx, "diff", "--find-renames", "--no-color", "--unified=3", baseSHA, headSHA, "--")
+	b, err := r.git(ctx, "diff", "--find-renames", "--no-color", "--unified=0", baseSHA, headSHA, "--")
 	if err != nil {
-		return model.Inventory{}, err
+		return model.ChangeMap{}, err
 	}
 	frags, err := ParseUnified(b, baseSHA, headSHA)
 	if err != nil {
-		return model.Inventory{}, err
+		return model.ChangeMap{}, err
 	}
-	return model.Inventory{BaseSHA: baseSHA, HeadSHA: headSHA, Fragments: frags}, nil
+	return model.ChangeMap{BaseSHA: baseSHA, HeadSHA: headSHA, Changes: frags}, nil
+}
+
+// SuggestedFragments converts Git's zero-context changed spans into editable
+// fragment definitions. These are starting points only; groups.json stores
+// the resulting ranges as its source of truth.
+func SuggestedFragments(inv model.ChangeMap) []model.Fragment {
+	result := make([]model.Fragment, 0, len(inv.Changes))
+	metadataPaths := map[string]bool{}
+	for _, change := range inv.Changes {
+		if change.Metadata || change.OldLines == 0 && change.NewLines == 0 {
+			metadataPaths[change.Path] = true
+		}
+	}
+	for _, change := range inv.Changes {
+		if change.Metadata {
+			continue
+		}
+		fragment := model.Fragment{ID: change.ID, Path: change.Path}
+		if change.OldLines > 0 || change.NewLines > 0 {
+			span := model.FragmentRange{}
+			if change.OldLines > 0 {
+				span.Old = &model.Range{Start: change.OldStart, Lines: change.OldLines}
+			}
+			if change.NewLines > 0 {
+				span.New = &model.Range{Start: change.NewStart, Lines: change.NewLines}
+			}
+			fragment.Ranges = []model.FragmentRange{span}
+		} else {
+			fragment.FileMetadata = true
+		}
+		result = append(result, fragment)
+	}
+	for path := range metadataPaths {
+		merged := false
+		for index := range result {
+			if result[index].Path == path {
+				result[index].FileMetadata = true
+				merged = true
+				break
+			}
+		}
+		if merged {
+			continue
+		}
+		for _, change := range inv.Changes {
+			if change.Path == path {
+				result = append(result, model.Fragment{ID: change.ID, Path: path, FileMetadata: true})
+				break
+			}
+		}
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].Path == result[j].Path {
+			return result[i].ID < result[j].ID
+		}
+		return result[i].Path < result[j].Path
+	})
+	return result
+}
+
+// Materialize renders range-defined fragments back into ordinary diff
+// fragments for show and the viewer.
+func Materialize(inv model.ChangeMap, definitions []model.Fragment) model.FragmentSet {
+	result := model.FragmentSet{BaseSHA: inv.BaseSHA, HeadSHA: inv.HeadSHA}
+	for _, definition := range definitions {
+		fragment := model.MaterializedFragment{
+			ID: definition.ID, BaseSHA: inv.BaseSHA, HeadSHA: inv.HeadSHA, Path: definition.Path,
+		}
+		setFragmentBounds(&fragment, definition.Ranges)
+		var header string
+		var hunks []string
+		for _, change := range inv.Changes {
+			if change.Path != definition.Path {
+				continue
+			}
+			fileHeader, hunk := splitPatch(change.Patch)
+			if header == "" {
+				header = fileHeader
+			}
+			if change.Metadata || change.OldLines == 0 && change.NewLines == 0 {
+				if definition.FileMetadata {
+					fragment.Patch = change.Patch
+				}
+				continue
+			}
+			hunks = append(hunks, selectHunk(hunk, definition.Ranges)...)
+		}
+		if len(hunks) > 0 {
+			fragment.Patch = header + strings.Join(hunks, "")
+		}
+		result.Fragments = append(result.Fragments, fragment)
+	}
+	return result
+}
+
+func setFragmentBounds(fragment *model.MaterializedFragment, ranges []model.FragmentRange) {
+	oldStart, oldEnd, newStart, newEnd := 0, 0, 0, 0
+	for _, span := range ranges {
+		if span.Old != nil {
+			if oldStart == 0 || span.Old.Start < oldStart {
+				oldStart = span.Old.Start
+			}
+			oldEnd = max(oldEnd, span.Old.Start+span.Old.Lines)
+		}
+		if span.New != nil {
+			if newStart == 0 || span.New.Start < newStart {
+				newStart = span.New.Start
+			}
+			newEnd = max(newEnd, span.New.Start+span.New.Lines)
+		}
+	}
+	fragment.OldStart, fragment.NewStart = oldStart, newStart
+	if oldStart > 0 {
+		fragment.OldLines = oldEnd - oldStart
+	}
+	if newStart > 0 {
+		fragment.NewLines = newEnd - newStart
+	}
+}
+
+func splitPatch(patch string) (string, string) {
+	lines := strings.SplitAfter(patch, "\n")
+	for index, line := range lines {
+		if strings.HasPrefix(line, "@@ ") {
+			return strings.Join(lines[:index], ""), strings.Join(lines[index:], "")
+		}
+	}
+	return patch, ""
+}
+
+func selected(line int, ranges []model.FragmentRange, old bool) bool {
+	for _, span := range ranges {
+		candidate := span.New
+		if old {
+			candidate = span.Old
+		}
+		if candidate != nil && line >= candidate.Start && line < candidate.Start+candidate.Lines {
+			return true
+		}
+	}
+	return false
+}
+
+func selectHunk(hunk string, ranges []model.FragmentRange) []string {
+	lines := strings.Split(strings.TrimSuffix(hunk, "\n"), "\n")
+	if len(lines) == 0 {
+		return nil
+	}
+	m := hunkRE.FindStringSubmatch(lines[0])
+	if m == nil {
+		return nil
+	}
+	oldLine, _ := strconv.Atoi(m[1])
+	newLine, _ := strconv.Atoi(m[3])
+	type segment struct {
+		oldStart, newStart, oldLines, newLines int
+		lines                                  []string
+	}
+	var segments []segment
+	var current *segment
+	flush := func() {
+		if current != nil {
+			segments = append(segments, *current)
+			current = nil
+		}
+	}
+	for _, line := range lines[1:] {
+		if strings.HasPrefix(line, "\\") {
+			if current != nil {
+				current.lines = append(current.lines, line)
+			}
+			continue
+		}
+		isOld := strings.HasPrefix(line, "-")
+		isNew := strings.HasPrefix(line, "+")
+		isContext := strings.HasPrefix(line, " ")
+		keep := (isOld && selected(oldLine, ranges, true)) || (isNew && selected(newLine, ranges, false))
+		if !keep {
+			flush()
+		} else {
+			if current == nil {
+				current = &segment{oldStart: oldLine, newStart: newLine}
+			}
+			current.lines = append(current.lines, line)
+			if isOld {
+				current.oldLines++
+			}
+			if isNew {
+				current.newLines++
+			}
+		}
+		if isOld {
+			oldLine++
+		}
+		if isNew {
+			newLine++
+		}
+		if isContext {
+			oldLine++
+			newLine++
+		}
+	}
+	flush()
+	result := make([]string, 0, len(segments))
+	for _, part := range segments {
+		result = append(result, fmt.Sprintf("@@ -%d,%d +%d,%d @@\n%s\n", part.oldStart, part.oldLines, part.newStart, part.newLines, strings.Join(part.lines, "\n")))
+	}
+	return result
 }
 
 // FileContents loads the head version of each path, falling back to the base
@@ -145,7 +353,42 @@ func decodePath(s string) string {
 	return s
 }
 
-func ParseUnified(data []byte, baseSHA, headSHA string) ([]model.DiffFragment, error) {
+func diffHeaderPath(line string) string {
+	rest := strings.TrimSpace(strings.TrimPrefix(line, "diff --git "))
+	var tokens []string
+	for rest != "" && len(tokens) < 2 {
+		if rest[0] != '"' {
+			fields := strings.Fields(rest)
+			if len(fields) == 0 {
+				break
+			}
+			tokens = append(tokens, fields[0])
+			rest = strings.TrimSpace(strings.TrimPrefix(rest, fields[0]))
+			continue
+		}
+		end, escaped := 1, false
+		for end < len(rest) {
+			if rest[end] == '"' && !escaped {
+				end++
+				break
+			}
+			if rest[end] == '\\' && !escaped {
+				escaped = true
+			} else {
+				escaped = false
+			}
+			end++
+		}
+		tokens = append(tokens, rest[:end])
+		rest = strings.TrimSpace(rest[end:])
+	}
+	if len(tokens) != 2 {
+		return ""
+	}
+	return decodePath(tokens[1])
+}
+
+func ParseUnified(data []byte, baseSHA, headSHA string) ([]model.DiffChange, error) {
 	type fileDiff struct {
 		path   string
 		header []string
@@ -173,7 +416,7 @@ func ParseUnified(data []byte, baseSHA, headSHA string) ([]model.DiffFragment, e
 		line := s.Text()
 		if strings.HasPrefix(line, "diff --git ") {
 			flushFile()
-			cur = &fileDiff{}
+			cur = &fileDiff{path: diffHeaderPath(line)}
 			cur.header = append(cur.header, line)
 			continue
 		}
@@ -210,10 +453,11 @@ func ParseUnified(data []byte, baseSHA, headSHA string) ([]model.DiffFragment, e
 		return nil, err
 	}
 	flushFile()
-	var out []model.DiffFragment
+	var out []model.DiffChange
 	for _, f := range files {
+		metadata := hasFileMetadata(f.header)
 		if len(f.hunks) == 0 {
-			f.hunks = [][]string{{}}
+			metadata = true
 		}
 		for _, h := range f.hunks {
 			oldStart, oldLines, newStart, newLines := 0, 0, 0, 0
@@ -236,7 +480,12 @@ func ParseUnified(data []byte, baseSHA, headSHA string) ([]model.DiffFragment, e
 			patchLines := append(append([]string{}, f.header...), h...)
 			patch := strings.Join(patchLines, "\n") + "\n"
 			hash := sha256.Sum256([]byte(baseSHA + "\x00" + headSHA + "\x00" + f.path + "\x00" + fmt.Sprint(oldStart, oldLines, newStart, newLines) + "\x00" + patch))
-			out = append(out, model.DiffFragment{ID: "F-" + hex.EncodeToString(hash[:])[:12], BaseSHA: baseSHA, HeadSHA: headSHA, Path: f.path, OldStart: oldStart, OldLines: oldLines, NewStart: newStart, NewLines: newLines, Patch: patch})
+			out = append(out, model.DiffChange{ID: "F-" + hex.EncodeToString(hash[:])[:12], BaseSHA: baseSHA, HeadSHA: headSHA, Path: f.path, OldStart: oldStart, OldLines: oldLines, NewStart: newStart, NewLines: newLines, Patch: patch})
+		}
+		if metadata {
+			patch := strings.Join(f.header, "\n") + "\n"
+			hash := sha256.Sum256([]byte(baseSHA + "\x00" + headSHA + "\x00" + f.path + "\x00metadata\x00" + patch))
+			out = append(out, model.DiffChange{ID: "F-" + hex.EncodeToString(hash[:])[:12], BaseSHA: baseSHA, HeadSHA: headSHA, Path: f.path, Metadata: true, Patch: patch})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -246,4 +495,15 @@ func ParseUnified(data []byte, baseSHA, headSHA string) ([]model.DiffFragment, e
 		return out[i].Path < out[j].Path
 	})
 	return out, nil
+}
+
+func hasFileMetadata(header []string) bool {
+	for _, line := range header {
+		for _, prefix := range []string{"new file mode ", "deleted file mode ", "old mode ", "new mode ", "rename from ", "rename to ", "Binary files ", "GIT binary patch"} {
+			if strings.HasPrefix(line, prefix) {
+				return true
+			}
+		}
+	}
+	return false
 }

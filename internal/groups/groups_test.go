@@ -1,102 +1,82 @@
 package groups
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ry023/semdiff/internal/model"
 )
 
-func fixture() (model.GroupsFile, model.Inventory) {
-	inv := model.Inventory{BaseSHA: "aaa", HeadSHA: "bbb", Fragments: []model.DiffFragment{{ID: "F1", Path: "a"}, {ID: "F2", Path: "b"}}}
-	g := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "g1", Title: "One", FragmentIDs: []string{"F1"}}, {ID: "g2", Title: "Two", FragmentIDs: []string{"F2"}}}}
-	return g, inv
-}
+func lineRange(start, lines int) *model.Range { return &model.Range{Start: start, Lines: lines} }
 
-func TestValidateOK(t *testing.T) {
-	g, inv := fixture()
-	if errs := Validate(g, inv); len(errs) > 0 {
-		t.Fatal(errs)
-	}
-}
-
-func TestValidateDescribedFragments(t *testing.T) {
-	_, inv := fixture()
-	g := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{
-		{ID: "g1", Title: "One", Fragments: []model.FragmentReference{{ID: "F1", Description: "Introduces the first behavior."}}},
-		{ID: "g2", Title: "Two", Fragments: []model.FragmentReference{{ID: "F2", Description: "Updates the second behavior."}}},
+func fixture() (model.GroupsFile, model.ChangeMap) {
+	changes := model.ChangeMap{BaseSHA: "aaa", HeadSHA: "bbb", Changes: []model.DiffChange{
+		{Path: "a.go", OldStart: 10, OldLines: 2, NewStart: 10, NewLines: 3},
+		{Path: "new.go", NewStart: 1, NewLines: 4},
 	}}
-	if errs := Validate(g, inv); len(errs) > 0 {
-		t.Fatal(errs)
+	fileCategories := []model.FileCategory{{Path: "a.go", Category: "logic"}, {Path: "new.go", Category: "logic"}}
+	groups := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{
+		ID: "logic", Title: "Logic", Summary: "Explains the change.", FileCategories: fileCategories,
+		Fragments: []model.Fragment{
+			{ID: "replace", Path: "a.go", Ranges: []model.FragmentRange{{Old: lineRange(10, 2), New: lineRange(10, 3)}}, Description: "Replaces the behavior."},
+			{ID: "new-top", Path: "new.go", Ranges: []model.FragmentRange{{New: lineRange(1, 2)}}, Description: "Adds the first concern."},
+			{ID: "new-bottom", Path: "new.go", Ranges: []model.FragmentRange{{New: lineRange(3, 2)}}, Description: "Adds the second concern."},
+		},
+	}}}
+	return groups, changes
+}
+
+func TestValidateRangeCoverage(t *testing.T) {
+	g, changes := fixture()
+	if report := ValidateReport(g, changes); len(report.Errors) != 0 {
+		t.Fatal(report.Errors)
 	}
 }
 
-func TestValidateFileCategories(t *testing.T) {
-	inv := model.Inventory{BaseSHA: "aaa", HeadSHA: "bbb", Fragments: []model.DiffFragment{{ID: "F1", Path: "src/a.ts"}, {ID: "F2", Path: "src/a.ts"}, {ID: "F3", Path: "src/a.test.ts"}}}
-	g := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "g", Title: "Group", FileCategories: []model.FileCategory{{Path: "src/a.ts", Category: "logic"}, {Path: "src/a.test.ts", Category: "test"}}, FragmentIDs: []string{"F1", "F2", "F3"}}}}
-	report := ValidateReport(g, inv)
-	if len(report.Errors) != 0 || len(report.Warnings) != 0 {
-		t.Fatalf("valid file categories produced report: %+v", report)
+func TestValidateDetectsGapAndOverlap(t *testing.T) {
+	g, changes := fixture()
+	g.Groups[0].Fragments[1].Ranges[0].New.Lines = 1
+	errors := strings.Join(Validate(g, changes), "\n")
+	if !strings.Contains(errors, "unassigned changed range: new.go new:2") {
+		t.Fatal(errors)
 	}
 
-	g.Groups[0].FileCategories = []model.FileCategory{{Path: "src/a.ts", Category: "logic"}, {Path: "src/a.ts", Category: "test"}}
-	report = ValidateReport(g, inv)
-	if !contains(report.Errors, "is repeated in group") || !contains(report.Errors, "has no file category for src/a.test.ts") {
-		t.Fatalf("missing category errors: %+v", report.Errors)
-	}
-
-	legacy := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "legacy", Title: "Legacy", FragmentIDs: []string{"F1", "F2", "F3"}}}}
-	report = ValidateReport(legacy, inv)
-	if len(report.Errors) != 0 || !contains(report.Warnings, "has no file_categories") {
-		t.Fatalf("legacy category warning missing: %+v", report)
+	g, changes = fixture()
+	g.Groups[0].Fragments[1].Ranges[0].New.Lines = 3
+	errors = strings.Join(Validate(g, changes), "\n")
+	if !strings.Contains(errors, "assigned to multiple fragments: new.go new:3") {
+		t.Fatal(errors)
 	}
 }
 
-func contains(values []string, want string) bool {
-	for _, value := range values {
-		if strings.Contains(value, want) {
-			return true
-		}
-	}
-	return false
-}
-
-func TestValidateFailures(t *testing.T) {
-	tests := []struct {
-		name   string
-		mutate func(*model.GroupsFile)
-		want   string
-	}{
-		{"unassigned", func(g *model.GroupsFile) { g.Groups[1].FragmentIDs = nil }, "unassigned fragment"},
-		{"multiple", func(g *model.GroupsFile) { g.Groups[1].FragmentIDs = []string{"F1", "F2"} }, "multiple groups"},
-		{"unknown", func(g *model.GroupsFile) { g.Groups[0].FragmentIDs = []string{"F1", "missing"} }, "unknown fragment"},
-		{"duplicate group", func(g *model.GroupsFile) { g.Groups[1].ID = "g1" }, "duplicate group ID"},
-		{"base mismatch", func(g *model.GroupsFile) { g.BaseSHA = "wrong" }, "base_sha mismatch"},
-		{"head mismatch", func(g *model.GroupsFile) { g.HeadSHA = "wrong" }, "head_sha mismatch"},
-		{"both fragment formats", func(g *model.GroupsFile) {
-			g.Groups[0].Fragments = []model.FragmentReference{{ID: "F1", Description: "Description"}}
-		}, "either fragments or fragment_ids"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g, inv := fixture()
-			tt.mutate(&g)
-			errs := Validate(g, inv)
-			if !strings.Contains(strings.Join(errs, "\n"), tt.want) {
-				t.Fatalf("errors %v do not contain %q", errs, tt.want)
-			}
-		})
+func TestValidateAllowsDiscontiguousRanges(t *testing.T) {
+	g, changes := fixture()
+	g.Groups[0].Fragments[1].Ranges = append(g.Groups[0].Fragments[1].Ranges, model.FragmentRange{New: lineRange(4, 1)})
+	g.Groups[0].Fragments[2].Ranges[0] = model.FragmentRange{New: lineRange(3, 1)}
+	if errors := Validate(g, changes); len(errors) != 0 {
+		t.Fatal(errors)
 	}
 }
 
-func TestValidateFragmentDescription(t *testing.T) {
-	_, inv := fixture()
-	g := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{
-		{ID: "g1", Title: "One", Fragments: []model.FragmentReference{{ID: "F1"}}},
-		{ID: "g2", Title: "Two", Fragments: []model.FragmentReference{{ID: "F2", Description: "Explains F2"}}},
-	}}
-	errs := strings.Join(Validate(g, inv), "\n")
-	if !strings.Contains(errs, "fragment F1 in group g1 has an empty description") {
-		t.Fatal(errs)
+func TestValidateMetadataOnlyChange(t *testing.T) {
+	changes := model.ChangeMap{BaseSHA: "a", HeadSHA: "b", Changes: []model.DiffChange{{Path: "renamed.go"}}}
+	g := model.GroupsFile{Version: 1, BaseSHA: "a", HeadSHA: "b", Groups: []model.SemanticGroup{{
+		ID: "rename", Title: "Rename", Summary: "Renames the file.", FileCategories: []model.FileCategory{{Path: "renamed.go", Category: "logic"}},
+		Fragments: []model.Fragment{{ID: "rename-file", Path: "renamed.go", FileMetadata: true, Description: "Renames the file."}},
+	}}}
+	if errors := Validate(g, changes); len(errors) != 0 {
+		t.Fatal(errors)
+	}
+}
+
+func TestLoadRejectsOldFragmentIDs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "groups.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"base_sha":"a","head_sha":"b","groups":[{"id":"g","title":"G","summary":"S","fragment_ids":["F1"]}]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "unknown field \"fragment_ids\"") {
+		t.Fatalf("old schema was accepted: %v", err)
 	}
 }

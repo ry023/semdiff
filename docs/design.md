@@ -1,755 +1,133 @@
-# MVP: Semantic Git Diff Viewer
+# semdiff design
 
-GitのPR/ブランチ差分を、ファイル単位やコミット単位ではなく、**意味のある変更単位（Semantic Group）に再構成してレビューできるツール**を実装してください。
+## Goal
 
-目的はGit履歴を書き換えることではありません。既存のGit commitやEntire.io等のprovenanceはそのまま維持し、その上に**レビュー専用のsemantic layer**を構築します。
+`semdiff` provides a semantic review layer over a fixed Git `base..head` range. It does not rewrite commits. Review authors define meaningful fragments and collect them into ordered semantic groups.
 
-## 背景
+## Core distinction
 
-大きなPRでは `Files changed` に大量のファイルが並び、変更全体を理解するのが難しくなります。
+Git hunks and semantic fragments are different concepts:
 
-しかし実際の変更は例えば、
+- Git supplies a mechanical change map: added lines, deleted lines, and file metadata changes.
+- A fragment supplies semantic ownership: a path and one or more ranges selecting records from that change map.
+- A semantic group connects fragments across files into one review concern.
 
-* 新しいdomain conceptの追加
-* DBへの永続化
-* APIへの公開
-* frontend対応
-* test更新
-* generated/mechanical change
+Git zero-context hunks may seed a draft, but they never determine the final fragment boundaries. A new file can be split into several fragments, and discontiguous edits in one file can be represented by one fragment.
 
-のような意味単位に分けられます。
+## Data model
 
-このツールではGit diffを細かな差分断片へ分解し、Agentがそれらを意味単位にグループ化し、その結果をWeb Viewerで表示します。
-
-## 実装言語
-
-**Goを使用してください。**
-
-CLI、Git操作、データモデル、validation、ローカルWeb ServerはGoで実装してください。
-
-Web ViewerはMVPでは可能な限り軽量にしてください。
-
-* Go標準ライブラリの `net/http` を基本とする
-* HTML/CSS/JavaScriptで十分ならフロントエンドフレームワークは導入しない
-* 必要であればWeb assetsをGo binaryへembedしてよい
-* dependenciesは最小限にする
-* 最終的に単一バイナリとして配布しやすい構成を優先する
-
-## コア概念
-
-このMVPでは主に以下の2つのデータ構造を扱います。
-
-### DiffFragment
-
-`DiffFragment` は、`base..head` 間の変更の一部分を表すレビュー用の最小単位です。
-
-1つのファイル内に複数存在でき、それぞれ別のSemantic Groupへ所属できます。
-
-最低限、以下の情報を保持してください。
-
-```text
-DiffFragment
-- id
-- base commit SHA
-- head commit SHA
-- file path
-- old range
-- new range
-- changed lines / patch
-```
-
-`id` は、特定の `base..head` に対して一意に識別できれば十分です。
-
-MVPでは、PR更新をまたいで同一fragmentを永続的に追跡する必要はありません。
-
-例えば以下を元にIDを生成して構いません。
-
-```text
-base SHA
-+ head SHA
-+ file path
-+ old/new range
-+ 必要ならpatch hash
-```
-
-DiffFragmentの境界は、まずは実装しやすい方法で構いません。
-
-例えば、連続する変更行のまとまりを1つのDiffFragmentとして扱ってください。
-
-ただし、将来的により細かく分割できるよう、データモデルと内部APIは特定の分割方式に強く依存しない形にしてください。
-
-### SemanticGroup
-
-`SemanticGroup` は、複数のDiffFragmentを意味的にまとめたレビュー単位です。
-
-例えば、
-
-```text
-Introduce OrderStatus
-Persist OrderStatus
-Expose OrderStatus through API
-Display OrderStatus in frontend
-Update tests
-Generated changes
-```
-
-のような単位です。
-
-最低限、以下を保持してください。
-
-```text
-SemanticGroup
-- id
-- title
-- summary
-- fragment IDs
-- optional review order
-```
-
-## 全体構成
-
-以下の3レイヤーに分けて実装してください。
-
-```text
-Git repository
-    ↓
-Diff Fragment extraction / CLI
-    ↓
-Semantic Grouping Agent Skill
-    ↓
-groups.json
-    ↓
-Web Viewer
-```
-
-## 1. Diff Fragment Data Model / Git CLI
-
-Git repositoryからcommit rangeとdiffを取得し、DiffFragmentへ変換するGo CLIを実装してください。
-
-CLI名は `semdiff` とします。
-
-最低限、以下の操作を提供してください。
-
-```bash
-semdiff commits <base>..<head>
-
-semdiff fragments <base>..<head>
-
-semdiff grouping init <base>..<head>
-semdiff grouping apply <operations-file|->
-semdiff grouping status
-semdiff grouping inspect --unassigned
-semdiff grouping finalize <groups-file>
-
-semdiff show <fragment-id>
-
-semdiff validate <groups-file>
-
-semdiff view <groups-file>
-```
-
-必要なら以下も追加して構いません。
-
-```bash
-semdiff context <fragment-id>
-
-semdiff related <fragment-id>
-```
-
-Agent Skillから使うため、各コマンドはJSON出力をサポートしてください。
-
-例えば、
-
-```bash
-semdiff fragments origin/main..HEAD --json
-```
-
-のような形です。
-
-### commits
-
-commit rangeに含まれるcommitの概要を返します。
-
-例:
-
-```json
-[
-  {
-    "sha": "abc123",
-    "subject": "Add status support",
-    "author": "Alice",
-    "timestamp": "2026-08-24T10:00:00Z",
-    "files_changed": 8
-  }
-]
-```
-
-### fragments
-
-range全体についてDiffFragment inventoryを返します。
-
-例:
-
-```json
-[
-  {
-    "id": "F001",
-    "base_sha": "...",
-    "head_sha": "...",
-    "path": "server/order.go",
-    "old_start": 42,
-    "old_lines": 12,
-    "new_start": 42,
-    "new_lines": 18
-  }
-]
-```
-
-inventoryでは巨大なpatch全文を必ずしも返す必要はありません。
-
-Agentが全diffを一度にコンテキストへ読み込まなくて済むよう、metadata中心の軽い出力にしてください。
-
-### show
-
-指定したDiffFragmentの実際の変更内容を返します。
-
-例:
-
-```bash
-semdiff show F001 --json
-```
-
-```json
-{
-  "id": "F001",
-  "path": "server/order.go",
-  "old_start": 42,
-  "old_lines": 12,
-  "new_start": 42,
-  "new_lines": 18,
-  "patch": "..."
-}
-```
-
-### context
-
-実装する場合、DiffFragment周辺のソースコードを取得します。
-
-Agentが変更箇所だけでは意味を判断できない場合に利用することを想定しています。
-
-### related
-
-実装する場合、あるDiffFragmentに関連しそうな候補を機械的なheuristicで返します。
-
-例えば、
-
-* 同一ファイル
-* 同一commitに含まれる変更
-* 近接する変更
-* testとimplementationらしいファイル名
-* import/reference関係
-
-などです。
-
-ただし、Semantic GroupそのものをCLI側で決定する必要はありません。
-
-## 2. Semantic Grouping Agent Skill
-
-Agentに巨大な `git log -p` や全diffを最初から丸ごと渡し、Markdownプロンプトだけで処理させる構成にはしないでください。
-
-**決定的・機械的な処理はCLI、意味判断はAgent**という責務分離にしてください。
-
-Agent SkillをMarkdownで用意し、Agentが `semdiff` CLIを使って段階的に探索するよう指示してください。
-
-### Agentの責務
-
-Agentは以下を担当します。
-
-* 変更全体の意図を理解する
-* DiffFragment間の意味的な関連性を判断する
-* Semantic Groupを作る
-* Group titleを付ける
-* Group summaryを書く
-* 各DiffFragmentをGroupへ割り当てる
-* `semdiff classify` の機械分類を確認し、Group内のファイルカテゴリを決定する
-* 必要ならレビュー順序を決める
-* 分類困難な変更を適切なfallback groupへ分類する
-
-Agentは最終`groups.json`を直接管理せず、`semdiff grouping`のdraft操作を段階的に適用します。CLIがfragment inventory、SHA、割り当て整合性、カテゴリの機械候補、最終schemaを管理し、Agentはsemanticな判断だけを追加・修正します。
-
-出力例:
-
-```json
-{
-  "groups": [
-    {
-      "id": "introduce-order-status",
-      "title": "Introduce OrderStatus",
-      "summary": "Introduce the OrderStatus domain concept and expose its core representation.",
-      "fragments": [
-        {"id": "F001", "description": "Defines the OrderStatus domain type."},
-        {"id": "F004", "description": "Adds status to the API representation."},
-        {"id": "F017", "description": "Wires status into order construction."}
-      ]
-    },
-    {
-      "id": "persist-order-status",
-      "title": "Persist OrderStatus",
-      "summary": "Store and retrieve OrderStatus through the repository layer.",
-      "fragments": [
-        {"id": "F002", "description": "Stores status in the repository."},
-        {"id": "F009", "description": "Loads status from persisted records."}
-      ]
-    }
-  ]
-}
-```
-
-### Agentの探索フロー
-
-Skillでは、おおむね以下の手順を指示してください。
-
-```text
-1. `semdiff grouping init <base>..<head>` でdraftを初期化する
-2. commit一覧とDiffFragment inventoryを確認する
-3. `semdiff classify <base>..<head> --json` でパスベースのカテゴリ候補を取得する
-4. commit message / path / fragment metadataから変更全体の概要を把握する
-5. 必要なfragmentだけshowする
-6. 必要に応じてcontext / relatedを使う
-7. 仮のSemantic Groupを`grouping apply`でdraftへ追加する
-8. 全fragmentを段階的にGroupへ割り当てる
-9. Groupごとに関連ファイルのカテゴリとfragment descriptionを確定する
-10. `grouping status`で未完了箇所を確認する
-11. 未割当fragmentがあれば再調査し、必要ならfallback groupへ分類する
-12. `semdiff grouping finalize groups.json`で厳密検証と出力を行う
-13. 必要に応じて`semdiff validate groups.json`を再実行する
-```
-
-Agentが最初から全patchをコンテキストへ読み込まないことを重視してください。
-
-### Grouping draft
-
-`semdiff grouping init`は`.semdiff/grouping-draft.json`に、resolved SHA、patchを省いたfragment inventory、`semdiff classify`の候補を保存します。Agentのsemantic判断は`grouping apply`の操作JSONとして複数回適用できます。
-
-draftでは未所属fragment、description未記入、summary未完成を許容します。ただし、不明なID、重複所属、重複Group IDなどの構造エラーは保存しません。`grouping status`は残作業だけを返し、`grouping finalize`が完全coverageとfile categoryを検証して最終`groups.json`へ変換します。applyはatomicで、失敗した操作バッチはdraftへ反映されません。
-
-## Coverageの不変条件
-
-これはMVPで重要な制約です。
-
-**すべてのDiffFragmentが必ずちょうど1つのSemantic Groupへ所属する**ようにしてください。
-
-```text
-∀ fragment, exactly one semantic group
-```
-
-未所属も重複所属もvalidation errorです。
-
-Agentの判断だけに任せず、`semdiff validate` で機械的に検証してください。
-
-例えば、
-
-```text
-87 fragments total
-84 assigned
-3 unassigned
-
-F031
-F052
-F086
-```
-
-あるいは、
-
-```text
-F017 is assigned to multiple groups:
-- introduce-order-status
-- persist-order-status
-```
-
-のように問題を返してください。
-
-Agent Skillには、
-
-```text
-validateが成功するまでgroupingを完了扱いにしない
-```
-
-というルールを書いてください。
-
-意味的な分類が困難なfragmentを無理に既存Groupへ押し込む必要はありません。
-
-必要に応じて、
-
-* Mechanical changes
-* Generated changes
-* Incidental cleanup
-* Unclassified
-
-などのfallback groupを作って構いません。
-
-## 複数Groupへの意味的な関連
-
-MVPでは、1つのDiffFragmentを複数Groupへ重複所属させないでください。
-
-意味的に複数のconcernへ関係する場合でも、primary membershipは1つにします。
-
-将来的には、
-
-```text
-related_group_ids
-```
-
-のような補助relationを追加しても構いませんが、MVPでは不要です。
-
-## 3. Web Viewer
-
-Semantic GroupデータとGit repositoryの実際のdiffを読み込み、意味単位で差分をレビューできるローカルWeb Viewerを実装してください。
-
-GitHubの `Files changed` が、
-
-```text
-file
-  -> diff fragments
-```
-
-であるのに対して、このViewerでは、
-
-```text
-semantic group
-  -> file
-      -> diff fragments
-```
-
-という階層で表示します。
-
-表示イメージ:
-
-```text
-Semantic Changes
-
-▼ 1. Introduce OrderStatus
-    Introduces the new domain concept and API representation.
-
-    domain/order.go
-    --------------------------------
-    - old code
-    + new code
-    --------------------------------
-
-    api/schema.ts
-    --------------------------------
-    - old
-    + new
-    --------------------------------
-
-
-▼ 2. Persist OrderStatus
-    Stores the newly introduced status.
-
-    repository/order.go
-    --------------------------------
-    ...
-```
-
-### Viewerで最低限欲しい機能
-
-MVPでは以下を実装してください。
-
-* Semantic Group一覧
-* Group title
-* Group summary
-* Group単位の展開/折りたたみ
-* Group内のfile category見出し（カテゴリ単位で折りたたみ、初期状態は展開）
-* file path表示
-* unified diff表示
-* fragment数
-* file数
-* range全体のbase/head SHA表示
-* syntax highlightingが容易なら追加
-
-GitHub API連携やレビューコメント投稿は不要です。
-
-ローカルViewerとして成立すれば十分です。
-
-例えば、
-
-```bash
-semdiff view groups.json
-```
-
-でHTTP serverを起動し、ブラウザで閲覧できるようにしてください。
-
-必要であればWeb assetsは `embed` packageでバイナリに埋め込んでください。
-
-## groups.json
-
-Agentが生成するSemantic Groupデータのschemaを明確に定義してください。
-
-例:
+The only supported `groups.json` schema is version 1:
 
 ```json
 {
   "version": 1,
-  "base_sha": "abc...",
-  "head_sha": "def...",
+  "base_sha": "<full SHA>",
+  "head_sha": "<full SHA>",
   "groups": [
     {
-      "id": "introduce-order-status",
-      "title": "Introduce OrderStatus",
-      "summary": "Introduce the new domain concept.",
+      "id": "command-boundary",
+      "title": "Centralize command execution",
+      "summary": "Explains the motivation, approach, and result.",
       "order": 1,
       "file_categories": [
-        {"path": "src/domain.ts", "category": "logic"}
+        {"path": "src/commands.ts", "category": "logic"}
       ],
       "fragments": [
-        {"id": "F001", "description": "Defines the new domain concept."},
-        {"id": "F004", "description": "Exposes the concept through the API."}
+        {
+          "id": "command-contract",
+          "path": "src/commands.ts",
+          "ranges": [
+            {
+              "old": {"start": 10, "lines": 4},
+              "new": {"start": 10, "lines": 7}
+            },
+            {
+              "old": {"start": 80, "lines": 2},
+              "new": {"start": 83, "lines": 4}
+            }
+          ],
+          "description": "Defines the shared command contract and routes execution through it."
+        }
       ]
     }
   ]
 }
 ```
 
-以下をvalidationしてください。
+### Range semantics
 
-* `base_sha` / `head_sha` が現在のfragment inventoryと一致する
-* Group IDが一意
-* `file_categories`がある場合、Groupに関連する各ファイルがちょうど1回だけ出現する
-* fragment IDが存在する
-* 新しい `fragments` 形式では各fragmentの `description` が空でない
-* すべてのfragmentがちょうど1回だけ出現する
-* unknown fragmentがない
-* 重複所属がない
-* 未所属fragmentがない
+`start` is a one-based file line number and `lines` is a positive count. A range may contain:
 
-既存の `fragment_ids` 形式は後方互換のため読み込み可能ですが、新しく生成する場合は説明付きの `fragments` 形式を使用してください。
+- both `old` and `new` for a replacement;
+- only `new` for an addition;
+- only `old` for a deletion.
 
-## CLIとAgentの責務分離
+The old and new sides select changed lines independently. Unchanged lines inside a declared range provide semantic context but are not owned and do not affect coverage. A fragment may contain multiple ranges, but remains local to one path.
 
-原則として以下を守ってください。
+`file_metadata: true` selects the path's non-line change, such as creation, deletion, rename, mode, symlink, or binary metadata. It can coexist with ranges on the same fragment.
 
-### CLI / deterministic logic
+### Fragment IDs
 
-担当するもの:
+A fragment ID is unique within one draft or groups file. It is a stable editing and lookup handle, not a hash-derived identity. The fragment's path and ranges are its actual definition. IDs do not need to persist when `base_sha` or `head_sha` changes.
 
-* Git command実行
-* commit range解析
-* diff取得
-* DiffFragment抽出
-* DiffFragment ID生成
-* JSON serialization
-* grouping draftの状態管理とatomicな部分更新
-* schema validation
-* coverage validation
-* draftから最終groups.jsonへの変換
-* Viewerへのデータ提供
-* 必要なら周辺コードや関連候補の取得
+## Validation
 
-### Agent / semantic reasoning
+Validation resolves the recorded SHAs, computes `git diff --unified=0`, and treats every added line, deleted line, and file metadata change as a coverage atom.
 
-担当するもの:
+A valid groups file satisfies all of the following:
 
-* 変更意図の理解
-* fragment間の意味的関連性判断
-* grouping
-* group title
-* group summary
-* review order
-* fallback分類判断
-* grouping draftへ投入するsemantic decision
+- SHAs match the computed change map.
+- Group and fragment IDs are unique and non-empty.
+- Every group has a title and summary.
+- Every fragment has a path, description, and at least one range or `file_metadata` selection.
+- Every range has positive coordinates.
+- Every coverage atom is selected by exactly one fragment.
+- Every path used by a group has exactly one file category in that group.
 
-CLI側に高度なLLM的semantic clusteringを実装しないでください。
+Ranges that select no changed lines are rejected. Gaps and overlaps are reported at the changed-line coordinate.
 
-MVPではAgentを意味判断に集中させてください。
+## Patch materialization
 
-## Git履歴との関係
+Patches are derived data and are not stored in `groups.json`. `show` and `view` recompute the Git change map and select diff rows using each fragment's ranges. Discontiguous ranges produce multiple zero-context hunk sections in the materialized patch. The viewer loads file contents separately to offer expandable context.
 
-このMVPはGit履歴を書き換えません。
-
-以下はすべてそのまま維持します。
+This makes review output reproducible from:
 
 ```text
-Git commits
-Git commit hashes
-branch history
-Entire.io checkpoints / provenance
-その他既存Git tooling
+base SHA + head SHA + path + ranges + metadata ownership
 ```
 
-Semantic Groupは完全なderived dataです。
+## CLI workflow
 
 ```text
-Git repository
-       |
-       +--> existing Git / Entire workflow
-       |
-       +--> semdiff
-                |
-                +--> DiffFragments
-                +--> Semantic Groups
-                +--> Web Viewer
+commits <base>..<head>             inspect history
+fragments <base>..<head>           inspect editable starting suggestions
+classify <base>..<head>            inspect path-based category suggestions
+grouping init <base>..<head>       create a resumable draft
+grouping inspect/status            inspect draft work
+grouping apply <operations>        edit definitions and decisions atomically
+grouping finalize <groups-file>    validate coverage and write groups.json
+show --draft <path> <fragment-id>  materialize an editable draft fragment
+show <groups-file> <fragment-id>   materialize a finalized fragment
+validate <groups-file>             recompute and validate coverage
+view <groups-file>                 render semantic groups
 ```
 
-Entire.ioとの直接連携はMVPでは不要です。
+`show` always names its groups file or draft, so it does not depend on mutable “latest inventory” state.
 
-## Source commitについて
+## Draft model
 
-最終的な `base..head` のDiffFragmentが、必ずしも単一のcommitだけに由来するとは限りません。
+The draft contains:
 
-そのため、`source_commit_sha` をDiffFragmentの必須フィールドにはしないでください。
+- resolved base/head SHAs;
+- a lightweight mechanical change map without patches;
+- editable fragment definitions initially seeded from Git zero-context spans;
+- groups whose `members` refer to local fragment IDs;
+- category suggestions and revision metadata.
 
-必要であれば、Git履歴から推定・参照できるprovenance情報として別途追加できる設計にしてください。
+Supported definition operations are `add_fragment`, `update_fragment`, and `delete_fragments`. Supported membership operations are `assign_fragments`, `move_fragments`, and `unassign_fragments`. Group and category operations remain independent so partial work is resumable. Each apply batch is atomic and can use `expected_revision` for optimistic concurrency.
 
-MVPの本質は、最終差分を意味単位へ整理してレビューすることです。
+Finalization refreshes the Git change map before writing output. A stale or incomplete draft therefore cannot silently produce a groups file with incorrect coverage.
 
-## プロジェクト構成
+## File metadata and binary changes
 
-Go projectとして自然な構成にしてください。
-
-例えば以下は一案です。
-
-```text
-cmd/
-  semdiff/
-
-internal/
-  git/
-  diff/
-  fragment/
-  group/
-  validate/
-  viewer/
-
-web/
-  templates/
-  static/
-
-skills/
-  semantic-grouping/
-    SKILL.md
-```
-
-ただし、この構成を機械的に採用する必要はありません。
-
-過剰なpackage分割は避け、MVPとして読みやすい構成を選んでください。
-
-## テスト
-
-最低限、以下をテストしてください。
-
-### DiffFragment extraction
-
-* 1ファイルの単純な変更
-* 1ファイル内の複数変更
-* 複数ファイル
-* file追加
-* file削除
-* renameを含むケース
-* 複数commitを跨ぐrange
-
-### Validation
-
-* 正常なgroups.json
-* 未所属fragment
-* 重複所属
-* unknown fragment ID
-* duplicate Group ID
-* base/head mismatch
-* `file_categories`未記載は既存ファイル互換のwarningとし、新規生成時は解消する
-
-基本カテゴリは `implementation`、`test`、`component`、`logic`、`config`、`unknown` とする。カテゴリ名はenumで固定せず、`docs`、`style`、`migration`などの自由記述も許可する。`semdiff classify`はパス、ファイル名、拡張子、ディレクトリ構造だけから基本カテゴリの叩き台を生成し、最終判断はAgentが行う。
-
-### Viewer
-
-過剰なE2Eテストは不要ですが、少なくとも主要なdata transformationがテスト可能な構造にしてください。
-
-## MVPの実装順序
-
-いきなり完成形を目指さず、まず以下をend-to-endで動かしてください。
-
-```text
-Git repository
-  ↓
-base..head指定
-  ↓
-DiffFragmentsをJSON生成
-  ↓
-grouping draftへ段階的にsemantic判断を適用
-  ↓
-grouping finalize
-  ↓
-groups.json
-  ↓
-validate
-  ↓
-Web ViewerでSemantic Group単位にdiff表示
-```
-
-このvertical sliceにdraft操作とAgent Skillを接続し、最終JSONの構造管理をCLIへ寄せます。
-
-優先順位は以下です。
-
-1. Go CLI skeleton
-2. データモデル
-3. Git diff → DiffFragment
-4. Group schema
-5. validation
-6. Web Viewer
-7. Grouping draft CLI
-8. Agent Skill
-9. UX改善
-
-## 完了条件
-
-最低限、以下が動作する状態にしてください。
-
-```bash
-semdiff fragments origin/main..HEAD --json
-```
-
-でDiffFragment一覧を取得できる。
-
-手書き、または`semdiff grouping finalize`で生成した `groups.json` に対して、
-
-```bash
-semdiff validate groups.json
-```
-
-がcoverageとschemaを検証できる。
-
-さらに、
-
-```bash
-semdiff view groups.json
-```
-
-でローカルWeb Viewerが起動し、
-
-```text
-Semantic Group
-  -> files
-      -> DiffFragments
-```
-
-の順番で実際の差分を閲覧できる。
-
-また、`skills/` 以下にAgent Skillを用意し、AgentがCLIのdraft操作を使って段階的に変更を探索し、coverageを満たす `groups.json` を生成できるようにしてください。
-
-## 実装方針
-
-まずrepositoryの現状を調査してください。
-
-その上で、MVPを最短で成立させる設計を選び、実装してください。
-
-過剰な抽象化、過剰なフレームワーク導入、将来機能の先行実装は避けてください。
-
-設計判断に迷った場合は、以下を最優先してください。
-
-> Gitの物理履歴を変更せず、最終差分をレビューしやすい意味単位へ再構成する。
-
-そして、
-
-> 機械的に判断できることはGo CLIに任せ、意味的な判断はAgent Skillに任せる。
-
-という責務分離を維持してください。
+The diff parser emits metadata coverage independently from textual hunks when Git reports file creation/deletion, mode changes, renames, or binary changes. Draft initialization attaches that ownership to the first suggested fragment for the path; authors may move it to another fragment with `update_fragment`. Metadata-only files receive a fragment with `file_metadata: true` and no ranges.

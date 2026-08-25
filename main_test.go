@@ -55,7 +55,7 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	runGit("add", ".")
 	runGit("commit", "-qm", "head")
 	draftRunner := gitdiff.Runner{Dir: repo}
-	inv, err := draftRunner.Fragments(context.Background(), base+"..HEAD")
+	inv, err := draftRunner.Changes(context.Background(), base+"..HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,16 +70,16 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 		{Op: "upsert_group", GroupID: "logic", Title: stringPtrForTest("Logic"), Summary: stringPtrForTest("A complete summary.")},
 	}}
 	var fragmentIDs []string
-	descriptions := map[string]string{}
 	fileCategories := map[string]string{}
-	for _, fragment := range inv.Fragments {
+	for index, fragment := range inv.Changes {
 		fragmentIDs = append(fragmentIDs, fragment.ID)
-		descriptions[fragment.ID] = "Adds the logic contract."
 		fileCategories[fragment.Path] = "logic"
+		definition := draft.Fragments[index]
+		definition.Description = "Adds the logic contract."
+		request.Operations = append(request.Operations, groupingdraft.Operation{Op: "update_fragment", Fragment: &definition})
 	}
 	request.Operations = append(request.Operations,
-		groupingdraft.Operation{Op: "assign_fragments", GroupID: "logic", FragmentIDs: fragmentIDs},
-		groupingdraft.Operation{Op: "describe_fragments", Descriptions: descriptions},
+		groupingdraft.Operation{Op: "assign_fragments", GroupID: "logic", Members: fragmentIDs},
 		groupingdraft.Operation{Op: "set_file_categories", GroupID: "logic", Categories: fileCategories},
 	)
 	b, err := json.Marshal(request)
@@ -99,7 +99,7 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Groups) != 1 || len(result.Groups[0].Fragments) != len(inv.Fragments) || result.Groups[0].Fragments[0].Description == "" {
+	if len(result.Groups) != 1 || len(result.Groups[0].Fragments) != len(inv.Changes) || result.Groups[0].Fragments[0].Description == "" {
 		t.Fatalf("unexpected finalized groups: %+v", result)
 	}
 }

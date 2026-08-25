@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ry023/semdiff/internal/model"
 )
 
 func TestParseUnified(t *testing.T) {
@@ -42,10 +44,10 @@ rename to after.txt
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 5 {
-		t.Fatalf("got %d fragments, want 5", len(got))
+	if len(got) != 7 {
+		t.Fatalf("got %d changes, want 7", len(got))
 	}
-	wantPaths := []string{"a.go", "a.go", "after.txt", "new.txt", "old.txt"}
+	wantPaths := []string{"a.go", "a.go", "after.txt", "new.txt", "new.txt", "old.txt", "old.txt"}
 	for i, want := range wantPaths {
 		if got[i].Path != want {
 			t.Errorf("fragment %d path=%q want %q", i, got[i].Path, want)
@@ -57,8 +59,30 @@ rename to after.txt
 	if got[0].OldStart != 1 || got[1].NewStart != 10 {
 		t.Fatalf("unexpected hunk ranges: %+v %+v", got[0], got[1])
 	}
-	if got[2].OldLines != 0 || got[2].NewLines != 0 {
+	if !got[2].Metadata {
 		t.Fatalf("rename should be metadata-only: %+v", got[2])
+	}
+}
+
+func TestMaterializeSplitsNewFileAndCombinesRanges(t *testing.T) {
+	diff := "diff --git a/new.txt b/new.txt\nnew file mode 100644\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,6 @@\n+one\n+two\n+three\n+four\n+five\n+six\n"
+	changes, err := ParseUnified([]byte(diff), "base", "head")
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions := []model.Fragment{
+		{ID: "odd", Path: "new.txt", FileMetadata: true, Ranges: []model.FragmentRange{{New: &model.Range{Start: 1, Lines: 2}}, {New: &model.Range{Start: 5, Lines: 2}}}},
+		{ID: "middle", Path: "new.txt", Ranges: []model.FragmentRange{{New: &model.Range{Start: 3, Lines: 2}}}},
+	}
+	materialized := Materialize(model.ChangeMap{BaseSHA: "base", HeadSHA: "head", Changes: changes}, definitions)
+	if len(materialized.Fragments) != 2 {
+		t.Fatal(materialized.Fragments)
+	}
+	if strings.Contains(materialized.Fragments[0].Patch, "+three") || !strings.Contains(materialized.Fragments[0].Patch, "+six") {
+		t.Fatalf("unexpected selected patch: %s", materialized.Fragments[0].Patch)
+	}
+	if !strings.Contains(materialized.Fragments[1].Patch, "+three") || strings.Contains(materialized.Fragments[1].Patch, "+one") {
+		t.Fatalf("unexpected middle patch: %s", materialized.Fragments[1].Patch)
 	}
 }
 
@@ -70,6 +94,17 @@ func TestParseRange(t *testing.T) {
 		if _, _, err := ParseRange(bad); err == nil {
 			t.Errorf("ParseRange(%q) succeeded", bad)
 		}
+	}
+}
+
+func TestParseBinaryAndQuotedPath(t *testing.T) {
+	diff := "diff --git \"a/image file.png\" \"b/image file.png\"\nnew file mode 100644\nindex 000..111\nBinary files /dev/null and b/image file.png differ\n"
+	changes, err := ParseUnified([]byte(diff), "base", "head")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Path != "image file.png" || !changes[0].Metadata {
+		t.Fatalf("unexpected binary change: %+v", changes)
 	}
 }
 
@@ -108,12 +143,12 @@ func TestRunnerAcrossCommitsAndFileOperations(t *testing.T) {
 	run("add", ".")
 	run("commit", "-qm", "second commit")
 	r := Runner{Dir: dir}
-	inv, err := r.Fragments(context.Background(), base+"..HEAD")
+	inv, err := r.Changes(context.Background(), base+"..HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	paths := map[string]bool{}
-	for _, f := range inv.Fragments {
+	for _, f := range inv.Changes {
 		paths[f.Path] = true
 	}
 	for _, want := range []string{"change.txt", "delete.txt", "new.txt", "renamed.txt", "second.txt"} {

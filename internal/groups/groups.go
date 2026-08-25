@@ -15,124 +15,231 @@ func Load(path string) (model.GroupsFile, error) {
 	if err != nil {
 		return model.GroupsFile{}, err
 	}
-	var g model.GroupsFile
-	d := json.NewDecoder(strings.NewReader(string(b)))
-	d.DisallowUnknownFields()
-	if err := d.Decode(&g); err != nil {
-		return g, fmt.Errorf("decode groups file: %w", err)
+	var result model.GroupsFile
+	decoder := json.NewDecoder(strings.NewReader(string(b)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&result); err != nil {
+		return result, fmt.Errorf("decode groups file: %w", err)
 	}
-	return g, nil
+	return result, nil
 }
 
-type ValidationReport struct {
-	Errors   []string
-	Warnings []string
+type ValidationReport struct{ Errors, Warnings []string }
+
+func Validate(g model.GroupsFile, changes model.ChangeMap) []string {
+	return ValidateReport(g, changes).Errors
 }
 
-func Validate(g model.GroupsFile, inv model.Inventory) []string {
-	return ValidateReport(g, inv).Errors
-}
-
-func ValidateReport(g model.GroupsFile, inv model.Inventory) ValidationReport {
-	var report ValidationReport
-	errs := &report.Errors
-	warnings := &report.Warnings
-	if g.Version != 1 {
-		*errs = append(*errs, fmt.Sprintf("version must be 1 (got %d)", g.Version))
-	}
-	if g.BaseSHA != inv.BaseSHA {
-		*errs = append(*errs, fmt.Sprintf("base_sha mismatch: groups=%s inventory=%s", g.BaseSHA, inv.BaseSHA))
-	}
-	if g.HeadSHA != inv.HeadSHA {
-		*errs = append(*errs, fmt.Sprintf("head_sha mismatch: groups=%s inventory=%s", g.HeadSHA, inv.HeadSHA))
-	}
-	known := map[string]bool{}
-	for _, f := range inv.Fragments {
-		known[f.ID] = true
-	}
-	groupIDs, assigned := map[string]bool{}, map[string][]string{}
+func Fragments(g model.GroupsFile) []model.Fragment {
+	var result []model.Fragment
 	for _, group := range g.Groups {
-		if group.ID == "" {
-			*errs = append(*errs, "group id must not be empty")
+		result = append(result, group.Fragments...)
+	}
+	return result
+}
+
+type lineKey struct {
+	path string
+	old  bool
+	line int
+}
+
+func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationReport {
+	var report ValidationReport
+	add := func(format string, args ...any) { report.Errors = append(report.Errors, fmt.Sprintf(format, args...)) }
+	if g.Version != 1 {
+		add("version must be 1 (got %d)", g.Version)
+	}
+	if g.BaseSHA != changes.BaseSHA {
+		add("base_sha mismatch: groups=%s changes=%s", g.BaseSHA, changes.BaseSHA)
+	}
+	if g.HeadSHA != changes.HeadSHA {
+		add("head_sha mismatch: groups=%s changes=%s", g.HeadSHA, changes.HeadSHA)
+	}
+
+	changedLines := map[lineKey]bool{}
+	metadataPaths := map[string]bool{}
+	for _, change := range changes.Changes {
+		if change.Metadata || change.OldLines == 0 && change.NewLines == 0 {
+			metadataPaths[change.Path] = true
+			continue
+		}
+		for line := change.OldStart; line < change.OldStart+change.OldLines; line++ {
+			changedLines[lineKey{path: change.Path, old: true, line: line}] = true
+		}
+		for line := change.NewStart; line < change.NewStart+change.NewLines; line++ {
+			changedLines[lineKey{path: change.Path, line: line}] = true
+		}
+	}
+
+	claims := map[lineKey][]string{}
+	metadataClaims := map[string][]string{}
+	groupIDs, fragmentIDs := map[string]bool{}, map[string]bool{}
+	for _, group := range g.Groups {
+		if strings.TrimSpace(group.ID) == "" {
+			add("group id must not be empty")
 		} else if groupIDs[group.ID] {
-			*errs = append(*errs, fmt.Sprintf("duplicate group ID: %s", group.ID))
+			add("duplicate group ID: %s", group.ID)
 		}
 		groupIDs[group.ID] = true
 		if strings.TrimSpace(group.Title) == "" {
-			*errs = append(*errs, fmt.Sprintf("group %s has an empty title", group.ID))
+			add("group %s has an empty title", group.ID)
 		}
-		if len(group.Fragments) > 0 && len(group.FragmentIDs) > 0 {
-			*errs = append(*errs, fmt.Sprintf("group %s must use either fragments or fragment_ids, not both", group.ID))
+		if strings.TrimSpace(group.Summary) == "" {
+			add("group %s has an empty summary", group.ID)
 		}
-		seen := map[string]bool{}
 		groupPaths := map[string]bool{}
-		for _, fragment := range group.FragmentReferences() {
-			id := fragment.ID
-			if id == "" {
-				*errs = append(*errs, fmt.Sprintf("group %s has a fragment with an empty ID", group.ID))
-				continue
+		for _, fragment := range group.Fragments {
+			validateFragment(fragment, group.ID, changedLines, metadataPaths, claims, metadataClaims, fragmentIDs, &report.Errors)
+			if fragment.Path != "" {
+				groupPaths[fragment.Path] = true
 			}
-			if len(group.Fragments) > 0 && strings.TrimSpace(fragment.Description) == "" {
-				*errs = append(*errs, fmt.Sprintf("fragment %s in group %s has an empty description", id, group.ID))
-			}
-			if seen[id] {
-				*errs = append(*errs, fmt.Sprintf("fragment %s is repeated in group %s", id, group.ID))
-			}
-			seen[id] = true
-			if !known[id] {
-				*errs = append(*errs, fmt.Sprintf("unknown fragment ID %s in group %s", id, group.ID))
-			} else {
-				for _, fragment := range inv.Fragments {
-					if fragment.ID == id {
-						groupPaths[fragment.Path] = true
-						break
-					}
-				}
-			}
-			assigned[id] = append(assigned[id], group.ID)
 		}
-		validateFileCategories(group, groupPaths, errs, warnings)
+		validateFileCategories(group, groupPaths, &report.Errors)
 	}
-	for _, f := range inv.Fragments {
-		if len(assigned[f.ID]) == 0 {
-			*errs = append(*errs, fmt.Sprintf("unassigned fragment: %s (%s)", f.ID, f.Path))
-		}
-		if len(assigned[f.ID]) > 1 {
-			*errs = append(*errs, fmt.Sprintf("fragment %s is assigned to multiple groups: %s", f.ID, strings.Join(assigned[f.ID], ", ")))
+	report.Errors = append(report.Errors, coverageErrors(changedLines, claims)...)
+	for path := range metadataPaths {
+		if len(metadataClaims[path]) == 0 {
+			add("unassigned file metadata change: %s", path)
+		} else if len(metadataClaims[path]) > 1 {
+			add("file metadata change assigned to multiple fragments: %s (%s)", path, strings.Join(metadataClaims[path], ", "))
 		}
 	}
-	sort.Strings(*errs)
-	sort.Strings(*warnings)
+	sort.Strings(report.Errors)
 	return report
 }
 
-func validateFileCategories(group model.SemanticGroup, groupPaths map[string]bool, errs, warnings *[]string) {
-	if len(group.FileCategories) == 0 {
-		*warnings = append(*warnings, fmt.Sprintf("group %s has no file_categories", group.ID))
-		return
+func validateFragment(fragment model.Fragment, groupID string, changed map[lineKey]bool, metadata map[string]bool, claims map[lineKey][]string, metadataClaims map[string][]string, ids map[string]bool, errors *[]string) {
+	add := func(format string, args ...any) { *errors = append(*errors, fmt.Sprintf(format, args...)) }
+	if strings.TrimSpace(fragment.ID) == "" {
+		add("group %s has a fragment with an empty ID", groupID)
+	} else if ids[fragment.ID] {
+		add("duplicate fragment ID: %s", fragment.ID)
 	}
-	seen := map[string]bool{}
-	for _, fileCategory := range group.FileCategories {
-		path := strings.TrimSpace(fileCategory.Path)
-		category := strings.TrimSpace(fileCategory.Category)
-		if path == "" {
-			*errs = append(*errs, fmt.Sprintf("group %s has a file category with an empty path", group.ID))
+	ids[fragment.ID] = true
+	if strings.TrimSpace(fragment.Path) == "" {
+		add("fragment %s has an empty path", fragment.ID)
+	}
+	if strings.TrimSpace(fragment.Description) == "" {
+		add("fragment %s in group %s has an empty description", fragment.ID, groupID)
+	}
+	if len(fragment.Ranges) == 0 && !fragment.FileMetadata {
+		add("fragment %s has neither ranges nor file_metadata", fragment.ID)
+	}
+	selected := map[lineKey]bool{}
+	for index, span := range fragment.Ranges {
+		if span.Old == nil && span.New == nil {
+			add("fragment %s range %d has neither old nor new side", fragment.ID, index)
+		}
+		sides := []struct {
+			old   bool
+			value *model.Range
+		}{{true, span.Old}, {false, span.New}}
+		for _, side := range sides {
+			if side.value == nil {
+				continue
+			}
+			if side.value.Start < 1 || side.value.Lines < 1 {
+				add("fragment %s range %d must have positive start and lines", fragment.ID, index)
+				continue
+			}
+		}
+	}
+	for key := range changed {
+		if key.path != fragment.Path {
 			continue
 		}
-		if category == "" {
-			*errs = append(*errs, fmt.Sprintf("file category for %s in group %s has an empty category", path, group.ID))
-		}
-		if seen[path] {
-			*errs = append(*errs, fmt.Sprintf("file category for %s is repeated in group %s", path, group.ID))
-		}
-		seen[path] = true
-		if !groupPaths[path] {
-			*errs = append(*errs, fmt.Sprintf("file category path %s is not referenced by group %s", path, group.ID))
+		for _, span := range fragment.Ranges {
+			value := span.New
+			if key.old {
+				value = span.Old
+			}
+			if value != nil && key.line >= value.Start && key.line < value.Start+value.Lines {
+				selected[key] = true
+				break
+			}
 		}
 	}
-	for path := range groupPaths {
+	if len(fragment.Ranges) > 0 && len(selected) == 0 {
+		add("fragment %s ranges select no changed lines", fragment.ID)
+	}
+	for key := range selected {
+		claims[key] = append(claims[key], fragment.ID)
+	}
+	if fragment.FileMetadata {
+		if !metadata[fragment.Path] {
+			add("fragment %s selects file metadata but %s has no metadata-only change", fragment.ID, fragment.Path)
+		} else {
+			metadataClaims[fragment.Path] = append(metadataClaims[fragment.Path], fragment.ID)
+		}
+	}
+}
+
+func coverageErrors(changed map[lineKey]bool, claims map[lineKey][]string) []string {
+	keys := make([]lineKey, 0, len(changed))
+	for key := range changed {
+		if len(claims[key]) != 1 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].path != keys[j].path {
+			return keys[i].path < keys[j].path
+		}
+		if keys[i].old != keys[j].old {
+			return keys[i].old
+		}
+		return keys[i].line < keys[j].line
+	})
+	var result []string
+	for index := 0; index < len(keys); {
+		start := keys[index]
+		owners := strings.Join(claims[start], ", ")
+		end := start.line
+		index++
+		for index < len(keys) && keys[index].path == start.path && keys[index].old == start.old && keys[index].line == end+1 && strings.Join(claims[keys[index]], ", ") == owners {
+			end = keys[index].line
+			index++
+		}
+		side := "new"
+		if start.old {
+			side = "old"
+		}
+		location := fmt.Sprintf("%s %s:%d", start.path, side, start.line)
+		if end > start.line {
+			location = fmt.Sprintf("%s %s:%d,%d", start.path, side, start.line, end-start.line+1)
+		}
+		if owners == "" {
+			result = append(result, "unassigned changed range: "+location)
+		} else {
+			result = append(result, fmt.Sprintf("changed range assigned to multiple fragments: %s (%s)", location, owners))
+		}
+	}
+	return result
+}
+
+func validateFileCategories(group model.SemanticGroup, paths map[string]bool, errors *[]string) {
+	seen := map[string]bool{}
+	for _, category := range group.FileCategories {
+		path := strings.TrimSpace(category.Path)
+		if path == "" {
+			*errors = append(*errors, fmt.Sprintf("group %s has a file category with an empty path", group.ID))
+			continue
+		}
+		if strings.TrimSpace(category.Category) == "" {
+			*errors = append(*errors, fmt.Sprintf("file category for %s in group %s has an empty category", path, group.ID))
+		}
+		if seen[path] {
+			*errors = append(*errors, fmt.Sprintf("file category for %s is repeated in group %s", path, group.ID))
+		}
+		seen[path] = true
+		if !paths[path] {
+			*errors = append(*errors, fmt.Sprintf("file category path %s is not referenced by group %s", path, group.ID))
+		}
+	}
+	for path := range paths {
 		if !seen[path] {
-			*errs = append(*errs, fmt.Sprintf("group %s has no file category for %s", group.ID, path))
+			*errors = append(*errors, fmt.Sprintf("group %s has no file category for %s", group.ID, path))
 		}
 	}
 }

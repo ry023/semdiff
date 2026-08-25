@@ -9,22 +9,22 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 
 ## Workflow
 
-1. Run `semdiff grouping init <base>..<head> --json` to create a resumable draft containing the exact range, lightweight fragment inventory, and mechanical category suggestions.
+1. Run `semdiff grouping init <base>..<head> --json` to create a resumable draft containing the exact range, editable Git-derived fragment suggestions, and mechanical category suggestions. Git hunk boundaries are only starting points.
 2. Run `semdiff commits <base>..<head> --json` to understand the change narrative. Do not load the complete diff up front.
 3. Run `semdiff grouping status --json` and `semdiff grouping inspect --unassigned --json` to see the remaining work.
-4. Run `semdiff show <id> --json` only for relevant fragments. The `fragments` inventory must exist before `show` can be used.
+4. Run `semdiff show --draft .semdiff/grouping-draft.json <id> --json` for relevant suggestions, then use `add_fragment`, `update_fragment`, and `delete_fragments` to split or combine them along semantic boundaries. `show` materializes the patch from the draft ranges; after finalization use `semdiff show <groups-file> <id> --json`.
 5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
 6. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. For every file referenced by a group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 7. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
-8. Run `semdiff grouping finalize groups.json --json`. Finalize succeeds only when every fragment is assigned and described, every Group has a complete summary and file categories, and the resulting file passes `semdiff validate groups.json --json` without errors or category warnings.
+8. Run `semdiff grouping finalize groups.json --json`. Finalize succeeds only when every fragment is assigned and described, every Group has a complete summary and file categories, and every changed line and metadata change is selected exactly once.
 
 The required shape is:
 
 ```json
-{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"F-...","description":"Adds the domain type used by the new workflow."}]}]}
+{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}}],"description":"Adds the domain type used by the new workflow."}]}]}
 ```
 
-Every extracted fragment must occur exactly once across all groups and every `fragments` entry must have a non-empty `description`. Every file referenced by a Group must occur exactly once in that Group's `file_categories`. Legacy files using `fragment_ids` or omitting `file_categories` remain readable, but new output must use `fragments` and complete `file_categories`.
+Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
 
 ## Grouping drafts
 
@@ -36,14 +36,14 @@ An apply request contains a batch of operations. For example:
 {
   "operations": [
     {"op":"upsert_group","group_id":"domain-change","title":"Introduce domain change","summary":"Explains the motivation and approach.","order":1},
-    {"op":"assign_fragments","group_id":"domain-change","fragment_ids":["F001","F004"]},
-    {"op":"describe_fragments","descriptions":{"F001":"Defines the shared domain contract."}},
+    {"op":"update_fragment","fragment":{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}}],"description":"Defines the shared domain contract."}},
+    {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
     {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
   ]
 }
 ```
 
-Use `move_fragments` when a fragment already belongs to another Group, and use `status` to identify only the remaining work. `apply` is atomic: an invalid operation leaves the previous draft unchanged. Do not edit the draft file by hand.
+Use `move_fragments` when a fragment already belongs to another Group, and use `status` to identify only the remaining work. `add_fragment`, `update_fragment`, and `delete_fragments` edit definitions; fragment IDs are local handles while path/ranges are the source of truth. `apply` is atomic: an invalid operation leaves the previous draft unchanged. Do not edit the draft file by hand.
 
 The `classify` command only uses file paths, names, extensions, and directory structure. It intentionally has no confidence score or semantic rationale. Treat its output as a draft: the final category should describe the file's role in that Group, based on the commit narrative and relevant code when the mechanical guess is insufficient.
 

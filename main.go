@@ -10,13 +10,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/ry023/semdiff/internal/categories"
 	"github.com/ry023/semdiff/internal/gitdiff"
+	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
 	"github.com/ry023/semdiff/internal/viewer"
@@ -32,9 +32,10 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
 	semdiff commits <base>..<head> [--json]
-	  semdiff fragments <base>..<head> [--json]
+	semdiff fragments <base>..<head> [--json]
 	semdiff classify <base>..<head> [--json]
-	semdiff show <fragment-id> [--json]
+	semdiff show <groups-file> <fragment-id> [--json]
+	semdiff show --draft <path> <fragment-id> [--json]
 	semdiff validate <groups-file> [--json]
 	semdiff grouping init <base>..<head> [--draft <path>] [--json]
 	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
@@ -84,22 +85,15 @@ func run(ctx context.Context, args []string) error {
 		if len(positional) != 1 {
 			return errors.New("fragments requires <base>..<head>")
 		}
-		inv, err := r.Fragments(ctx, positional[0])
+		inv, err := r.Changes(ctx, positional[0])
 		if err != nil {
 			return err
 		}
-		if err = saveCache(inv); err != nil {
-			return fmt.Errorf("save inventory cache: %w", err)
-		}
 		if *jsonOut {
-			light := inv.Fragments
-			for i := range light {
-				light[i].Patch = ""
-			}
-			return printJSON(light)
+			return printJSON(gitdiff.SuggestedFragments(inv))
 		}
-		for _, f := range inv.Fragments {
-			fmt.Printf("%s  %s  -%d,%d +%d,%d\n", f.ID, f.Path, f.OldStart, f.OldLines, f.NewStart, f.NewLines)
+		for _, f := range gitdiff.SuggestedFragments(inv) {
+			fmt.Printf("%s  %s  %s\n", f.ID, f.Path, formatFragmentRanges(f))
 		}
 		return nil
 	case "classify":
@@ -112,12 +106,12 @@ func run(ctx context.Context, args []string) error {
 		if len(positional) != 1 {
 			return errors.New("classify requires <base>..<head>")
 		}
-		inv, err := r.Fragments(ctx, positional[0])
+		inv, err := r.Changes(ctx, positional[0])
 		if err != nil {
 			return err
 		}
-		paths := make([]string, 0, len(inv.Fragments))
-		for _, fragment := range inv.Fragments {
+		paths := make([]string, 0, len(inv.Changes))
+		for _, fragment := range inv.Changes {
 			paths = append(paths, fragment.Path)
 		}
 		suggestions := categories.ClassifyPaths(paths)
@@ -131,27 +125,36 @@ func run(ctx context.Context, args []string) error {
 	case "show":
 		fs := flag.NewFlagSet("show", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
+		draftPath := fs.String("draft", "", "grouping draft path")
 		positional, err := parseInterspersed(fs, args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) != 1 {
-			return errors.New("show requires <fragment-id>")
-		}
-		inv, err := loadCache()
-		if err != nil {
-			return fmt.Errorf("load inventory (run fragments first): %w", err)
-		}
-		for _, f := range inv.Fragments {
-			if f.ID == positional[0] {
-				if *jsonOut {
-					return printJSON(f)
-				}
-				fmt.Print(f.Patch)
-				return nil
+		if *draftPath != "" {
+			if len(positional) != 1 {
+				return errors.New("show --draft requires <fragment-id>")
 			}
+			draft, err := groupingdraft.Load(*draftPath)
+			if err != nil {
+				return err
+			}
+			changes, err := r.Changes(ctx, draft.BaseSHA+".."+draft.HeadSHA)
+			if err != nil {
+				return err
+			}
+			return printMaterializedFragment(gitdiff.Materialize(changes, draft.Fragments), draft.Fragments, positional[0], *jsonOut)
 		}
-		return fmt.Errorf("fragment %s not found in latest inventory", positional[0])
+		if len(positional) != 2 {
+			return errors.New("show requires <groups-file> <fragment-id>")
+		}
+		g, inv, report, err := loadAndValidate(ctx, r, positional[0])
+		if err != nil {
+			return err
+		}
+		if len(report.Errors) > 0 {
+			return fmt.Errorf("groups file is invalid: %s", strings.Join(report.Errors, "; "))
+		}
+		return printMaterializedFragment(inv, groups.Fragments(g), positional[1], *jsonOut)
 	case "validate":
 		fs := flag.NewFlagSet("validate", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
@@ -271,48 +274,36 @@ func printJSON(v any) error {
 	e.SetIndent("", "  ")
 	return e.Encode(v)
 }
-func cachePath() (string, error) {
-	root, err := filepath.Abs(".semdiff")
-	if err != nil {
-		return "", err
+
+func printMaterializedFragment(set model.FragmentSet, definitions []model.Fragment, id string, jsonOut bool) error {
+	for _, rendered := range set.Fragments {
+		if rendered.ID != id {
+			continue
+		}
+		if !jsonOut {
+			fmt.Print(rendered.Patch)
+			return nil
+		}
+		for _, definition := range definitions {
+			if definition.ID == id {
+				return printJSON(struct {
+					model.Fragment
+					Patch string `json:"patch"`
+				}{definition, rendered.Patch})
+			}
+		}
 	}
-	return filepath.Join(root, "inventory.json"), nil
+	return fmt.Errorf("fragment %s not found", id)
 }
-func saveCache(inv model.Inventory) error {
-	p, err := cachePath()
-	if err != nil {
-		return err
-	}
-	if err = os.MkdirAll(filepath.Dir(p), 0755); err != nil {
-		return err
-	}
-	b, err := json.Marshal(inv)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(p, b, 0644)
-}
-func loadCache() (model.Inventory, error) {
-	p, err := cachePath()
-	if err != nil {
-		return model.Inventory{}, err
-	}
-	b, err := os.ReadFile(p)
-	if err != nil {
-		return model.Inventory{}, err
-	}
-	var inv model.Inventory
-	err = json.Unmarshal(b, &inv)
-	return inv, err
-}
-func loadAndValidate(ctx context.Context, r gitdiff.Runner, path string) (model.GroupsFile, model.Inventory, groups.ValidationReport, error) {
+func loadAndValidate(ctx context.Context, r gitdiff.Runner, path string) (model.GroupsFile, model.FragmentSet, groups.ValidationReport, error) {
 	g, err := groups.Load(path)
 	if err != nil {
-		return g, model.Inventory{}, groups.ValidationReport{}, err
+		return g, model.FragmentSet{}, groups.ValidationReport{}, err
 	}
-	inv, err := r.Fragments(ctx, g.BaseSHA+".."+g.HeadSHA)
+	changes, err := r.Changes(ctx, g.BaseSHA+".."+g.HeadSHA)
 	if err != nil {
-		return g, inv, groups.ValidationReport{}, err
+		return g, model.FragmentSet{}, groups.ValidationReport{}, err
 	}
-	return g, inv, groups.ValidateReport(g, inv), nil
+	report := groups.ValidateReport(g, changes)
+	return g, gitdiff.Materialize(changes, groups.Fragments(g)), report, nil
 }

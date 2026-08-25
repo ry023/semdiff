@@ -15,9 +15,28 @@ import (
 	"github.com/ry023/semdiff/internal/gitdiff"
 	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
+	"github.com/ry023/semdiff/internal/model"
 )
 
 const defaultGroupingDraftPath = ".semdiff/grouping-draft.json"
+
+func formatFragmentRanges(fragment model.Fragment) string {
+	if fragment.FileMetadata && len(fragment.Ranges) == 0 {
+		return "metadata"
+	}
+	parts := make([]string, 0, len(fragment.Ranges))
+	for _, span := range fragment.Ranges {
+		oldSide, newSide := "∅", "∅"
+		if span.Old != nil {
+			oldSide = fmt.Sprintf("%d,%d", span.Old.Start, span.Old.Lines)
+		}
+		if span.New != nil {
+			newSide = fmt.Sprintf("%d,%d", span.New.Start, span.New.Lines)
+		}
+		parts = append(parts, fmt.Sprintf("-%s +%s", oldSide, newSide))
+	}
+	return strings.Join(parts, "; ")
+}
 
 func runGrouping(ctx context.Context, runner gitdiff.Runner, args []string) error {
 	if len(args) == 0 {
@@ -56,18 +75,15 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("check grouping draft: %w", err)
 	}
-	inv, err := runner.Fragments(ctx, positional[0])
+	inv, err := runner.Changes(ctx, positional[0])
 	if err != nil {
 		return err
 	}
-	paths := make([]string, 0, len(inv.Fragments))
-	for _, fragment := range inv.Fragments {
+	paths := make([]string, 0, len(inv.Changes))
+	for _, fragment := range inv.Changes {
 		paths = append(paths, fragment.Path)
 	}
 	draft := groupingdraft.New(inv, categories.ClassifyPaths(paths))
-	if err := saveCache(inv); err != nil {
-		return fmt.Errorf("save inventory cache: %w", err)
-	}
 	if err := groupingdraft.SaveAtomic(*draftPath, draft); err != nil {
 		return err
 	}
@@ -77,7 +93,7 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 			Status    groupingdraft.Status `json:"status"`
 		}{*draftPath, draft.Status()})
 	}
-	fmt.Printf("initialized grouping draft: %s (%d fragments)\n", *draftPath, len(draft.Fragments))
+	fmt.Printf("initialized grouping draft: %s (%d suggested fragments)\n", *draftPath, len(draft.Fragments))
 	return nil
 }
 
@@ -179,7 +195,7 @@ func runGroupingInspect(args []string) error {
 			return printJSON(fragments)
 		}
 		for _, fragment := range fragments {
-			fmt.Printf("%s  %s  -%d,%d +%d,%d\n", fragment.ID, fragment.Path, fragment.OldStart, fragment.OldLines, fragment.NewStart, fragment.NewLines)
+			fmt.Printf("%s  %s  %s\n", fragment.ID, fragment.Path, formatFragmentRanges(fragment))
 		}
 		return nil
 	}
@@ -192,8 +208,8 @@ func runGroupingInspect(args []string) error {
 			return printJSON(inspection)
 		}
 		fmt.Printf("%s  %s  assignment=%s  category=%s\n", inspection.Fragment.ID, inspection.Fragment.Path, strings.Join(inspection.Assignments, ","), inspection.CategorySuggestion)
-		if inspection.Description != "" {
-			fmt.Printf("description: %s\n", inspection.Description)
+		if inspection.Fragment.Description != "" {
+			fmt.Printf("description: %s\n", inspection.Fragment.Description)
 		}
 		return nil
 	}
@@ -210,21 +226,16 @@ func runGroupingInspect(args []string) error {
 		}
 	}
 	result := struct {
-		Group        groupingdraft.DraftGroup  `json:"group"`
-		Descriptions map[string]string         `json:"descriptions,omitempty"`
-		Status       groupingdraft.GroupStatus `json:"status"`
-	}{Group: group, Descriptions: map[string]string{}, Status: groupStatus}
-	for _, id := range group.FragmentIDs {
-		if description := draft.Descriptions[id]; description != "" {
-			result.Descriptions[id] = description
-		}
-	}
+		Group  groupingdraft.DraftGroup  `json:"group"`
+		Status groupingdraft.GroupStatus `json:"status"`
+	}{Group: group, Status: groupStatus}
 	if *jsonOut {
 		return printJSON(result)
 	}
-	fmt.Printf("%s: %s (%d fragments)\n", group.ID, group.Title, len(group.FragmentIDs))
-	for _, id := range group.FragmentIDs {
-		fmt.Printf("  %s: %s\n", id, result.Descriptions[id])
+	fmt.Printf("%s: %s (%d fragments)\n", group.ID, group.Title, len(group.Members))
+	for _, id := range group.Members {
+		inspection, _ := draft.FragmentInspection(id)
+		fmt.Printf("  %s: %s\n", id, inspection.Fragment.Description)
 	}
 	return nil
 }
@@ -253,9 +264,9 @@ func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []stri
 		}
 		return fmt.Errorf("grouping draft is not ready to finalize: %s", strings.Join(errs, "; "))
 	}
-	inv, err := runner.Fragments(ctx, draft.BaseSHA+".."+draft.HeadSHA)
+	inv, err := runner.Changes(ctx, draft.BaseSHA+".."+draft.HeadSHA)
 	if err != nil {
-		return fmt.Errorf("refresh fragment inventory: %w", err)
+		return fmt.Errorf("refresh change map: %w", err)
 	}
 	groupsFile := draft.ToGroupsFile()
 	report := groups.ValidateReport(groupsFile, inv)
@@ -268,7 +279,7 @@ func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []stri
 				Warnings []string `json:"warnings"`
 			}{false, report.Errors, report.Warnings})
 		}
-		return fmt.Errorf("current inventory does not match grouping draft: %s", strings.Join(issues, "; "))
+		return fmt.Errorf("current change map does not match grouping draft: %s", strings.Join(issues, "; "))
 	}
 	if err := saveJSONAtomic(positional[0], groupsFile); err != nil {
 		return err
