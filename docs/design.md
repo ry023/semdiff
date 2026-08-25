@@ -135,6 +135,12 @@ semdiff commits <base>..<head>
 
 semdiff fragments <base>..<head>
 
+semdiff grouping init <base>..<head>
+semdiff grouping apply <operations-file|->
+semdiff grouping status
+semdiff grouping inspect --unassigned
+semdiff grouping finalize <groups-file>
+
 semdiff show <fragment-id>
 
 semdiff validate <groups-file>
@@ -269,6 +275,8 @@ Agentは以下を担当します。
 * 必要ならレビュー順序を決める
 * 分類困難な変更を適切なfallback groupへ分類する
 
+Agentは最終`groups.json`を直接管理せず、`semdiff grouping`のdraft操作を段階的に適用します。CLIがfragment inventory、SHA、割り当て整合性、カテゴリの機械候補、最終schemaを管理し、Agentはsemanticな判断だけを追加・修正します。
+
 出力例:
 
 ```json
@@ -302,22 +310,28 @@ Agentは以下を担当します。
 Skillでは、おおむね以下の手順を指示してください。
 
 ```text
-1. commit一覧を確認する
-2. DiffFragment inventoryを取得する
+1. `semdiff grouping init <base>..<head>` でdraftを初期化する
+2. commit一覧とDiffFragment inventoryを確認する
 3. `semdiff classify <base>..<head> --json` でパスベースのカテゴリ候補を取得する
 4. commit message / path / fragment metadataから変更全体の概要を把握する
 5. 必要なfragmentだけshowする
 6. 必要に応じてcontext / relatedを使う
-7. 仮のSemantic Groupを作成する
-8. 全fragmentをGroupへ割り当てる
-9. Groupごとに関連ファイルのカテゴリを確定する
-10. groups.jsonをvalidateする
-11. 未割当fragmentがあれば再調査する
-12. それでも分類不能ならfallback groupへ分類する
-13. validate成功後にgroups.jsonを確定する
+7. 仮のSemantic Groupを`grouping apply`でdraftへ追加する
+8. 全fragmentを段階的にGroupへ割り当てる
+9. Groupごとに関連ファイルのカテゴリとfragment descriptionを確定する
+10. `grouping status`で未完了箇所を確認する
+11. 未割当fragmentがあれば再調査し、必要ならfallback groupへ分類する
+12. `semdiff grouping finalize groups.json`で厳密検証と出力を行う
+13. 必要に応じて`semdiff validate groups.json`を再実行する
 ```
 
 Agentが最初から全patchをコンテキストへ読み込まないことを重視してください。
+
+### Grouping draft
+
+`semdiff grouping init`は`.semdiff/grouping-draft.json`に、resolved SHA、patchを省いたfragment inventory、`semdiff classify`の候補を保存します。Agentのsemantic判断は`grouping apply`の操作JSONとして複数回適用できます。
+
+draftでは未所属fragment、description未記入、summary未完成を許容します。ただし、不明なID、重複所属、重複Group IDなどの構造エラーは保存しません。`grouping status`は残作業だけを返し、`grouping finalize`が完全coverageとfile categoryを検証して最終`groups.json`へ変換します。applyはatomicで、失敗した操作バッチはdraftへ反映されません。
 
 ## Coverageの不変条件
 
@@ -525,8 +539,10 @@ Agentが生成するSemantic Groupデータのschemaを明確に定義してく�
 * DiffFragment抽出
 * DiffFragment ID生成
 * JSON serialization
+* grouping draftの状態管理とatomicな部分更新
 * schema validation
 * coverage validation
+* draftから最終groups.jsonへの変換
 * Viewerへのデータ提供
 * 必要なら周辺コードや関連候補の取得
 
@@ -541,6 +557,7 @@ Agentが生成するSemantic Groupデータのschemaを明確に定義してく�
 * group summary
 * review order
 * fallback分類判断
+* grouping draftへ投入するsemantic decision
 
 CLI側に高度なLLM的semantic clusteringを実装しないでください。
 
@@ -658,14 +675,18 @@ base..head指定
   ↓
 DiffFragmentsをJSON生成
   ↓
-手書きのgroups.json
+grouping draftへ段階的にsemantic判断を適用
+  ↓
+grouping finalize
+  ↓
+groups.json
   ↓
 validate
   ↓
 Web ViewerでSemantic Group単位にdiff表示
 ```
 
-このvertical sliceが動いてからAgent Skillを追加してください。
+このvertical sliceにdraft操作とAgent Skillを接続し、最終JSONの構造管理をCLIへ寄せます。
 
 優先順位は以下です。
 
@@ -675,8 +696,9 @@ Web ViewerでSemantic Group単位にdiff表示
 4. Group schema
 5. validation
 6. Web Viewer
-7. Agent Skill
-8. UX改善
+7. Grouping draft CLI
+8. Agent Skill
+9. UX改善
 
 ## 完了条件
 
@@ -688,7 +710,7 @@ semdiff fragments origin/main..HEAD --json
 
 でDiffFragment一覧を取得できる。
 
-手書きまたはAgent生成の `groups.json` に対して、
+手書き、または`semdiff grouping finalize`で生成した `groups.json` に対して、
 
 ```bash
 semdiff validate groups.json
@@ -712,7 +734,7 @@ Semantic Group
 
 の順番で実際の差分を閲覧できる。
 
-また、`skills/` 以下にAgent Skillを用意し、AgentがCLIを使って段階的に変更を探索し、coverageを満たす `groups.json` を生成できるようにしてください。
+また、`skills/` 以下にAgent Skillを用意し、AgentがCLIのdraft操作を使って段階的に変更を探索し、coverageを満たす `groups.json` を生成できるようにしてください。
 
 ## 実装方針
 

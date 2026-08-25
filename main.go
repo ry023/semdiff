@@ -33,10 +33,15 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
 	semdiff commits <base>..<head> [--json]
 	  semdiff fragments <base>..<head> [--json]
-	  semdiff classify <base>..<head> [--json]
-	  semdiff show <fragment-id> [--json]
-	  semdiff validate <groups-file> [--json]
-	  semdiff view <groups-file> [--addr 127.0.0.1:8080]`)
+	semdiff classify <base>..<head> [--json]
+	semdiff show <fragment-id> [--json]
+	semdiff validate <groups-file> [--json]
+	semdiff grouping init <base>..<head> [--draft <path>] [--json]
+	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
+	semdiff grouping status [--draft <path>] [--json]
+	semdiff grouping inspect (--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
+	semdiff grouping finalize <groups-file> [--draft <path>] [--json]
+	semdiff view <groups-file> [--addr 127.0.0.1:8080]`)
 }
 
 func run(ctx context.Context, args []string) error {
@@ -46,6 +51,8 @@ func run(ctx context.Context, args []string) error {
 	}
 	r := gitdiff.Runner{Dir: "."}
 	switch args[0] {
+	case "grouping":
+		return runGrouping(ctx, r, args[1:])
 	case "commits":
 		fs := flag.NewFlagSet("commits", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
@@ -239,7 +246,7 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		if strings.HasPrefix(a, "-") {
+		if a != "-" && strings.HasPrefix(a, "-") {
 			flags = append(flags, a)
 			name := strings.TrimLeft(strings.SplitN(a, "=", 2)[0], "-")
 			f := fs.Lookup(name)

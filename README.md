@@ -25,11 +25,15 @@ semdiff commits main..HEAD --json
 semdiff fragments main..HEAD --json
 semdiff classify main..HEAD --json
 semdiff show F-0123456789ab --json
+semdiff grouping init main..HEAD --json
+semdiff grouping status --json
+semdiff grouping apply decisions.json --json
+semdiff grouping finalize groups.json --json
 semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
 ```
 
-`fragments` caches the latest complete inventory under `.semdiff/`; its JSON output omits patches so an agent can inspect individual changes with `show`. A `groups.json` records full resolved commit SHAs and version `1`. See [the grouping skill](skills/semantic-grouping/SKILL.md) for the staged agent workflow.
+`fragments` caches the latest complete inventory under `.semdiff/`; its JSON output omits patches so an agent can inspect individual changes with `show`. `grouping init` creates a resumable `.semdiff/grouping-draft.json`; repeated `grouping apply` calls add or revise semantic decisions, and `grouping finalize` writes a validated `groups.json`. A final `groups.json` records full resolved commit SHAs and version `1`. See [the grouping skill](skills/semantic-grouping/SKILL.md) for the staged agent workflow.
 
 `classify` provides a deterministic draft based only on changed file paths, names, extensions, and directory structure. The grouping agent should review and finalize those suggestions per Group.
 
@@ -53,3 +57,10 @@ New `groups.json` files attach a review explanation to every fragment:
 ```
 
 Legacy `fragment_ids` arrays remain supported for existing files.
+
+Grouping draft operations can also be read from standard input:
+
+```sh
+printf '%s\n' '{"operations":[{"op":"assign_fragments","group_id":"domain-change","fragment_ids":["F001"]}]}' \
+  | semdiff grouping apply - --json
+```
