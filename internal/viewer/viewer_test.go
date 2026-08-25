@@ -10,7 +10,7 @@ import (
 
 func TestBuildAndHandler(t *testing.T) {
 	one, two := 1, 2
-	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, FragmentIDs: []string{"F2"}}, {ID: "first", Title: "First", Summary: "Start here", Order: &one, Fragments: []model.FragmentReference{{ID: "F1", Description: "Explains the <safe> change."}}}}}
+	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, FragmentIDs: []string{"F2"}}, {ID: "first", Title: "First", Summary: "Start here\nMore context.", Order: &one, Fragments: []model.FragmentReference{{ID: "F1", Description: "Explains the <safe> change."}}}}}
 	inv := model.Inventory{Fragments: []model.DiffFragment{{ID: "F1", Path: "a.go", NewStart: 5, NewLines: 3, Patch: "diff --git a/a.go b/a.go\n@@ -5,3 +5,3 @@\n-unsafe <tag>\n+safe\n context\n"}, {ID: "F2", Path: "b.go", Patch: "patch\n"}}}
 	p := Build(g, inv, map[string]string{"a.go": strings.Repeat("source line\n", 20)})
 	if p.Groups[0].ID != "first" || p.FileCount != 2 || p.FragmentCount != 2 {
@@ -25,6 +25,12 @@ func TestBuildAndHandler(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "Semantic Changes") || !strings.Contains(body, "Start here") {
 		t.Fatal("missing viewer content")
+	}
+	if !strings.Contains(body, "Start here\nMore context.") {
+		t.Fatal("group summary line break was not rendered")
+	}
+	if !strings.Contains(body, ".summary{color:var(--muted);margin:8px 0 0 24px;white-space:pre-line}") {
+		t.Fatal("group summary line breaks are not preserved in the viewer")
 	}
 	if !strings.Contains(body, "Explains the &lt;safe&gt; change.") {
 		t.Fatal("missing or unsafe fragment description")

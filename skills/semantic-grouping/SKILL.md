@@ -53,11 +53,11 @@ A group `summary` is a review narrative, not a one-line restatement of its fragm
 
 Use `semdiff commits` as the primary source for background: consider commit subjects, commit bodies, chronology, and which files each commit touched. Use fragment evidence to verify what was actually implemented and to connect the narrative to the grouped changes. Commit history is the current boundary of available context; do not invent product requirements, incidents, user reports, or design decisions that are not supported by commits or code. If the motivation is unclear, say what limitation the diff addresses only when that is directly observable, and keep uncertain interpretation out of the summary.
 
-The summary should explain the relationship among the fragments rather than enumerate filenames or repeat each fragment description. Prefer a coherent paragraph with explicit causal links such as “because,” “so that,” or “which allows.” It is fine for the JSON string to contain several sentences; do not compress it into one sentence merely to keep the value on one line.
+The summary should explain the relationship among the fragments rather than enumerate filenames or repeat each fragment description. Put the main parts on separate lines in the JSON string: use one line for the background or problem, one for the approach, and optionally one for the result or review implication. Encode those line breaks as `\n` (use `\n\n` only when a blank line is useful). Keep explicit causal links such as “because,” “so that,” or “which allows.” Do not compress the summary into one line merely to make the JSON shorter.
 
 Prefer a summary shaped like:
 
-`The previous implementation spread state transitions across direct mutations, which made related updates difficult to keep consistent. The change introduces a centralized command boundary and retains inactive state needed when switching modes, so callers can apply the same transition rules and the associated tests can exercise them together. This gives reviewers one place to inspect the new invariants and the behavior that protects them.`
+`The previous implementation spread state transitions across direct mutations, which made related updates difficult to keep consistent.\nThe change introduces a centralized command boundary and retains inactive state needed when switching modes, so callers can apply the same transition rules.\nThe associated tests exercise the shared contract and give reviewers one place to inspect the invariants that protect it.`
 
 Avoid a summary shaped like:
 
