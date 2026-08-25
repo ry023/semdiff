@@ -68,6 +68,12 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, ".context-hidden[hidden]{display:none!important}") {
 		t.Fatal("hidden context rows are not explicitly hidden by CSS")
 	}
+	if !strings.Contains(body, ".file[open]>summary{position:sticky;top:0") {
+		t.Fatal("open file heading is not sticky")
+	}
+	if !strings.Contains(body, ".group{border:1px solid var(--line);border-radius:8px;background:var(--panel);margin:14px 0;overflow:clip}") {
+		t.Fatal("group clipping prevents sticky file headings")
+	}
 	if !strings.Contains(body, "batch[0].before(button)") || !strings.Contains(body, "batch[batch.length-1].after(button)") {
 		t.Fatal("context controls do not move to the expanded range boundary")
 	}
