@@ -29,3 +29,21 @@ semdiff view groups.json --addr 127.0.0.1:8080
 ```
 
 `fragments` caches the latest complete inventory under `.semdiff/`; its JSON output omits patches so an agent can inspect individual changes with `show`. A `groups.json` records full resolved commit SHAs and version `1`. See [the grouping skill](skills/semantic-grouping/SKILL.md) for the staged agent workflow.
+
+New `groups.json` files attach a review explanation to every fragment:
+
+```json
+{
+  "id": "domain-change",
+  "title": "Introduce domain change",
+  "summary": "Introduces the new domain behavior.",
+  "fragments": [
+    {
+      "id": "F-0123456789ab",
+      "description": "Defines the domain type used by the new workflow."
+    }
+  ]
+}
+```
+
+Legacy `fragment_ids` arrays remain supported for existing files.

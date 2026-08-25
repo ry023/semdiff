@@ -20,6 +20,17 @@ func TestValidateOK(t *testing.T) {
 	}
 }
 
+func TestValidateDescribedFragments(t *testing.T) {
+	_, inv := fixture()
+	g := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{
+		{ID: "g1", Title: "One", Fragments: []model.FragmentReference{{ID: "F1", Description: "Introduces the first behavior."}}},
+		{ID: "g2", Title: "Two", Fragments: []model.FragmentReference{{ID: "F2", Description: "Updates the second behavior."}}},
+	}}
+	if errs := Validate(g, inv); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+}
+
 func TestValidateFailures(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -32,6 +43,9 @@ func TestValidateFailures(t *testing.T) {
 		{"duplicate group", func(g *model.GroupsFile) { g.Groups[1].ID = "g1" }, "duplicate group ID"},
 		{"base mismatch", func(g *model.GroupsFile) { g.BaseSHA = "wrong" }, "base_sha mismatch"},
 		{"head mismatch", func(g *model.GroupsFile) { g.HeadSHA = "wrong" }, "head_sha mismatch"},
+		{"both fragment formats", func(g *model.GroupsFile) {
+			g.Groups[0].Fragments = []model.FragmentReference{{ID: "F1", Description: "Description"}}
+		}, "either fragments or fragment_ids"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,5 +56,17 @@ func TestValidateFailures(t *testing.T) {
 				t.Fatalf("errors %v do not contain %q", errs, tt.want)
 			}
 		})
+	}
+}
+
+func TestValidateFragmentDescription(t *testing.T) {
+	_, inv := fixture()
+	g := model.GroupsFile{Version: 1, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{
+		{ID: "g1", Title: "One", Fragments: []model.FragmentReference{{ID: "F1"}}},
+		{ID: "g2", Title: "Two", Fragments: []model.FragmentReference{{ID: "F2", Description: "Explains F2"}}},
+	}}
+	errs := strings.Join(Validate(g, inv), "\n")
+	if !strings.Contains(errs, "fragment F1 in group g1 has an empty description") {
+		t.Fatal(errs)
 	}
 }

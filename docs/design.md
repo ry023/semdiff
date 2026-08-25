@@ -277,19 +277,19 @@ Agentは以下を担当します。
       "id": "introduce-order-status",
       "title": "Introduce OrderStatus",
       "summary": "Introduce the OrderStatus domain concept and expose its core representation.",
-      "fragment_ids": [
-        "F001",
-        "F004",
-        "F017"
+      "fragments": [
+        {"id": "F001", "description": "Defines the OrderStatus domain type."},
+        {"id": "F004", "description": "Adds status to the API representation."},
+        {"id": "F017", "description": "Wires status into order construction."}
       ]
     },
     {
       "id": "persist-order-status",
       "title": "Persist OrderStatus",
       "summary": "Store and retrieve OrderStatus through the repository layer.",
-      "fragment_ids": [
-        "F002",
-        "F009"
+      "fragments": [
+        {"id": "F002", "description": "Stores status in the repository."},
+        {"id": "F009", "description": "Loads status from persisted records."}
       ]
     }
   ]
@@ -481,9 +481,9 @@ Agentが生成するSemantic Groupデータのschemaを明確に定義してく�
       "title": "Introduce OrderStatus",
       "summary": "Introduce the new domain concept.",
       "order": 1,
-      "fragment_ids": [
-        "F001",
-        "F004"
+      "fragments": [
+        {"id": "F001", "description": "Defines the new domain concept."},
+        {"id": "F004", "description": "Exposes the concept through the API."}
       ]
     }
   ]
@@ -495,10 +495,13 @@ Agentが生成するSemantic Groupデータのschemaを明確に定義してく�
 * `base_sha` / `head_sha` が現在のfragment inventoryと一致する
 * Group IDが一意
 * fragment IDが存在する
+* 新しい `fragments` 形式では各fragmentの `description` が空でない
 * すべてのfragmentがちょうど1回だけ出現する
 * unknown fragmentがない
 * 重複所属がない
 * 未所属fragmentがない
+
+既存の `fragment_ids` 形式は後方互換のため読み込み可能ですが、新しく生成する場合は説明付きの `fragments` 形式を使用してください。
 
 ## CLIとAgentの責務分離
 

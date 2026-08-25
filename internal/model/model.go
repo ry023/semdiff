@@ -26,11 +26,31 @@ type Commit struct {
 }
 
 type SemanticGroup struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Summary     string   `json:"summary"`
-	Order       *int     `json:"order,omitempty"`
-	FragmentIDs []string `json:"fragment_ids"`
+	ID          string              `json:"id"`
+	Title       string              `json:"title"`
+	Summary     string              `json:"summary"`
+	Order       *int                `json:"order,omitempty"`
+	Fragments   []FragmentReference `json:"fragments,omitempty"`
+	FragmentIDs []string            `json:"fragment_ids,omitempty"`
+}
+
+// FragmentReference is the semantic annotation attached to a fragment in a
+// group. FragmentIDs remains supported for groups.json files created before
+// descriptions were introduced.
+type FragmentReference struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+}
+
+func (g SemanticGroup) FragmentReferences() []FragmentReference {
+	if len(g.Fragments) > 0 {
+		return g.Fragments
+	}
+	refs := make([]FragmentReference, 0, len(g.FragmentIDs))
+	for _, id := range g.FragmentIDs {
+		refs = append(refs, FragmentReference{ID: id})
+	}
+	return refs
 }
 
 type GroupsFile struct {

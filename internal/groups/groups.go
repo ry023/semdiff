@@ -50,8 +50,19 @@ func Validate(g model.GroupsFile, inv model.Inventory) []string {
 		if strings.TrimSpace(group.Title) == "" {
 			errs = append(errs, fmt.Sprintf("group %s has an empty title", group.ID))
 		}
+		if len(group.Fragments) > 0 && len(group.FragmentIDs) > 0 {
+			errs = append(errs, fmt.Sprintf("group %s must use either fragments or fragment_ids, not both", group.ID))
+		}
 		seen := map[string]bool{}
-		for _, id := range group.FragmentIDs {
+		for _, fragment := range group.FragmentReferences() {
+			id := fragment.ID
+			if id == "" {
+				errs = append(errs, fmt.Sprintf("group %s has a fragment with an empty ID", group.ID))
+				continue
+			}
+			if len(group.Fragments) > 0 && strings.TrimSpace(fragment.Description) == "" {
+				errs = append(errs, fmt.Sprintf("fragment %s in group %s has an empty description", id, group.ID))
+			}
 			if seen[id] {
 				errs = append(errs, fmt.Sprintf("fragment %s is repeated in group %s", id, group.ID))
 			}

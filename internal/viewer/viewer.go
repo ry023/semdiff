@@ -16,6 +16,7 @@ var assets embed.FS
 
 type FragmentView struct {
 	model.DiffFragment
+	Description      string
 	HeaderHTML       template.HTML
 	HunkHTML         template.HTML
 	UpperContextHTML template.HTML
@@ -59,19 +60,26 @@ func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]strin
 	for _, group := range g.Groups {
 		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, Order: group.Order}
 		fileMap := map[string][]model.DiffFragment{}
+		descriptions := map[string]string{}
 		var paths []string
-		for _, id := range group.FragmentIDs {
+		for _, reference := range group.FragmentReferences() {
+			id := reference.ID
 			f := byID[id]
 			if _, ok := fileMap[f.Path]; !ok {
 				paths = append(paths, f.Path)
 			}
 			fileMap[f.Path] = append(fileMap[f.Path], f)
+			descriptions[id] = reference.Description
 			allFiles[f.Path] = true
 			gv.FragmentCount++
 		}
 		sort.Strings(paths)
 		for _, path := range paths {
-			gv.Files = append(gv.Files, buildFileView(path, fileMap[path], fileContents[path], byPath[path]))
+			file := buildFileView(path, fileMap[path], fileContents[path], byPath[path])
+			for i := range file.Fragments {
+				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
+			}
+			gv.Files = append(gv.Files, file)
 		}
 		p.Groups = append(p.Groups, gv)
 		p.FragmentCount += gv.FragmentCount
