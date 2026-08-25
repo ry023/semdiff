@@ -169,7 +169,12 @@ func run(ctx context.Context, args []string) error {
 		if len(problems) > 0 {
 			return fmt.Errorf("groups file is invalid: %s", strings.Join(problems, "; "))
 		}
-		h, err := viewer.Handler(viewer.Build(g, inv))
+		paths := make([]string, 0, len(inv.Fragments))
+		for _, fragment := range inv.Fragments {
+			paths = append(paths, fragment.Path)
+		}
+		fileContents := r.FileContents(ctx, inv.BaseSHA, inv.HeadSHA, paths)
+		h, err := viewer.Handler(viewer.Build(g, inv, fileContents))
 		if err != nil {
 			return err
 		}

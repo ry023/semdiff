@@ -107,6 +107,28 @@ func (r Runner) Fragments(ctx context.Context, rangeSpec string) (model.Inventor
 	return model.Inventory{BaseSHA: baseSHA, HeadSHA: headSHA, Fragments: frags}, nil
 }
 
+// FileContents loads the head version of each path, falling back to the base
+// version for deleted files. The viewer uses these lines to expand context
+// around each fragment without changing the fragment itself.
+func (r Runner) FileContents(ctx context.Context, baseSHA, headSHA string, paths []string) map[string]string {
+	contents := make(map[string]string, len(paths))
+	seen := map[string]bool{}
+	for _, path := range paths {
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		b, err := r.git(ctx, "show", headSHA+":"+path)
+		if err != nil {
+			b, err = r.git(ctx, "show", baseSHA+":"+path)
+		}
+		if err == nil {
+			contents[path] = string(b)
+		}
+	}
+	return contents
+}
+
 func decodePath(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "/dev/null" {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -129,5 +130,9 @@ func TestRunnerAcrossCommitsAndFileOperations(t *testing.T) {
 	}
 	if commits[0].FilesChanged != 4 {
 		t.Errorf("first commit changed %d files, want 4", commits[0].FilesChanged)
+	}
+	contents := r.FileContents(context.Background(), base, "HEAD", []string{"change.txt", "delete.txt"})
+	if !strings.Contains(contents["change.txt"], "keep") || !strings.Contains(contents["delete.txt"], "gone") {
+		t.Errorf("file contents did not load head and deleted paths: %q %q", contents["change.txt"], contents["delete.txt"])
 	}
 }

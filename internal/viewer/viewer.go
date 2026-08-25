@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/ry023/semdiff/internal/model"
 )
@@ -14,7 +16,10 @@ var assets embed.FS
 
 type FragmentView struct {
 	model.DiffFragment
-	PatchHTML template.HTML
+	HeaderHTML       template.HTML
+	HunkHTML         template.HTML
+	UpperContextHTML template.HTML
+	LowerContextHTML template.HTML
 }
 type FileView struct {
 	Path      string
@@ -32,10 +37,21 @@ type Page struct {
 	FragmentCount, FileCount int
 }
 
-func Build(g model.GroupsFile, inv model.Inventory) Page {
+func Build(g model.GroupsFile, inv model.Inventory, contents ...map[string]string) Page {
+	var fileContents map[string]string
+	if len(contents) > 0 {
+		fileContents = contents[0]
+	}
 	byID := map[string]model.DiffFragment{}
+	byPath := map[string][]model.DiffFragment{}
 	for _, f := range inv.Fragments {
 		byID[f.ID] = f
+		byPath[f.Path] = append(byPath[f.Path], f)
+	}
+	for path := range byPath {
+		sort.SliceStable(byPath[path], func(i, j int) bool {
+			return fragmentStart(byPath[path][i]) < fragmentStart(byPath[path][j])
+		})
 	}
 	p := Page{BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 	allFiles := map[string]bool{}
@@ -48,12 +64,15 @@ func Build(g model.GroupsFile, inv model.Inventory) Page {
 			if _, ok := fileMap[f.Path]; !ok {
 				paths = append(paths, f.Path)
 			}
-			fileMap[f.Path] = append(fileMap[f.Path], FragmentView{DiffFragment: f, PatchHTML: colorPatch(f.Patch)})
+			fileMap[f.Path] = append(fileMap[f.Path], buildFragmentView(f, fileContents[f.Path], byPath[f.Path]))
 			allFiles[f.Path] = true
 			gv.FragmentCount++
 		}
 		sort.Strings(paths)
 		for _, path := range paths {
+			sort.SliceStable(fileMap[path], func(i, j int) bool {
+				return fragmentStart(fileMap[path][i].DiffFragment) < fragmentStart(fileMap[path][j].DiffFragment)
+			})
 			gv.Files = append(gv.Files, FileView{Path: path, Fragments: fileMap[path]})
 		}
 		p.Groups = append(p.Groups, gv)
@@ -72,6 +91,96 @@ func Build(g model.GroupsFile, inv model.Inventory) Page {
 	return p
 }
 
+func fragmentStart(f model.DiffFragment) int {
+	if f.NewLines > 0 {
+		return f.NewStart
+	}
+	return f.OldStart
+}
+
+func fragmentLines(f model.DiffFragment) int {
+	if f.NewLines > 0 {
+		return f.NewLines
+	}
+	return f.OldLines
+}
+
+func splitPatch(patch string) (string, string) {
+	lines := strings.Split(strings.TrimSuffix(patch, "\n"), "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "@@ ") {
+			return strings.Join(lines[:i], "\n") + "\n", strings.Join(lines[i:], "\n") + "\n"
+		}
+	}
+	return patch, ""
+}
+
+func sourceLines(content string) []string {
+	if content == "" {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+func buildFragmentView(f model.DiffFragment, content string, siblings []model.DiffFragment) FragmentView {
+	header, hunk := splitPatch(f.Patch)
+	view := FragmentView{DiffFragment: f, HeaderHTML: colorPatch(header), HunkHTML: colorPatch(hunk)}
+	lines := sourceLines(content)
+	start := fragmentStart(f) - 1
+	if start < 0 || start > len(lines) {
+		return view
+	}
+	end := min(len(lines), start+fragmentLines(f))
+	upperStart, lowerEnd := 0, len(lines)
+	for i, sibling := range siblings {
+		if sibling.ID != f.ID {
+			continue
+		}
+		if i > 0 {
+			previous := siblings[i-1]
+			upperStart = min(start, fragmentStart(previous)-1+fragmentLines(previous))
+		}
+		if i+1 < len(siblings) {
+			lowerEnd = max(end, fragmentStart(siblings[i+1])-1)
+		}
+		break
+	}
+	upperStart = max(0, min(upperStart, start))
+	lowerEnd = max(end, min(lowerEnd, len(lines)))
+	view.UpperContextHTML = expandableContext(lines[upperStart:start], "up")
+	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], "down")
+	return view
+}
+
+func expandableContext(lines []string, direction string) template.HTML {
+	if len(lines) == 0 {
+		return ""
+	}
+	arrow := "↑"
+	if direction == "down" {
+		arrow = "↓"
+	}
+	var out strings.Builder
+	out.WriteString(`<span class="context-expand context-` + direction + `">`)
+	if direction == "down" {
+		out.WriteString(`<button class="expand-lines" type="button" data-direction="down">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
+	}
+	for _, line := range lines {
+		out.WriteString(`<span class="context-hidden" hidden> `)
+		out.WriteString(template.HTMLEscapeString(line))
+		out.WriteString(`</span>`)
+	}
+	if direction == "up" {
+		out.WriteString(`<button class="expand-lines" type="button" data-direction="up">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
+	}
+	out.WriteString(`</span>`)
+	return template.HTML(out.String())
+}
+
 func colorPatch(patch string) template.HTML {
 	// The template escapes each line before these trusted presentation wrappers are added.
 	escaped := template.HTMLEscapeString(patch)
@@ -79,6 +188,9 @@ func colorPatch(patch string) template.HTML {
 	out := make([]byte, 0, len(lines)+128)
 	start := 0
 	for i := 0; i <= len(lines); i++ {
+		if i == len(lines) && start == len(lines) {
+			break
+		}
 		if i < len(lines) && lines[i] != '\n' {
 			continue
 		}
@@ -100,7 +212,9 @@ func colorPatch(patch string) template.HTML {
 		}
 		out = append(out, []byte(`<span class="`+class+`">`)...)
 		out = append(out, line...)
-		out = append(out, []byte("</span>\n")...)
+		// Each span is a block, so a literal newline here would create an
+		// additional blank row inside the preformatted diff.
+		out = append(out, []byte("</span>")...)
 		start = i + 1
 	}
 	return template.HTML(out)
