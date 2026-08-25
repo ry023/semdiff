@@ -43,6 +43,9 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, "batch[0].before(button)") || !strings.Contains(body, "batch[batch.length-1].after(button)") {
 		t.Fatal("context controls do not move to the expanded range boundary")
 	}
+	if !strings.Contains(body, "hunk.classList.contains('hunk')") || !strings.Contains(body, "hunk.remove()") {
+		t.Fatal("upper expansion does not remove the stale hunk header")
+	}
 	if strings.Contains(body, `<details class="group" open>`) || !strings.Contains(body, `<details class="group">`) || !strings.Contains(body, `<details class="file">`) {
 		t.Fatalf("groups and files should be collapsed by default: %s", body)
 	}
