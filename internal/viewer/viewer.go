@@ -614,9 +614,9 @@ func colorPatch(patch string) template.HTML {
 		class, oldNumber, newNumber := "ctx", "", ""
 		switch {
 		case strings.HasPrefix(line, "@@ "):
-			class = "hunk"
 			oldLine, newLine = hunkStarts(line)
 			inHunk = true
+			continue
 		case strings.HasPrefix(line, "diff "):
 			class = "meta"
 		case inHunk && strings.HasPrefix(line, "+"):

@@ -110,8 +110,8 @@ func TestBuildAndHandler(t *testing.T) {
 	if !strings.Contains(body, "batch[0].before(button)") || !strings.Contains(body, "batch[batch.length-1].after(button)") {
 		t.Fatal("context controls do not move to the expanded range boundary")
 	}
-	if !strings.Contains(body, "while(hunk&&!hunk.classList.contains('hunk'))") || !strings.Contains(body, "hunk.remove()") {
-		t.Fatal("upper expansion does not remove the stale hunk header")
+	if strings.Contains(body, "@@ -5,3 +5,3 @@") {
+		t.Fatal("hunk headers should not be rendered")
 	}
 	if !strings.Contains(body, `<details class="group" open>`) {
 		t.Fatal("groups should be open by default")
@@ -259,6 +259,9 @@ func TestCategoryViewsCountFileStatuses(t *testing.T) {
 
 func TestColorPatchLineNumbers(t *testing.T) {
 	html := string(colorPatch("@@ -7,2 +7,2 @@\n-old\n+new\n context\n"))
+	if strings.Contains(html, "@@ -7,2 +7,2 @@") || strings.Contains(html, `class="diff-row hunk"`) {
+		t.Fatalf("hunk header should only drive line numbering, not be rendered: %q", html)
+	}
 	if strings.Count(html, `<span class="line-number unified-cell">7</span>`) != 2 {
 		t.Fatalf("deletion and addition should use line 7: %q", html)
 	}
