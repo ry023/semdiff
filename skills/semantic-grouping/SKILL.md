@@ -13,7 +13,7 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 2. Run `semdiff commits <base>..<head> --json` to understand the change narrative. Do not load the complete diff up front.
 3. Run `semdiff grouping inspect --suggestions --json` and review suggestions by file and neighboring code. Use `semdiff show --draft .semdiff/grouping-draft.json <id> --json` for the relevant candidates.
 4. Compose authored fragments from the suggestions with `merge_fragments`: one `member` promotes a semantically complete suggestion, while several same-path `members` become one multi-range fragment. Use `add_fragment`, `update_fragment`, and `delete_fragments` only when the intended definition needs explicit ranges. Only authored fragments appear in status and require assignment.
-5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
+5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Set each group's `order` so prerequisites appear before groups that depend on them. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
 6. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. For every file referenced by a group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 7. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
 8. Before finalizing, review each file for over-fragmentation. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
@@ -52,6 +52,8 @@ Use `move_fragments` when a fragment already belongs to another Group, and use `
 
 A fragment should be the smallest change that a reviewer can understand and describe independently—not the smallest contiguous diff span. One range is sufficient when it contains a complete semantic change; use multiple ranges whenever separated edits implement one responsibility.
 
+Treat file boundaries and fragment boundaries independently. In particular, do not keep a new file as one fragment merely because Git presents the entire file as one addition. When distinct line ranges in that file implement independently reviewable responsibilities that belong to different Groups, create separate fragments and assign each one to its owning Group. Include shared declarations, imports, delimiters, and other structural lines with the responsibility that makes them necessary; do not manufacture a separate fragment for scaffolding that has no independent meaning.
+
 Never leave these as standalone fragments when they only complete another change:
 
 - a closing brace, bracket, parenthesis, comma, semicolon, or other punctuation-only edit;
@@ -82,6 +84,14 @@ Avoid descriptions such as:
 - `ファイルを更新。古いコードを削除。`
 - `テストファイルを新規追加。関連するテストを追加。`
 - `ファイル前半部分を更新。新しい依存関係を追加。`
+
+## Group review order
+
+Choose Group `order` as a reviewer-oriented dependency order, not alphabetical order, file order, or the order in which fragments were discovered. If Group B relies on a contract, type, schema, helper, migration, or behavior introduced by Group A, place A before B. Apply this transitively across the full set of Groups: establish prerequisites first, then dependent behavior and integrations, then follow-up validation or documentation when those are genuinely separate concerns.
+
+Infer dependencies from imports and call sites, type and schema usage, configuration consumers, commit chronology, and the semantic descriptions—not merely from directory layout. Keep tests in the same Group as the behavior they verify unless the tests form an independently reviewable concern; when they do form a separate Group, place that Group after the behavior it verifies.
+
+When Groups are independent, order them to minimize context switching and make the change read as a coherent narrative—for example, shared foundations before feature-specific uses and core behavior before peripheral adaptation. Do not invent a dependency solely to force a tidy sequence. Before finalizing, scan the ordered summaries from first to last and revise `order` if a Group requires knowledge that is introduced only later.
 
 ## Group summaries
 
