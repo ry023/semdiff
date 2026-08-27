@@ -19,6 +19,8 @@ import (
 //go:embed index.html
 var assets embed.FS
 
+const defaultContextLines = 5
+
 type FragmentView struct {
 	model.MaterializedFragment
 	Description      string
@@ -318,8 +320,16 @@ func buildFragmentView(f model.MaterializedFragment, content string, siblings []
 	}
 	upperStart = max(0, min(upperStart, start))
 	lowerEnd = max(end, min(lowerEnd, len(lines)))
-	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperStart+1, "up")
-	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], end+1, "down")
+	upperOldFirst, lowerOldFirst := upperStart+1, end+1
+	blocks := splitHunkBlocks(hunk)
+	if len(blocks) > 0 {
+		first := parseHunkBounds(blocks[0])
+		last := parseHunkBounds(blocks[len(blocks)-1])
+		upperOldFirst = max(1, first.oldStart-(start-upperStart)+1)
+		lowerOldFirst = last.oldEnd + 1
+	}
+	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperOldFirst, upperStart+1, "up")
+	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], lowerOldFirst, end+1, "down")
 	return view
 }
 
@@ -335,11 +345,15 @@ func colorPatchWithContext(patch string, lines []string) template.HTML {
 	var out strings.Builder
 	for i, block := range blocks {
 		if i > 0 {
-			_, previousEnd := hunkNewBounds(blocks[i-1])
-			currentStart, _ := hunkNewBounds(block)
+			previous := parseHunkBounds(blocks[i-1])
+			current := parseHunkBounds(block)
+			previousEnd := previous.newEnd
+			currentStart := current.newStart
 			previousEnd = max(0, min(previousEnd, len(lines)))
 			currentStart = max(previousEnd, min(currentStart, len(lines)))
-			out.WriteString(string(expandableGap(lines[previousEnd:currentStart], previousEnd+1)))
+			gapLines := lines[previousEnd:currentStart]
+			oldFirst := max(1, current.oldStart-len(gapLines)+1)
+			out.WriteString(string(expandableGap(gapLines, oldFirst, previousEnd+1)))
 		}
 		out.WriteString(string(colorPatch(block)))
 	}
@@ -366,15 +380,24 @@ func splitHunkBlocks(patch string) []string {
 	return blocks
 }
 
-func hunkNewBounds(hunk string) (int, int) {
+type hunkBounds struct {
+	oldStart int
+	oldEnd   int
+	newStart int
+	newEnd   int
+}
+
+func parseHunkBounds(hunk string) hunkBounds {
 	header := strings.SplitN(hunk, "\n", 2)[0]
 	fields := strings.Fields(header)
 	if len(fields) < 3 {
-		return 0, 0
+		return hunkBounds{}
 	}
-	start, count := rangeBounds(fields[2])
-	start = max(0, start-1)
-	return start, start + count
+	oldStart, oldCount := rangeBounds(fields[1])
+	newStart, newCount := rangeBounds(fields[2])
+	oldStart = max(0, oldStart-1)
+	newStart = max(0, newStart-1)
+	return hunkBounds{oldStart: oldStart, oldEnd: oldStart + oldCount, newStart: newStart, newEnd: newStart + newCount}
 }
 
 func rangeBounds(field string) (int, int) {
@@ -442,7 +465,15 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 		end := fragmentStart(current.MaterializedFragment) - 1
 		start = max(0, min(start, len(lines)))
 		end = max(start, min(end, len(lines)))
-		previous.LowerContextHTML = expandableGap(lines[start:end], start+1)
+		gapLines := lines[start:end]
+		oldFirst := start + 1
+		_, currentHunk := splitPatch(current.Patch)
+		currentBlocks := splitHunkBlocks(currentHunk)
+		if len(currentBlocks) > 0 {
+			bounds := parseHunkBounds(currentBlocks[0])
+			oldFirst = max(1, bounds.oldStart-len(gapLines)+1)
+		}
+		previous.LowerContextHTML = expandableGap(gapLines, oldFirst, start+1)
 		current.UpperContextHTML = ""
 	}
 	return file
@@ -516,42 +547,58 @@ func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber strin
 	out.WriteString(`</span>`)
 }
 
-func expandableContext(lines []string, firstLine int, direction string) template.HTML {
+func expandableContext(lines []string, firstOldLine, firstNewLine int, direction string) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
+	hiddenStart, hiddenEnd := 0, len(lines)
+	if direction == "up" {
+		hiddenEnd = max(0, len(lines)-defaultContextLines)
+	} else {
+		hiddenStart = min(defaultContextLines, len(lines))
+	}
+	hiddenCount := hiddenEnd - hiddenStart
 	arrow := "↑"
 	if direction == "down" {
 		arrow = "↓"
 	}
 	var out strings.Builder
 	out.WriteString(`<span class="context-expand context-` + direction + `">`)
-	if direction == "down" {
-		out.WriteString(`<button class="expand-lines" type="button" data-direction="down">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
-	}
 	for i, line := range lines {
-		number := strconv.Itoa(firstLine + i)
-		appendDiffRow(&out, " "+line, "ctx", number, number, true)
-	}
-	if direction == "up" {
-		out.WriteString(`<button class="expand-lines" type="button" data-direction="up">` + arrow + ` Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
+		if direction == "down" && i == hiddenStart && hiddenCount > 0 {
+			out.WriteString(`<button class="expand-lines" type="button" data-direction="down">` + arrow + ` Show ` + strconv.Itoa(hiddenCount) + ` lines below</button>`)
+		}
+		if direction == "up" && i == hiddenEnd && hiddenCount > 0 {
+			out.WriteString(`<button class="expand-lines" type="button" data-direction="up">` + arrow + ` Show ` + strconv.Itoa(hiddenCount) + ` lines above</button>`)
+		}
+		oldNumber := strconv.Itoa(firstOldLine + i)
+		newNumber := strconv.Itoa(firstNewLine + i)
+		appendDiffRow(&out, " "+line, "ctx", oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
 	}
 	out.WriteString(`</span>`)
 	return template.HTML(out.String())
 }
 
-func expandableGap(lines []string, firstLine int) template.HTML {
+func expandableGap(lines []string, firstOldLine, firstNewLine int) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
+	hiddenStart := min(defaultContextLines, len(lines))
+	hiddenEnd := max(hiddenStart, len(lines)-defaultContextLines)
+	hiddenCount := hiddenEnd - hiddenStart
 	var out strings.Builder
 	out.WriteString(`<span class="context-expand context-gap">`)
-	out.WriteString(`<button class="expand-lines" type="button" data-direction="down">↓ Show ` + strconv.Itoa(len(lines)) + ` lines below</button>`)
 	for i, line := range lines {
-		number := strconv.Itoa(firstLine + i)
-		appendDiffRow(&out, " "+line, "ctx", number, number, true)
+		if i == hiddenStart && hiddenCount > 0 {
+			out.WriteString(`<button class="expand-lines" type="button" data-direction="down">↓ Show ` + strconv.Itoa(hiddenCount) + ` lines below</button>`)
+		}
+		if i == hiddenEnd && hiddenCount > 0 {
+			out.WriteString(`<button class="expand-lines" type="button" data-direction="up">↑ Show ` + strconv.Itoa(hiddenCount) + ` lines above</button>`)
+		}
+		oldNumber := strconv.Itoa(firstOldLine + i)
+		newNumber := strconv.Itoa(firstNewLine + i)
+		appendDiffRow(&out, " "+line, "ctx", oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
 	}
-	out.WriteString(`<button class="expand-lines" type="button" data-direction="up">↑ Show ` + strconv.Itoa(len(lines)) + ` lines above</button>`)
 	out.WriteString(`</span>`)
 	return template.HTML(out.String())
 }

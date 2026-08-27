@@ -89,11 +89,11 @@ func TestBuildAndHandler(t *testing.T) {
 	}
 	fragment := p.Groups[0].Files[0].Fragments[0]
 	upper, lower := string(fragment.UpperContextHTML), string(fragment.LowerContextHTML)
-	if !strings.Contains(upper, "Show 4 lines above") || !strings.Contains(lower, "Show 13 lines below") {
+	if strings.Contains(upper, "Show ") || !strings.Contains(lower, "Show 8 lines below") {
 		t.Fatalf("missing directional context controls: upper=%q lower=%q", upper, lower)
 	}
-	if strings.Index(upper, "context-hidden") > strings.Index(upper, `class="expand-lines"`) {
-		t.Fatal("upper expansion rows must be before their button")
+	if strings.Contains(upper, "context-hidden") {
+		t.Fatal("fewer than five upper context lines should all be initially visible")
 	}
 	if strings.Index(lower, `class="expand-lines"`) > strings.Index(lower, "context-hidden") {
 		t.Fatal("lower expansion rows must be after their button")
@@ -280,7 +280,7 @@ func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
 		t.Fatalf("got %d fragments, want 2", len(fragments))
 	}
 	gap := string(fragments[0].LowerContextHTML)
-	if !strings.Contains(gap, "Show 15 lines below") || !strings.Contains(gap, "Show 15 lines above") {
+	if !strings.Contains(gap, "Show 5 lines below") || !strings.Contains(gap, "Show 5 lines above") {
 		t.Fatalf("fragments do not share a bidirectional context gap: %q", gap)
 	}
 	if fragments[1].UpperContextHTML != "" {
@@ -313,13 +313,37 @@ func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
 	page := Build(group, model.FragmentSet{Fragments: []model.MaterializedFragment{fragment}}, map[string]string{"a.go": strings.Repeat("line\n", 40)})
 	view := page.Groups[0].Files[0].Fragments[0]
 	between := string(view.HunkHTML)
-	if !strings.Contains(between, "Show 19 lines below") || !strings.Contains(between, "Show 19 lines above") {
+	if !strings.Contains(between, "Show 9 lines below") || !strings.Contains(between, "Show 9 lines above") {
 		t.Fatalf("multi-range fragment has no bidirectional expansion between ranges: %q", between)
 	}
 	if strings.Count(between, `class="context-expand context-gap"`) != 1 {
 		t.Fatalf("got unexpected number of internal range gaps: %q", between)
 	}
-	if !strings.Contains(string(view.UpperContextHTML), "Show 9 lines above") || !strings.Contains(string(view.LowerContextHTML), "Show 10 lines below") {
+	if !strings.Contains(string(view.UpperContextHTML), "Show 4 lines above") || !strings.Contains(string(view.LowerContextHTML), "Show 5 lines below") {
 		t.Fatalf("outer fragment context changed: upper=%q lower=%q", view.UpperContextHTML, view.LowerContextHTML)
+	}
+}
+
+func TestShortRangeGapIsInitiallyVisibleWithoutExpandControls(t *testing.T) {
+	html := string(expandableGap(strings.Split("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine", "\n"), 11, 11))
+	if strings.Contains(html, "expand-lines") || strings.Contains(html, "context-hidden") {
+		t.Fatalf("a gap covered by five lines of context on each side should be fully visible: %q", html)
+	}
+	if strings.Count(html, `class="diff-row ctx"`) != 9 {
+		t.Fatalf("got unexpected visible context rows: %q", html)
+	}
+}
+
+func TestRangeGapUsesIndependentOldAndNewLineNumbers(t *testing.T) {
+	patch := "@@ -128,0 +129,4 @@\n+one\n+two\n+three\n+four\n@@ -138,1 +142,1 @@\n-old\n+new\n"
+	html := string(colorPatchWithContext(patch, sourceLines(strings.Repeat("line\n", 160))))
+	oldContext := `<span class="line-number split-cell old-number">137</span>`
+	newContext := `<span class="line-number split-cell new-number">141</span>`
+	oldChange := `<span class="line-number split-cell old-number">138</span>`
+	if !strings.Contains(html, oldContext) || !strings.Contains(html, newContext) {
+		t.Fatalf("context did not preserve independent split-view line numbers: %q", html)
+	}
+	if strings.Index(html, oldContext) > strings.Index(html, oldChange) {
+		t.Fatalf("old-side context line numbers run backward at the next range: %q", html)
 	}
 }
