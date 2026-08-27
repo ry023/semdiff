@@ -40,7 +40,7 @@ func usage() {
 	semdiff grouping init <base>..<head> [--draft <path>] [--json]
 	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
 	semdiff grouping status [--draft <path>] [--json]
-	semdiff grouping inspect (--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
+	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
 	semdiff grouping finalize <groups-file> [--draft <path>] [--json]
 	semdiff view <groups-file> [--addr 127.0.0.1:8080]`)
 }
@@ -142,7 +142,8 @@ func run(ctx context.Context, args []string) error {
 			if err != nil {
 				return err
 			}
-			return printMaterializedFragment(gitdiff.Materialize(changes, draft.Fragments), draft.Fragments, positional[0], *jsonOut)
+			inspectable := draft.InspectableFragments()
+			return printMaterializedFragment(gitdiff.Materialize(changes, inspectable), inspectable, positional[0], *jsonOut)
 		}
 		if len(positional) != 2 {
 			return errors.New("show requires <groups-file> <fragment-id>")

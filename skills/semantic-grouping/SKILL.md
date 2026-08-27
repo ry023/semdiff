@@ -9,26 +9,27 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 
 ## Workflow
 
-1. Run `semdiff grouping init <base>..<head> --json` to create a resumable draft containing the exact range, editable Git-derived fragment suggestions, and mechanical category suggestions. Git hunk boundaries are only starting points.
+1. Run `semdiff grouping init <base>..<head> --json` to create a resumable draft containing the exact range, Git-derived suggestions, and mechanical category suggestions. Suggestions are navigation aids, not fragments that must each be assigned.
 2. Run `semdiff commits <base>..<head> --json` to understand the change narrative. Do not load the complete diff up front.
-3. Run `semdiff grouping status --json` and `semdiff grouping inspect --unassigned --json` to see the remaining work.
-4. Run `semdiff show --draft .semdiff/grouping-draft.json <id> --json` for relevant suggestions, then use `add_fragment`, `update_fragment`, and `delete_fragments` to split or combine them along semantic boundaries. `show` materializes the patch from the draft ranges; after finalization use `semdiff show <groups-file> <id> --json`.
+3. Run `semdiff grouping inspect --suggestions --json` and review suggestions by file and neighboring code. Use `semdiff show --draft .semdiff/grouping-draft.json <id> --json` for the relevant candidates.
+4. Compose authored fragments from the suggestions with `merge_fragments`: one `member` promotes a semantically complete suggestion, while several same-path `members` become one multi-range fragment. Use `add_fragment`, `update_fragment`, and `delete_fragments` only when the intended definition needs explicit ranges. Only authored fragments appear in status and require assignment.
 5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
 6. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. For every file referenced by a group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 7. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
-8. Run `semdiff grouping finalize groups.json --json`. Finalize succeeds only when every fragment is assigned and described, every Group has a complete summary and file categories, and every changed line and metadata change is selected exactly once.
+8. Before finalizing, review each file for over-fragmentation. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
+9. Run `semdiff grouping finalize groups.json --json`. Finalize succeeds only when every authored fragment is assigned and described, every Group has a complete summary and file categories, and every changed line and metadata change is selected exactly once.
 
 The required shape is:
 
 ```json
-{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}}],"description":"Adds the domain type used by the new workflow."}]}]}
+{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds the domain type and connects its validation at the call site."}]}]}
 ```
 
 Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
 
 ## Grouping drafts
 
-`semdiff grouping init` creates `.semdiff/grouping-draft.json` by default. The draft is the working state; `groups.json` is only produced by `grouping finalize`. Apply operations can be repeated and can add, revise, move, or remove decisions. Use `--draft <path>` when maintaining more than one draft.
+`semdiff grouping init` creates a draft schema version 2 file at `.semdiff/grouping-draft.json` by default. Recreate a version 1 draft with `grouping init --force`; do not continue it because version 1 reified Git spans as authored fragments. The draft is the working state; `groups.json` is only produced by `grouping finalize`. Apply operations can be repeated and can add, revise, move, or remove decisions. Use `--draft <path>` when maintaining more than one draft.
 
 An apply request contains a batch of operations. For example:
 
@@ -36,18 +37,33 @@ An apply request contains a batch of operations. For example:
 {
   "operations": [
     {"op":"upsert_group","group_id":"domain-change","title":"Introduce domain change","summary":"Explains the motivation and approach.","order":1},
-    {"op":"update_fragment","fragment":{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}}],"description":"Defines the shared domain contract."}},
+    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"domain-contract","description":"Defines the shared domain contract and connects its validation."}},
     {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
     {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
   ]
 }
 ```
 
-Use `move_fragments` when a fragment already belongs to another Group, and use `status` to identify only the remaining work. `add_fragment`, `update_fragment`, and `delete_fragments` edit definitions; fragment IDs are local handles while path/ranges are the source of truth. `apply` is atomic: an invalid operation leaves the previous draft unchanged. Do not edit the draft file by hand.
+`merge_fragments` accepts one or more same-path suggestion or authored-fragment IDs. It derives the path, concatenates their ranges, carries file metadata ownership, removes authored sources, and preserves a shared Group assignment. Provide explicit ranges in the resulting `fragment` only when the derived union is not the intended selection.
+
+Use `move_fragments` when a fragment already belongs to another Group, and use `status` to identify only the remaining authored work. `add_fragment`, `update_fragment`, and `delete_fragments` edit definitions; fragment IDs are local handles while path/ranges are the source of truth. `apply` is atomic: an invalid operation leaves the previous draft unchanged. Do not edit the draft file by hand.
+
+## Semantic fragment boundaries
+
+A fragment should be the smallest change that a reviewer can understand and describe independently—not the smallest contiguous diff span. One range is sufficient when it contains a complete semantic change; use multiple ranges whenever separated edits implement one responsibility.
+
+Never leave these as standalone fragments when they only complete another change:
+
+- a closing brace, bracket, parenthesis, comma, semicolon, or other punctuation-only edit;
+- a dangling `else`, `catch`, JSX closing tag, or similar structural counterpart;
+- an import used only by a neighboring implementation fragment;
+- one half of a declaration/body, caller/callee adaptation, or setup/assertion pair that has no independent review meaning.
+
+Attach such ranges to the fragment that owns the construct or behavior. A useful test is the description: if it can only say “closes,” “adjusts syntax,” “adds an import,” or refer vaguely to another fragment, merge it. Do not merge merely because ranges are close; keep independently reviewable behavior, tests, configuration, and refactors separate even when Git placed them in one hunk.
 
 The `classify` command only uses file paths, names, extensions, and directory structure. It intentionally has no confidence score or semantic rationale. Treat its output as a draft: the final category should describe the file's role in that Group, based on the commit narrative and relevant code when the mechanical guess is insufficient.
 
-The default category vocabulary is `implementation` for general source code, `test` for tests, `component` for UI components, `logic` for UI-independent logic, `config` for configuration and dependency metadata, and `unknown` when the path does not establish a useful role. These are conventions rather than an enum; use a more precise free-form category when needed.
+The default category vocabulary is `implementation` for general source code, `test` for tests, `component` for UI components, `logic` for UI-independent logic, `config` for configuration and dependency metadata, `docs` for documentation, and `unknown` when the path does not establish a useful role. These are conventions rather than an enum; use a more precise free-form category when needed.
 
 ## Fragment descriptions
 

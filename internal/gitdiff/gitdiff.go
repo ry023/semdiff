@@ -158,11 +158,29 @@ func SuggestedFragments(inv model.ChangeMap) []model.Fragment {
 	}
 	sort.SliceStable(result, func(i, j int) bool {
 		if result[i].Path == result[j].Path {
-			return result[i].ID < result[j].ID
+			left, right := fragmentPosition(result[i]), fragmentPosition(result[j])
+			if left == right {
+				return result[i].ID < result[j].ID
+			}
+			return left < right
 		}
 		return result[i].Path < result[j].Path
 	})
 	return result
+}
+
+func fragmentPosition(fragment model.Fragment) int {
+	position := 0
+	for _, span := range fragment.Ranges {
+		candidate := span.New
+		if candidate == nil {
+			candidate = span.Old
+		}
+		if candidate != nil && (position == 0 || candidate.Start < position) {
+			position = candidate.Start
+		}
+	}
+	return position
 }
 
 // Materialize renders range-defined fragments back into ordinary diff

@@ -22,11 +22,67 @@ func withDescription(fragment model.Fragment, description string) *model.Fragmen
 	return &fragment
 }
 
+func TestNewKeepsSuggestionsSeparateFromAuthoredFragments(t *testing.T) {
+	draft := fixtureDraft()
+	if len(draft.Suggestions) != 2 || len(draft.Fragments) != 0 {
+		t.Fatalf("suggestions were reified as fragments: %+v", draft)
+	}
+	status := draft.Status()
+	if status.SuggestionCount != 2 || status.FragmentCount != 0 || status.ReadyToFinalize {
+		t.Fatalf("unexpected initial status: %+v", status)
+	}
+}
+
+func TestMergeSuggestionsCreatesMultiRangeFragment(t *testing.T) {
+	draft := New(model.ChangeMap{BaseSHA: "base", HeadSHA: "head", Changes: []model.DiffChange{
+		{ID: "S1", Path: "src/a.ts", OldStart: 10, OldLines: 2, NewStart: 10, NewLines: 3},
+		{ID: "S2", Path: "src/a.ts", OldStart: 30, OldLines: 1, NewStart: 31, NewLines: 1},
+	}}, nil)
+	merged := model.Fragment{ID: "behavior", Description: "Updates one complete behavior across both locations."}
+	updated, err := Apply(draft, ApplyRequest{Operations: []Operation{{Op: "merge_fragments", Members: []string{"S1", "S2"}, Fragment: &merged}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Fragments) != 1 || updated.Fragments[0].Path != "src/a.ts" || len(updated.Fragments[0].Ranges) != 2 {
+		t.Fatalf("suggestions were not composed: %+v", updated.Fragments)
+	}
+	if len(updated.Suggestions) != 2 {
+		t.Fatalf("mechanical suggestions were mutated: %+v", updated.Suggestions)
+	}
+}
+
+func TestMergeAuthoredFragmentsPreservesSharedAssignment(t *testing.T) {
+	draft := New(model.ChangeMap{BaseSHA: "base", HeadSHA: "head", Changes: []model.DiffChange{
+		{ID: "S1", Path: "src/a.ts", NewStart: 10, NewLines: 1},
+		{ID: "S2", Path: "src/a.ts", NewStart: 30, NewLines: 1},
+	}}, nil)
+	first, second := draft.Suggestions[0], draft.Suggestions[1]
+	first.Description, second.Description = "First part.", "Second part."
+	var err error
+	draft, err = Apply(draft, ApplyRequest{Operations: []Operation{
+		{Op: "upsert_group", GroupID: "logic", Title: stringPtr("Logic")},
+		{Op: "add_fragment", Fragment: &first}, {Op: "add_fragment", Fragment: &second},
+		{Op: "assign_fragments", GroupID: "logic", Members: []string{"S1", "S2"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged := model.Fragment{ID: "complete", Description: "Implements the complete behavior."}
+	draft, err = Apply(draft, ApplyRequest{Operations: []Operation{{Op: "merge_fragments", Members: []string{"S1", "S2"}, Fragment: &merged}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(draft.Fragments) != 1 || draft.assignment("complete") != "logic" || draft.assignment("S1") != "" {
+		t.Fatalf("assignment was not preserved: %+v", draft)
+	}
+}
+
 func TestApplyEditsAndAssignsFragments(t *testing.T) {
 	draft := fixtureDraft()
+	suggestion, _ := draft.fragmentOrSuggestion("F1")
 	updated, err := Apply(draft, ApplyRequest{Operations: []Operation{
 		{Op: "upsert_group", GroupID: "logic", Title: stringPtr("Logic"), Summary: stringPtr("Explains the logic change.")},
-		{Op: "update_fragment", Fragment: withDescription(draft.Fragments[0], "Introduces the shared logic.")},
+		{Op: "add_fragment", Fragment: withDescription(suggestion, "Introduces the shared logic.")},
 		{Op: "assign_fragments", GroupID: "logic", Members: []string{"F1"}},
 		{Op: "set_file_categories", GroupID: "logic", Categories: map[string]string{"src/a.ts": "logic"}},
 	}})
@@ -45,11 +101,11 @@ func TestSplitSuggestedNewFileFragment(t *testing.T) {
 	draft := fixtureDraft()
 	first := model.Fragment{ID: "test-first", Path: "b.test.ts", Ranges: []model.FragmentRange{{New: &model.Range{Start: 1, Lines: 2}}}, Description: "Adds first tests."}
 	second := model.Fragment{ID: "test-second", Path: "b.test.ts", Ranges: []model.FragmentRange{{New: &model.Range{Start: 3, Lines: 2}}}, Description: "Adds second tests."}
-	updated, err := Apply(draft, ApplyRequest{Operations: []Operation{{Op: "delete_fragments", Members: []string{"F2"}}, {Op: "add_fragment", Fragment: &first}, {Op: "add_fragment", Fragment: &second}}})
+	updated, err := Apply(draft, ApplyRequest{Operations: []Operation{{Op: "add_fragment", Fragment: &first}, {Op: "add_fragment", Fragment: &second}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.fragmentIndex("F2") >= 0 || updated.fragmentIndex("test-first") < 0 || updated.fragmentIndex("test-second") < 0 {
+	if updated.fragmentIndex("test-first") < 0 || updated.fragmentIndex("test-second") < 0 {
 		t.Fatalf("split failed: %+v", updated.Fragments)
 	}
 }
@@ -67,8 +123,9 @@ func TestApplyRejectsInvalidBatchWithoutMutation(t *testing.T) {
 
 func TestFinalizeEmbedsDefinitions(t *testing.T) {
 	draft := fixtureDraft()
-	for index := range draft.Fragments {
-		draft.Fragments[index].Description = "Describes the change."
+	for _, suggestion := range draft.Suggestions {
+		suggestion.Description = "Describes the change."
+		draft.Fragments = append(draft.Fragments, suggestion)
 	}
 	var err error
 	draft, err = Apply(draft, ApplyRequest{Operations: []Operation{
@@ -98,11 +155,21 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(loaded.Changes) != 2 || len(loaded.Fragments) != 2 {
+	if len(loaded.Changes) != 2 || len(loaded.Suggestions) != 2 || len(loaded.Fragments) != 0 {
 		t.Fatalf("round trip changed draft: %+v", loaded)
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadRejectsVersionOneDraft(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "draft.json")
+	if err := os.WriteFile(path, []byte(`{"draft_version":1,"base_sha":"base","head_sha":"head","changes":[],"fragments":[],"groups":[]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "draft_version must be 2") {
+		t.Fatalf("version 1 draft was accepted: %v", err)
 	}
 }
 

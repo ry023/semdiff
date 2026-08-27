@@ -12,7 +12,7 @@ Git hunks and semantic fragments are different concepts:
 - A fragment supplies semantic ownership: a path and one or more ranges selecting records from that change map.
 - A semantic group connects fragments across files into one review concern.
 
-Git zero-context hunks may seed a draft, but they never determine the final fragment boundaries. A new file can be split into several fragments, and discontiguous edits in one file can be represented by one fragment.
+Git zero-context hunks are stored as draft suggestions, but they never populate the authored fragment collection or determine final boundaries. A new file can be split into several fragments, and discontiguous edits in one file can be represented by one fragment.
 
 ## Data model
 
@@ -100,10 +100,11 @@ base SHA + head SHA + path + ranges + metadata ownership
 
 ```text
 commits <base>..<head>             inspect history
-fragments <base>..<head>           inspect editable starting suggestions
+fragments <base>..<head>           inspect Git-derived navigation suggestions
 classify <base>..<head>            inspect path-based category suggestions
 grouping init <base>..<head>       create a resumable draft
-grouping inspect/status            inspect draft work
+grouping inspect --suggestions     inspect Git-derived navigation candidates
+grouping inspect/status            inspect authored draft work
 grouping apply <operations>        edit definitions and decisions atomically
 grouping finalize <groups-file>    validate coverage and write groups.json
 show --draft <path> <fragment-id>  materialize an editable draft fragment
@@ -114,20 +115,25 @@ view <groups-file>                 render semantic groups
 
 `show` always names its groups file or draft, so it does not depend on mutable “latest inventory” state.
 
+`classify` uses the standard vocabulary `logic`, `component`, `config`, `implementation`, `test`, `docs`, and `unknown`. The path-only heuristic recognizes documentation extensions, conventional names such as `README` and `CHANGELOG`, and documentation directories such as `docs/` and `guides/`. Categories remain free-form in authored groups.
+
 ## Draft model
 
-The draft contains:
+Draft schema version 2 separates suggestions from authored fragments. Version 1 drafts must be recreated; the final `groups.json` schema remains version 1. The draft contains:
 
 - resolved base/head SHAs;
 - a lightweight mechanical change map without patches;
-- editable fragment definitions initially seeded from Git zero-context spans;
+- immutable Git-derived suggestions used only for navigation and composition;
+- authored fragment definitions, initially empty;
 - groups whose `members` refer to local fragment IDs;
 - category suggestions and revision metadata.
 
-Supported definition operations are `add_fragment`, `update_fragment`, and `delete_fragments`. Supported membership operations are `assign_fragments`, `move_fragments`, and `unassign_fragments`. Group and category operations remain independent so partial work is resumable. Each apply batch is atomic and can use `expected_revision` for optimistic concurrency.
+`merge_fragments` composes one authored multi-range fragment from same-path suggestions or authored fragments. Supported explicit definition operations are `add_fragment`, `update_fragment`, and `delete_fragments`. Supported membership operations are `assign_fragments`, `move_fragments`, and `unassign_fragments`. Group and category operations remain independent so partial work is resumable. Each apply batch is atomic and can use `expected_revision` for optimistic concurrency.
+
+Suggestions are deliberately excluded from assignment and description counts. This prevents Git hunk granularity from becoming a completion checklist. Semantic fragments should be independently reviewable; delimiter-only, punctuation-only, and other structurally dependent ranges belong to the fragment that owns the complete construct.
 
 Finalization refreshes the Git change map before writing output. A stale or incomplete draft therefore cannot silently produce a groups file with incorrect coverage.
 
 ## File metadata and binary changes
 
-The diff parser emits metadata coverage independently from textual hunks when Git reports file creation/deletion, mode changes, renames, or binary changes. Draft initialization attaches that ownership to the first suggested fragment for the path; authors may move it to another fragment with `update_fragment`. Metadata-only files receive a fragment with `file_metadata: true` and no ranges.
+The diff parser emits metadata coverage independently from textual hunks when Git reports file creation/deletion, mode changes, renames, or binary changes. Draft initialization attaches that ownership to the first suggestion for the path. Composing that suggestion with `merge_fragments` carries metadata ownership to the authored fragment; an explicit definition can instead select it with `file_metadata: true`. Metadata-only files receive a suggestion with `file_metadata: true` and no ranges.

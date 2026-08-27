@@ -93,7 +93,7 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 			Status    groupingdraft.Status `json:"status"`
 		}{*draftPath, draft.Status()})
 	}
-	fmt.Printf("initialized grouping draft: %s (%d suggested fragments)\n", *draftPath, len(draft.Fragments))
+	fmt.Printf("initialized grouping draft: %s (%d suggestions)\n", *draftPath, len(draft.Suggestions))
 	return nil
 }
 
@@ -149,7 +149,7 @@ func runGroupingStatus(args []string) error {
 	if *jsonOut {
 		return printJSON(status)
 	}
-	fmt.Printf("revision %d: %d/%d fragments assigned, %d described\n", status.Revision, status.AssignedFragmentCount, status.FragmentCount, status.DescribedFragmentCount)
+	fmt.Printf("revision %d: %d suggestions; %d/%d authored fragments assigned, %d described\n", status.Revision, status.SuggestionCount, status.AssignedFragmentCount, status.FragmentCount, status.DescribedFragmentCount)
 	if status.ReadyToFinalize {
 		fmt.Println("ready to finalize")
 	} else {
@@ -163,6 +163,7 @@ func runGroupingInspect(args []string) error {
 	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
 	jsonOut := fs.Bool("json", false, "JSON output")
 	unassigned := fs.Bool("unassigned", false, "show unassigned fragments")
+	suggestions := fs.Bool("suggestions", false, "show Git-derived fragment suggestions")
 	groupID := fs.String("group", "", "show one group")
 	fragmentID := fs.String("fragment", "", "show one fragment")
 	positional, err := parseInterspersed(fs, args)
@@ -176,6 +177,9 @@ func runGroupingInspect(args []string) error {
 	if *unassigned {
 		selected++
 	}
+	if *suggestions {
+		selected++
+	}
 	if *groupID != "" {
 		selected++
 	}
@@ -183,7 +187,7 @@ func runGroupingInspect(args []string) error {
 		selected++
 	}
 	if selected != 1 {
-		return errors.New("grouping inspect requires exactly one of --unassigned, --group, or --fragment")
+		return errors.New("grouping inspect requires exactly one of --suggestions, --unassigned, --group, or --fragment")
 	}
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {
@@ -196,6 +200,15 @@ func runGroupingInspect(args []string) error {
 		}
 		for _, fragment := range fragments {
 			fmt.Printf("%s  %s  %s\n", fragment.ID, fragment.Path, formatFragmentRanges(fragment))
+		}
+		return nil
+	}
+	if *suggestions {
+		if *jsonOut {
+			return printJSON(draft.Suggestions)
+		}
+		for _, suggestion := range draft.Suggestions {
+			fmt.Printf("%s  %s  %s\n", suggestion.ID, suggestion.Path, formatFragmentRanges(suggestion))
 		}
 		return nil
 	}

@@ -15,6 +15,7 @@ semdiff commits main..HEAD --json
 semdiff fragments main..HEAD --json
 semdiff classify main..HEAD --json
 semdiff grouping init main..HEAD --json
+semdiff grouping inspect --suggestions --json
 semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
@@ -25,7 +26,11 @@ semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
 ```
 
-`fragments` emits Git-derived zero-context ranges as initial suggestions. They are not canonical fragment boundaries. `grouping init` copies those suggestions into an editable `.semdiff/grouping-draft.json`; use `add_fragment`, `update_fragment`, and `delete_fragments` to split, combine, or reshape them before finalizing.
+`fragments` emits Git-derived zero-context ranges as initial suggestions. They are not canonical fragment boundaries. `grouping init` stores suggestions separately from authored fragments in `.semdiff/grouping-draft.json`, so each Git span does not become an assignment obligation. Inspect them with `grouping inspect --suggestions`, then use `merge_fragments`, `add_fragment`, `update_fragment`, and `delete_fragments` to compose semantic fragments before finalizing.
+
+`classify` suggests the standard categories `logic`, `component`, `config`, `implementation`, `test`, `docs`, and `unknown` from paths. Documentation extensions such as Markdown and reStructuredText, conventional documentation filenames such as `README` and `CHANGELOG`, and files under documentation directories such as `docs/` and `guides/` are classified as `docs`.
+
+This workflow uses draft schema version 2. Re-run `grouping init --force` to replace a version 1 draft. The final `groups.json` schema remains version 1.
 
 `groups.json` is the source of truth. Every fragment contains its path, one or more old/new ranges, and its semantic description:
 
@@ -77,14 +82,11 @@ Draft operations are atomic and can be read from a file or standard input. Fragm
 {
   "operations": [
     {
-      "op": "update_fragment",
+      "op": "merge_fragments",
+      "members": ["F-candidate-1", "F-candidate-2"],
       "fragment": {
         "id": "domain-contract",
-        "path": "src/domain.ts",
-        "ranges": [
-          {"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}}
-        ],
-        "description": "Defines the domain contract."
+        "description": "Defines the domain contract and connects its validation."
       }
     },
     {
@@ -100,4 +102,6 @@ Draft operations are atomic and can be read from a file or standard input. Fragm
 }
 ```
 
-Available fragment operations are `add_fragment`, `update_fragment`, and `delete_fragments`. Group membership operations are `assign_fragments`, `move_fragments`, and `unassign_fragments`.
+`merge_fragments` derives one multi-range fragment from one or more same-path suggestions or authored fragments. Available explicit definition operations are `add_fragment`, `update_fragment`, and `delete_fragments`. Group membership operations are `assign_fragments`, `move_fragments`, and `unassign_fragments`.
+
+A fragment should be independently understandable, not merely contiguous. Do not create standalone fragments for closing delimiters, punctuation-only edits, dangling structural counterparts, or imports that only support a neighboring change. Attach those ranges to the fragment that owns the complete construct or behavior.

@@ -15,7 +15,7 @@ import (
 	"github.com/ry023/semdiff/internal/model"
 )
 
-const Version = 1
+const Version = 2
 
 type Draft struct {
 	Version             int                     `json:"draft_version"`
@@ -23,6 +23,7 @@ type Draft struct {
 	BaseSHA             string                  `json:"base_sha"`
 	HeadSHA             string                  `json:"head_sha"`
 	Changes             []model.DiffChange      `json:"changes"`
+	Suggestions         []model.Fragment        `json:"suggestions"`
 	Fragments           []model.Fragment        `json:"fragments"`
 	CategorySuggestions []categories.Suggestion `json:"category_suggestions,omitempty"`
 	Groups              []DraftGroup            `json:"groups"`
@@ -56,6 +57,7 @@ type Operation struct {
 
 type Status struct {
 	Revision               int           `json:"revision"`
+	SuggestionCount        int           `json:"suggestion_count"`
 	FragmentCount          int           `json:"fragment_count"`
 	AssignedFragmentCount  int           `json:"assigned_fragment_count"`
 	DescribedFragmentCount int           `json:"described_fragment_count"`
@@ -84,8 +86,8 @@ func New(inv model.ChangeMap, suggestions []categories.Suggestion) Draft {
 	for index := range changes {
 		changes[index].Patch = ""
 	}
-	fragments := gitdiff.SuggestedFragments(inv)
-	return Draft{Version: Version, BaseSHA: inv.BaseSHA, HeadSHA: inv.HeadSHA, Changes: changes, Fragments: fragments, CategorySuggestions: suggestions, Groups: []DraftGroup{}}
+	fragmentSuggestions := gitdiff.SuggestedFragments(inv)
+	return Draft{Version: Version, BaseSHA: inv.BaseSHA, HeadSHA: inv.HeadSHA, Changes: changes, Suggestions: fragmentSuggestions, Fragments: []model.Fragment{}, CategorySuggestions: suggestions, Groups: []DraftGroup{}}
 }
 
 func Load(path string) (Draft, error) {
@@ -167,7 +169,7 @@ func (d Draft) Status() Status {
 			assigned[id] = true
 		}
 	}
-	status := Status{Revision: d.Revision, FragmentCount: len(d.Fragments), Groups: []GroupStatus{}}
+	status := Status{Revision: d.Revision, SuggestionCount: len(d.Suggestions), FragmentCount: len(d.Fragments), Groups: []GroupStatus{}}
 	byID := map[string]model.Fragment{}
 	for _, fragment := range d.Fragments {
 		byID[fragment.ID] = fragment
@@ -290,6 +292,82 @@ func (d *Draft) applyOperation(operation Operation) error {
 			return fmt.Errorf("fragment %s does not exist", operation.Fragment.ID)
 		}
 		d.Fragments[index] = *operation.Fragment
+	case "merge_fragments":
+		if operation.Fragment == nil {
+			return errors.New("fragment is required")
+		}
+		if len(operation.Members) == 0 {
+			return errors.New("members must contain at least one suggestion or fragment ID")
+		}
+		merged := *operation.Fragment
+		if strings.TrimSpace(merged.ID) == "" {
+			return errors.New("merged fragment ID is required")
+		}
+		sourceIDs := map[string]bool{}
+		assignments := map[string]bool{}
+		var sources []model.Fragment
+		for _, id := range operation.Members {
+			if sourceIDs[id] {
+				return fmt.Errorf("source fragment %s is repeated", id)
+			}
+			sourceIDs[id] = true
+			source, ok := d.fragmentOrSuggestion(id)
+			if !ok {
+				return fmt.Errorf("source fragment or suggestion %s does not exist", id)
+			}
+			sources = append(sources, source)
+			if assignment := d.assignment(id); assignment != "" {
+				assignments[assignment] = true
+			}
+		}
+		if len(assignments) > 1 {
+			return errors.New("source fragments belong to different groups; move them to one group before merging")
+		}
+		path := sources[0].Path
+		for _, source := range sources {
+			if source.Path != path {
+				return errors.New("merge_fragments sources must use the same path")
+			}
+		}
+		if merged.Path == "" {
+			merged.Path = path
+		} else if merged.Path != path {
+			return fmt.Errorf("merged fragment path %s does not match source path %s", merged.Path, path)
+		}
+		if len(merged.Ranges) == 0 {
+			for _, source := range sources {
+				merged.Ranges = append(merged.Ranges, source.Ranges...)
+			}
+			sort.SliceStable(merged.Ranges, func(left, right int) bool {
+				return fragmentRangeStart(merged.Ranges[left]) < fragmentRangeStart(merged.Ranges[right])
+			})
+		}
+		for _, source := range sources {
+			merged.FileMetadata = merged.FileMetadata || source.FileMetadata
+		}
+		if existing := d.fragmentIndex(merged.ID); existing >= 0 && !sourceIDs[merged.ID] {
+			return fmt.Errorf("fragment %s already exists", merged.ID)
+		}
+		for _, suggestion := range d.Suggestions {
+			if suggestion.ID == merged.ID && !sourceIDs[merged.ID] {
+				return fmt.Errorf("suggestion %s already uses the merged fragment ID", merged.ID)
+			}
+		}
+		filtered := d.Fragments[:0]
+		for _, fragment := range d.Fragments {
+			if !sourceIDs[fragment.ID] {
+				filtered = append(filtered, fragment)
+			}
+		}
+		d.Fragments = filtered
+		for id := range sourceIDs {
+			d.removeFragment(id)
+		}
+		d.Fragments = append(d.Fragments, merged)
+		for groupID := range assignments {
+			group, _ := d.group(groupID)
+			group.Members = append(group.Members, merged.ID)
+		}
 	case "delete_fragments":
 		for _, id := range operation.Members {
 			index := d.fragmentIndex(id)
@@ -387,6 +465,20 @@ func (d Draft) FragmentInspection(id string) (FragmentInspection, error) {
 	return result, nil
 }
 
+func (d Draft) InspectableFragments() []model.Fragment {
+	result := append([]model.Fragment(nil), d.Fragments...)
+	authored := map[string]bool{}
+	for _, fragment := range d.Fragments {
+		authored[fragment.ID] = true
+	}
+	for _, suggestion := range d.Suggestions {
+		if !authored[suggestion.ID] {
+			result = append(result, suggestion)
+		}
+	}
+	return result
+}
+
 func (d Draft) UnassignedFragments() []model.Fragment {
 	assigned := map[string]bool{}
 	for _, group := range d.Groups {
@@ -420,6 +512,9 @@ func (d *Draft) normalizeAndValidate() error {
 	if d.Changes == nil {
 		d.Changes = []model.DiffChange{}
 	}
+	if d.Suggestions == nil {
+		d.Suggestions = []model.Fragment{}
+	}
 	if d.Fragments == nil {
 		d.Fragments = []model.Fragment{}
 	}
@@ -439,6 +534,15 @@ func (d *Draft) normalizeAndValidate() error {
 
 func (d Draft) structuralErrors() []string {
 	var result []string
+	suggestionIDs := map[string]bool{}
+	for _, suggestion := range d.Suggestions {
+		if strings.TrimSpace(suggestion.ID) == "" {
+			result = append(result, "suggestion ID must not be empty")
+		} else if suggestionIDs[suggestion.ID] {
+			result = append(result, fmt.Sprintf("duplicate suggestion ID: %s", suggestion.ID))
+		}
+		suggestionIDs[suggestion.ID] = true
+	}
 	ids := map[string]bool{}
 	for _, fragment := range d.Fragments {
 		if strings.TrimSpace(fragment.ID) == "" {
@@ -491,6 +595,26 @@ func (d Draft) fragmentIndex(id string) int {
 		}
 	}
 	return -1
+}
+func (d Draft) fragmentOrSuggestion(id string) (model.Fragment, bool) {
+	if index := d.fragmentIndex(id); index >= 0 {
+		return d.Fragments[index], true
+	}
+	for _, suggestion := range d.Suggestions {
+		if suggestion.ID == id {
+			return suggestion, true
+		}
+	}
+	return model.Fragment{}, false
+}
+func fragmentRangeStart(span model.FragmentRange) int {
+	if span.New != nil {
+		return span.New.Start
+	}
+	if span.Old != nil {
+		return span.Old.Start
+	}
+	return 0
 }
 func (d Draft) assignment(id string) string {
 	for _, group := range d.Groups {

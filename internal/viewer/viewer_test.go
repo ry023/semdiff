@@ -132,7 +132,9 @@ func TestFormatRangesPreservesDiscontiguousDefinition(t *testing.T) {
 		{Old: &model.Range{Start: 10, Lines: 2}, New: &model.Range{Start: 10, Lines: 4}},
 		{New: &model.Range{Start: 40, Lines: 3}},
 	}}
-	if got, want := formatRanges(fragment), "-10,2 +10,4; -∅ +40,3; metadata"; got != want { t.Fatalf("got %q, want %q", got, want) }
+	if got, want := formatRanges(fragment), "-10,2 +10,4; -∅ +40,3; metadata"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
 }
 
 func TestDiffstatBlocks(t *testing.T) {
@@ -216,18 +218,19 @@ func TestRenderMarkdown(t *testing.T) {
 }
 
 func TestCategoryViewsUseRequestedOrder(t *testing.T) {
-	files := []FileView{{Path: "a.ts"}, {Path: "b.tsx"}, {Path: "c.yml"}, {Path: "d.go"}, {Path: "e.test.ts"}, {Path: "f.md"}, {Path: "g.ts"}}
+	files := []FileView{{Path: "a.ts"}, {Path: "b.tsx"}, {Path: "c.yml"}, {Path: "d.go"}, {Path: "e.test.ts"}, {Path: "f.md"}, {Path: "g.ts"}, {Path: "h.bin"}}
 	declared := []model.FileCategory{
 		{Path: "a.ts", Category: "logic"},
 		{Path: "b.tsx", Category: "component"},
 		{Path: "c.yml", Category: "config"},
 		{Path: "d.go", Category: "implementation"},
 		{Path: "e.test.ts", Category: "test"},
-		{Path: "f.md", Category: "unknown"},
+		{Path: "f.md", Category: "docs"},
 		{Path: "g.ts", Category: "custom"},
+		{Path: "h.bin", Category: "unknown"},
 	}
 	views := buildCategoryViews(files, declared)
-	want := []string{"logic", "component", "config", "implementation", "test", "unknown", "custom"}
+	want := []string{"logic", "component", "config", "implementation", "test", "docs", "unknown", "custom"}
 	if len(views) != len(want) {
 		t.Fatalf("got %d categories, want %d: %+v", len(views), len(want), views)
 	}
@@ -235,6 +238,9 @@ func TestCategoryViewsUseRequestedOrder(t *testing.T) {
 		if category.Name != want[i] {
 			t.Errorf("category %d = %q, want %q", i, category.Name, want[i])
 		}
+	}
+	if !views[5].Standard || views[5].IconClass != "docs" || views[5].Icon == "" {
+		t.Errorf("docs category should have a standard icon: %+v", views[5])
 	}
 }
 

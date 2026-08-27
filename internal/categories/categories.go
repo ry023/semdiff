@@ -43,6 +43,9 @@ func classifyPath(filePath string) string {
 	if isTestPath(base, segments) {
 		return "test"
 	}
+	if isDocsPath(base, segments) {
+		return "docs"
+	}
 	if isConfigPath(base, segments) {
 		return "config"
 	}
@@ -56,6 +59,21 @@ func classifyPath(filePath string) string {
 		return "implementation"
 	}
 	return "unknown"
+}
+
+func isDocsPath(base string, segments []string) bool {
+	if hasExtension(base, ".md", ".mdx", ".rst", ".adoc", ".asciidoc") {
+		return true
+	}
+	if hasSegment(segments, "doc", "docs", "documentation", "guide", "guides", "manual", "manuals") {
+		return true
+	}
+	for _, name := range []string{"readme", "changelog", "contributing", "code_of_conduct", "security", "governance", "license"} {
+		if base == name || strings.HasPrefix(base, name+".") {
+			return true
+		}
+	}
+	return false
 }
 
 func isTestPath(base string, segments []string) bool {

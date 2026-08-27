@@ -17,6 +17,7 @@ semdiff commits main..HEAD --json
 semdiff fragments main..HEAD --json
 semdiff classify main..HEAD --json
 semdiff grouping init main..HEAD --json
+semdiff grouping inspect --suggestions --json
 semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
@@ -27,7 +28,11 @@ semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
 ```
 
-`fragments` は、Git から取得したコンテキストなしの変更範囲を初期候補として出力します。この範囲は fragment の確定境界ではありません。`grouping init` は候補を編集可能な `.semdiff/grouping-draft.json` にコピーします。finalize の前に `add_fragment`、`update_fragment`、`delete_fragments` を使って、fragment の分割、結合、範囲変更を行えます。
+`fragments` は、Git から取得したコンテキストなしの変更範囲を初期候補として出力します。この範囲は fragment の確定境界ではありません。`grouping init` は `.semdiff/grouping-draft.json` 内で候補と authored fragment を分離して保存するため、Git の各変更範囲がそのまま割り当て義務にはなりません。`grouping inspect --suggestions` で候補を確認し、finalize の前に `merge_fragments`、`add_fragment`、`update_fragment`、`delete_fragments` を使って意味的な fragment を構成します。
+
+`classify` はパスから標準カテゴリ `logic`、`component`、`config`、`implementation`、`test`、`docs`、`unknown` を提案します。Markdown や reStructuredText などのドキュメント拡張子、`README` や `CHANGELOG` などの定番ファイル名、`docs/` や `guides/` などのドキュメント用ディレクトリ配下を `docs` に分類します。
+
+この workflow では draft schema version 2 を使用します。version 1 の draft は `grouping init --force` で作り直してください。最終的な `groups.json` の schema は引き続き version 1 です。
 
 `groups.json` が source of truth です。各 fragment はファイルパス、1つ以上の変更前・変更後の行範囲、意味的な説明を保持します。
 
@@ -81,14 +86,11 @@ Draft 操作は atomic に適用され、ファイルまたは標準入力から
 {
   "operations": [
     {
-      "op": "update_fragment",
+      "op": "merge_fragments",
+      "members": ["F-candidate-1", "F-candidate-2"],
       "fragment": {
         "id": "domain-contract",
-        "path": "src/domain.ts",
-        "ranges": [
-          {"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}}
-        ],
-        "description": "Defines the domain contract."
+        "description": "Defines the domain contract and connects its validation."
       }
     },
     {
@@ -104,4 +106,6 @@ Draft 操作は atomic に適用され、ファイルまたは標準入力から
 }
 ```
 
-fragment の定義には `add_fragment`、`update_fragment`、`delete_fragments` を使用できます。Group への所属操作には `assign_fragments`、`move_fragments`、`unassign_fragments` を使用できます。
+`merge_fragments` は、同じファイルに属する1つ以上の候補または authored fragment から、複数 range を持つ1つの fragment を生成します。明示的な定義操作には `add_fragment`、`update_fragment`、`delete_fragments` を使用できます。Group への所属操作には `assign_fragments`、`move_fragments`、`unassign_fragments` を使用できます。
+
+fragment の境界は「連続しているか」ではなく「単独で理解できるか」で決めます。閉じ括弧、句読点だけの変更、対応先なしでは意味を持たない構文要素、隣接する変更のためだけの import を単独 fragment にしないでください。完全な構文要素または振る舞いを所有する fragment に、その range を含めます。

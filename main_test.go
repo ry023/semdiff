@@ -13,6 +13,7 @@ import (
 	"github.com/ry023/semdiff/internal/gitdiff"
 	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
+	"github.com/ry023/semdiff/internal/model"
 )
 
 func TestParseInterspersedKeepsStdinMarker(t *testing.T) {
@@ -71,12 +72,18 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	}}
 	var fragmentIDs []string
 	fileCategories := map[string]string{}
-	for index, fragment := range inv.Changes {
+	for _, fragment := range inv.Changes {
 		fragmentIDs = append(fragmentIDs, fragment.ID)
 		fileCategories[fragment.Path] = "logic"
-		definition := draft.Fragments[index]
+		var definition model.Fragment
+		for _, suggestion := range draft.Suggestions {
+			if suggestion.ID == fragment.ID {
+				definition = suggestion
+				break
+			}
+		}
 		definition.Description = "Adds the logic contract."
-		request.Operations = append(request.Operations, groupingdraft.Operation{Op: "update_fragment", Fragment: &definition})
+		request.Operations = append(request.Operations, groupingdraft.Operation{Op: "add_fragment", Fragment: &definition})
 	}
 	request.Operations = append(request.Operations,
 		groupingdraft.Operation{Op: "assign_fragments", GroupID: "logic", Members: fragmentIDs},

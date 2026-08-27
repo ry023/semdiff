@@ -13,7 +13,11 @@ func TestClassifyPaths(t *testing.T) {
 		{"web/components/Button.tsx", "component"},
 		{"src/domain/order.ts", "logic"},
 		{"internal/gitdiff/gitdiff.go", "implementation"},
-		{"docs/overview.md", "unknown"},
+		{"docs/overview.md", "docs"},
+		{"README", "docs"},
+		{"guides/getting-started.rst", "docs"},
+		{"SECURITY.md", "docs"},
+		{"notes.txt", "unknown"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
