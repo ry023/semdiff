@@ -207,11 +207,11 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 		{ID: "cleanup", Title: "Cleanup", Fragments: []model.Fragment{{ID: "F3", Path: "docs/design/a.go"}}},
 	}}
 	page := Build(groups, inv)
-	if len(page.SidebarDirectories) != 1 || page.SidebarDirectories[0].Name != "docs" || page.SidebarDirectories[0].FileCount != 1 {
+	if len(page.SidebarDirectories) != 1 || page.SidebarDirectories[0].Name != "docs/design" || page.SidebarDirectories[0].FileCount != 1 {
 		t.Fatalf("unexpected sidebar root directories: %+v", page.SidebarDirectories)
 	}
-	design := page.SidebarDirectories[0].Directories[0]
-	if design.Name != "design" || len(design.Files) != 1 || design.Files[0].Path != "docs/design/a.go" {
+	design := page.SidebarDirectories[0]
+	if len(design.Files) != 1 || design.Files[0].Path != "docs/design/a.go" {
 		t.Fatalf("nested file tree was not preserved: %+v", design)
 	}
 	occurrences := design.Files[0].Occurrences
@@ -234,12 +234,40 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 		`class="sidebar-pane sidebar-files"`,
 		`data-group-id="cleanup" data-file-path="docs/design/a.go"`,
 		`var mainFiles=Array.from(document.querySelectorAll('.main-file'))`,
+		`function buildGroupTrees()`,
+		`directory.className='nav-directory nav-group-directory'`,
+		`function compressGroupDirectories(root)`,
+		`--sidebar-width:360px`,
+		`semdiff-sidebar-width`,
+		`sidebar.setPointerCapture(event.pointerId)`,
 		`syncSidebar(fileAtViewport(),false)`,
+		`openAncestors(activeGroupFile)`,
 		`focusInPane(fileTarget,filePane)`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered sidebar is missing %q", want)
 		}
+	}
+}
+
+func TestSidebarKeepsDirectoryBranchesWhileCompressingSingleChains(t *testing.T) {
+	files := []SidebarFile{
+		{Path: "web/src/entities/node/model/v0.0.6/Node.ts", Name: "Node.ts"},
+		{Path: "web/src/entities/node/model/v0.0.6/MediaNode.ts", Name: "MediaNode.ts"},
+		{Path: "web/test/node.test.ts", Name: "node.test.ts"},
+	}
+	directories, rootFiles := buildSidebarTree(files)
+	if len(rootFiles) != 0 || len(directories) != 1 || directories[0].Name != "web" {
+		t.Fatalf("top-level branch should remain explicit: directories=%+v root=%+v", directories, rootFiles)
+	}
+	if len(directories[0].Directories) != 2 {
+		t.Fatalf("web branch was collapsed across a fork: %+v", directories[0])
+	}
+	if got := directories[0].Directories[0].Name; got != "src/entities/node/model/v0.0.6" {
+		t.Fatalf("single directory chain was not compressed: %q", got)
+	}
+	if got := directories[0].Directories[1].Name; got != "test" {
+		t.Fatalf("sibling directory was lost: %q", got)
 	}
 }
 

@@ -175,14 +175,18 @@ func (p *Page) buildSidebar() {
 			})
 		}
 	}
-	paths := make([]string, 0, len(byPath))
-	for path := range byPath {
-		paths = append(paths, path)
+	files := make([]SidebarFile, 0, len(byPath))
+	for _, file := range byPath {
+		files = append(files, *file)
 	}
-	sort.Strings(paths)
+	p.SidebarDirectories, p.SidebarFiles = buildSidebarTree(files)
+}
+
+func buildSidebarTree(files []SidebarFile) ([]SidebarDirectory, []SidebarFile) {
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	root := &sidebarDirectoryBuilder{directories: map[string]*sidebarDirectoryBuilder{}}
-	for _, path := range paths {
-		parts := strings.Split(path, "/")
+	for _, file := range files {
+		parts := strings.Split(file.Path, "/")
 		directory := root
 		for _, part := range parts[:len(parts)-1] {
 			child := directory.directories[part]
@@ -192,9 +196,9 @@ func (p *Page) buildSidebar() {
 			}
 			directory = child
 		}
-		directory.files = append(directory.files, *byPath[path])
+		directory.files = append(directory.files, file)
 	}
-	p.SidebarDirectories, p.SidebarFiles = materializeSidebarDirectory(root)
+	return materializeSidebarDirectory(root)
 }
 
 func materializeSidebarDirectory(builder *sidebarDirectoryBuilder) ([]SidebarDirectory, []SidebarFile) {
@@ -208,6 +212,15 @@ func materializeSidebarDirectory(builder *sidebarDirectoryBuilder) ([]SidebarDir
 		child := builder.directories[name]
 		grandchildren, files := materializeSidebarDirectory(child)
 		directory := SidebarDirectory{Name: child.name, Directories: grandchildren, Files: files, FileCount: len(files)}
+		if len(files) == 0 && len(grandchildren) == 1 {
+			grandchild := grandchildren[0]
+			directory.Name += "/" + grandchild.Name
+			directory.Directories = grandchild.Directories
+			directory.Files = grandchild.Files
+			directory.FileCount = grandchild.FileCount
+			directories = append(directories, directory)
+			continue
+		}
 		for _, grandchild := range grandchildren {
 			directory.FileCount += grandchild.FileCount
 		}
