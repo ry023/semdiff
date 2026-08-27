@@ -3,6 +3,7 @@ package viewer
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -17,7 +18,7 @@ import (
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-//go:embed index.html
+//go:embed index.html importance.css importance.js
 var assets embed.FS
 
 const defaultContextLines = 5
@@ -770,11 +771,47 @@ func rangeStart(field string) int {
 }
 
 func Handler(page Page) (http.Handler, error) {
-	t, err := template.ParseFS(assets, "index.html")
+	index, err := assets.ReadFile("index.html")
+	if err != nil {
+		return nil, err
+	}
+	source := strings.Replace(string(index), "</head>", `<link rel="stylesheet" href="/importance.css"></head>`, 1)
+	source = strings.Replace(source, "</body>", `<script src="/importance.js"></script></body>`, 1)
+	t, err := template.New("index.html").Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	importanceData := struct {
+		Groups    map[string]model.Importance `json:"groups"`
+		Fragments map[string]model.Importance `json:"fragments"`
+	}{Groups: map[string]model.Importance{}, Fragments: map[string]model.Importance{}}
+	for _, group := range page.Groups {
+		importanceData.Groups[group.ID] = group.Importance
+		for _, file := range group.Files {
+			for _, fragment := range file.Fragments {
+				importanceData.Fragments[fragment.ID] = fragment.Importance
+			}
+		}
+	}
+	importanceJSON, err := json.Marshal(importanceData)
 	if err != nil {
 		return nil, err
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/importance.css", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		content, _ := assets.ReadFile("importance.css")
+		_, _ = w.Write(content)
+	})
+	mux.HandleFunc("/importance.js", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		content, _ := assets.ReadFile("importance.js")
+		_, _ = w.Write(content)
+	})
+	mux.HandleFunc("/importance.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(importanceJSON)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

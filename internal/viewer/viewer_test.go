@@ -1,6 +1,7 @@
 package viewer
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -280,6 +281,29 @@ func TestFileImportanceUsesStrongestFragment(t *testing.T) {
 	}
 	if got := page.SidebarFiles[0].Importance; got != model.ImportanceSupporting {
 		t.Fatalf("sidebar file importance = %q", got)
+	}
+}
+
+func TestHandlerServesImportanceUIAssetsAndData(t *testing.T) {
+	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{
+		ID: "behavior", Title: "Behavior", Importance: model.ImportanceCore,
+		Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "Adapts the caller.", Importance: model.ImportanceSupporting}},
+	}}}, model.FragmentSet{Fragments: []model.MaterializedFragment{{ID: "F1", Path: "a.go", Patch: "@@ -1,1 +1,1 @@\n-old\n+new\n"}}})
+	handler, err := Handler(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		"/":                `<script src="/importance.js"></script>`,
+		"/importance.css":  ".importance-core",
+		"/importance.js":   "group-importance",
+		"/importance.json": `"behavior":"core"`,
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest("GET", path, nil))
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), want) {
+			t.Errorf("%s: status=%d body does not contain %q", path, response.Code, want)
+		}
 	}
 }
 
