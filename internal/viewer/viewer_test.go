@@ -232,6 +232,9 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 		`<aside class="sidebar" aria-label="Change navigation">`,
 		`class="sidebar-pane sidebar-groups"`,
 		`class="sidebar-pane sidebar-files"`,
+		`data-sidebar-view="groups"`,
+		`data-sidebar-view="files"`,
+		`semdiff-sidebar-view`,
 		`data-group-id="cleanup" data-file-path="docs/design/a.go"`,
 		`var mainFiles=Array.from(document.querySelectorAll('.main-file'))`,
 		`function buildGroupTrees()`,
@@ -243,6 +246,7 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 		`syncSidebar(fileAtViewport(),false)`,
 		`openAncestors(activeGroupFile)`,
 		`focusInPane(fileTarget,filePane)`,
+		`var current=Array.isArray(mainFiles)?fileAtViewport():null`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("rendered sidebar is missing %q", want)
