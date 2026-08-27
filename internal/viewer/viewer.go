@@ -25,6 +25,7 @@ const defaultContextLines = 5
 type FragmentView struct {
 	model.MaterializedFragment
 	Description      string
+	Importance       model.Importance
 	RangeLabel       string
 	HeaderHTML       template.HTML
 	HunkHTML         template.HTML
@@ -43,9 +44,11 @@ type FileView struct {
 	Diffstat   []string
 	HeaderHTML template.HTML
 	Fragments  []FragmentView
+	Importance model.Importance
 }
 type GroupView struct {
 	ID, Title, Summary string
+	Importance         model.Importance
 	AnchorID           string
 	SummaryHTML        template.HTML
 	Order              *int
@@ -75,11 +78,13 @@ type SidebarOccurrence struct {
 	GroupID, GroupTitle string
 	FileAnchorID        string
 	FragmentCount       int
+	Importance          model.Importance
 }
 
 type SidebarFile struct {
 	Path, Name  string
 	StatusIcon  template.HTML
+	Importance  model.Importance
 	Occurrences []SidebarOccurrence
 }
 
@@ -109,10 +114,11 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 	p := Page{BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 	allFiles := map[string]bool{}
 	for groupIndex, group := range g.Groups {
-		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, SummaryHTML: renderMarkdown(group.Summary), Order: group.Order, AnchorID: fmt.Sprintf("group-%d", groupIndex)}
+		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, Importance: group.Importance, SummaryHTML: renderMarkdown(group.Summary), Order: group.Order, AnchorID: fmt.Sprintf("group-%d", groupIndex)}
 		fileMap := map[string][]model.MaterializedFragment{}
 		descriptions := map[string]string{}
 		rangeLabels := map[string]string{}
+		importances := map[string]model.Importance{}
 		var paths []string
 		for _, reference := range group.Fragments {
 			id := reference.ID
@@ -123,6 +129,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			fileMap[f.Path] = append(fileMap[f.Path], f)
 			descriptions[id] = reference.Description
 			rangeLabels[id] = formatRanges(reference)
+			importances[id] = reference.Importance
 			allFiles[f.Path] = true
 			gv.FragmentCount++
 		}
@@ -133,6 +140,8 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
 				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
+				file.Fragments[i].Importance = importances[file.Fragments[i].ID]
+				file.Importance = strongerImportance(file.Importance, file.Fragments[i].Importance)
 			}
 			gv.Files = append(gv.Files, file)
 		}
@@ -171,8 +180,9 @@ func (p *Page) buildSidebar() {
 			}
 			sidebarFile.Occurrences = append(sidebarFile.Occurrences, SidebarOccurrence{
 				GroupID: group.ID, GroupTitle: group.Title,
-				FileAnchorID: file.AnchorID, FragmentCount: len(file.Fragments),
+				FileAnchorID: file.AnchorID, FragmentCount: len(file.Fragments), Importance: file.Importance,
 			})
+			sidebarFile.Importance = strongerImportance(sidebarFile.Importance, file.Importance)
 		}
 	}
 	files := make([]SidebarFile, 0, len(byPath))
@@ -180,6 +190,14 @@ func (p *Page) buildSidebar() {
 		files = append(files, *file)
 	}
 	p.SidebarDirectories, p.SidebarFiles = buildSidebarTree(files)
+}
+
+func strongerImportance(left, right model.Importance) model.Importance {
+	rank := map[model.Importance]int{model.ImportanceIncidental: 1, model.ImportanceSupporting: 2, model.ImportanceCore: 3}
+	if rank[right] > rank[left] {
+		return right
+	}
+	return left
 }
 
 func buildSidebarTree(files []SidebarFile) ([]SidebarDirectory, []SidebarFile) {

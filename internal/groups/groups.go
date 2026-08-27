@@ -88,6 +88,9 @@ func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationRepor
 		if strings.TrimSpace(group.Summary) == "" {
 			add("group %s has an empty summary", group.ID)
 		}
+		if !group.Importance.Valid() {
+			add("group %s has invalid importance %q (must be core, supporting, or incidental)", group.ID, group.Importance)
+		}
 		groupPaths := map[string]bool{}
 		for _, fragment := range group.Fragments {
 			validateFragment(fragment, group.ID, changedLines, metadataPaths, claims, metadataClaims, fragmentIDs, &report.Errors)
@@ -122,6 +125,9 @@ func validateFragment(fragment model.Fragment, groupID string, changed map[lineK
 	}
 	if strings.TrimSpace(fragment.Description) == "" {
 		add("fragment %s in group %s has an empty description", fragment.ID, groupID)
+	}
+	if !fragment.Importance.Valid() {
+		add("fragment %s in group %s has invalid importance %q (must be core, supporting, or incidental)", fragment.ID, groupID, fragment.Importance)
 	}
 	if len(fragment.Ranges) == 0 && !fragment.FileMetadata {
 		add("fragment %s has neither ranges nor file_metadata", fragment.ID)

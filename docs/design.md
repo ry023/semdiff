@@ -28,6 +28,7 @@ The only supported `groups.json` schema is version 1:
       "id": "command-boundary",
       "title": "Centralize command execution",
       "summary": "Explains the motivation, approach, and result.",
+      "importance": "core",
       "order": 1,
       "file_categories": [
         {"path": "src/commands.ts", "category": "logic"}
@@ -46,7 +47,8 @@ The only supported `groups.json` schema is version 1:
               "new": {"start": 83, "lines": 4}
             }
           ],
-          "description": "Defines the shared command contract and routes execution through it."
+          "description": "Defines the shared command contract and routes execution through it.",
+          "importance": "core"
         }
       ]
     }
@@ -70,6 +72,14 @@ The old and new sides select changed lines independently. Unchanged lines inside
 
 A fragment ID is unique within one draft or groups file. It is a stable editing and lookup handle, not a hash-derived identity. The fragment's path and ranges are its actual definition. IDs do not need to persist when `base_sha` or `head_sha` changes.
 
+### Importance
+
+Groups and authored Fragments use the same `importance` vocabulary: `core`, `supporting`, or `incidental`. A Group is evaluated relative to the PR as a whole, while a Fragment is evaluated relative to its containing Group. The labels describe the change's role, not review order, risk, size, or implementation quality.
+
+- `core` defines the purpose or essential behavior of its evaluation scope.
+- `supporting` implements, adapts, or verifies the core change.
+- `incidental` is mechanical or non-essential fallout, such as formatting or unrelated cleanup.
+
 ## Validation
 
 Validation resolves the recorded SHAs, computes `git diff --unified=0`, and treats every added line, deleted line, and file metadata change as a coverage atom.
@@ -79,7 +89,8 @@ A valid groups file satisfies all of the following:
 - SHAs match the computed change map.
 - Group and fragment IDs are unique and non-empty.
 - Every group has a title and summary.
-- Every fragment has a path, description, and at least one range or `file_metadata` selection.
+- Every group has a valid importance.
+- Every fragment has a path, description, valid importance, and at least one range or `file_metadata` selection.
 - Every range has positive coordinates.
 - Every coverage atom is selected by exactly one fragment.
 - Every path used by a group has exactly one file category in that group.

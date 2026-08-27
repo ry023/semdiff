@@ -67,8 +67,9 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	operationsPath := filepath.Join(t.TempDir(), "operations.json")
+	core := model.ImportanceCore
 	request := groupingdraft.ApplyRequest{Operations: []groupingdraft.Operation{
-		{Op: "upsert_group", GroupID: "logic", Title: stringPtrForTest("Logic"), Summary: stringPtrForTest("A complete summary.")},
+		{Op: "upsert_group", GroupID: "logic", Title: stringPtrForTest("Logic"), Summary: stringPtrForTest("A complete summary."), Importance: &core},
 	}}
 	var fragmentIDs []string
 	fileCategories := map[string]string{}
@@ -83,6 +84,7 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 			}
 		}
 		definition.Description = "Adds the logic contract."
+		definition.Importance = model.ImportanceCore
 		request.Operations = append(request.Operations, groupingdraft.Operation{Op: "add_fragment", Fragment: &definition})
 	}
 	request.Operations = append(request.Operations,

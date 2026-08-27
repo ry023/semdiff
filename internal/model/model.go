@@ -1,5 +1,17 @@
 package model
 
+type Importance string
+
+const (
+	ImportanceCore       Importance = "core"
+	ImportanceSupporting Importance = "supporting"
+	ImportanceIncidental Importance = "incidental"
+)
+
+func (i Importance) Valid() bool {
+	return i == ImportanceCore || i == ImportanceSupporting || i == ImportanceIncidental
+}
+
 type Range struct {
 	Start int `json:"start"`
 	Lines int `json:"lines"`
@@ -49,6 +61,7 @@ type SemanticGroup struct {
 	ID             string         `json:"id"`
 	Title          string         `json:"title"`
 	Summary        string         `json:"summary"`
+	Importance     Importance     `json:"importance"`
 	Order          *int           `json:"order,omitempty"`
 	FileCategories []FileCategory `json:"file_categories,omitempty"`
 	Fragments      []Fragment     `json:"fragments"`
@@ -67,6 +80,7 @@ type Fragment struct {
 	Ranges       []FragmentRange `json:"ranges,omitempty"`
 	FileMetadata bool            `json:"file_metadata,omitempty"`
 	Description  string          `json:"description,omitempty"`
+	Importance   Importance      `json:"importance,omitempty"`
 }
 
 type GroupsFile struct {

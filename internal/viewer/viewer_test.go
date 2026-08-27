@@ -267,6 +267,22 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 	}
 }
 
+func TestFileImportanceUsesStrongestFragment(t *testing.T) {
+	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{
+		ID: "g", Title: "Group", Importance: model.ImportanceCore,
+		Fragments: []model.Fragment{
+			{ID: "F1", Path: "a.go", Importance: model.ImportanceIncidental},
+			{ID: "F2", Path: "a.go", Importance: model.ImportanceSupporting},
+		},
+	}}}, model.FragmentSet{Fragments: []model.MaterializedFragment{{ID: "F1", Path: "a.go"}, {ID: "F2", Path: "a.go"}}})
+	if got := page.Groups[0].Files[0].Importance; got != model.ImportanceSupporting {
+		t.Fatalf("file importance = %q", got)
+	}
+	if got := page.SidebarFiles[0].Importance; got != model.ImportanceSupporting {
+		t.Fatalf("sidebar file importance = %q", got)
+	}
+}
+
 func TestSidebarKeepsDirectoryBranchesWhileCompressingSingleChains(t *testing.T) {
 	files := []SidebarFile{
 		{Path: "web/src/entities/node/model/v0.0.6/Node.ts", Name: "Node.ts"},

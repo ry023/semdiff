@@ -125,11 +125,13 @@ func TestFinalizeEmbedsDefinitions(t *testing.T) {
 	draft := fixtureDraft()
 	for _, suggestion := range draft.Suggestions {
 		suggestion.Description = "Describes the change."
+		suggestion.Importance = model.ImportanceCore
 		draft.Fragments = append(draft.Fragments, suggestion)
 	}
+	core := model.ImportanceCore
 	var err error
 	draft, err = Apply(draft, ApplyRequest{Operations: []Operation{
-		{Op: "upsert_group", GroupID: "all", Title: stringPtr("All"), Summary: stringPtr("Explains all changes.")},
+		{Op: "upsert_group", GroupID: "all", Title: stringPtr("All"), Summary: stringPtr("Explains all changes."), Importance: &core},
 		{Op: "assign_fragments", GroupID: "all", Members: []string{"F1", "F2"}},
 		{Op: "set_file_categories", GroupID: "all", Categories: map[string]string{"src/a.ts": "logic", "b.test.ts": "test"}},
 	}})

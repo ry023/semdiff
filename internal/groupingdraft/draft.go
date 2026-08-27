@@ -33,6 +33,7 @@ type DraftGroup struct {
 	ID             string               `json:"id"`
 	Title          string               `json:"title,omitempty"`
 	Summary        string               `json:"summary,omitempty"`
+	Importance     model.Importance     `json:"importance,omitempty"`
 	Order          *int                 `json:"order,omitempty"`
 	Members        []string             `json:"members,omitempty"`
 	FileCategories []model.FileCategory `json:"file_categories,omitempty"`
@@ -48,6 +49,7 @@ type Operation struct {
 	GroupID    string            `json:"group_id,omitempty"`
 	Title      *string           `json:"title,omitempty"`
 	Summary    *string           `json:"summary,omitempty"`
+	Importance *model.Importance `json:"importance,omitempty"`
 	Order      *int              `json:"order,omitempty"`
 	Fragment   *model.Fragment   `json:"fragment,omitempty"`
 	Members    []string          `json:"members,omitempty"`
@@ -71,7 +73,9 @@ type GroupStatus struct {
 	ID                       string   `json:"id"`
 	FragmentCount            int      `json:"fragment_count"`
 	MissingSummary           bool     `json:"missing_summary,omitempty"`
+	MissingImportance        bool     `json:"missing_importance,omitempty"`
 	MissingDescriptionIDs    []string `json:"missing_description_ids,omitempty"`
+	MissingImportanceIDs     []string `json:"missing_importance_ids,omitempty"`
 	MissingFileCategoryPaths []string `json:"missing_file_category_paths,omitempty"`
 }
 
@@ -153,7 +157,7 @@ func (d Draft) ToGroupsFile() model.GroupsFile {
 	}
 	result := model.GroupsFile{Version: 1, BaseSHA: d.BaseSHA, HeadSHA: d.HeadSHA}
 	for _, group := range d.Groups {
-		semantic := model.SemanticGroup{ID: group.ID, Title: group.Title, Summary: group.Summary, Order: group.Order, FileCategories: append([]model.FileCategory(nil), group.FileCategories...)}
+		semantic := model.SemanticGroup{ID: group.ID, Title: group.Title, Summary: group.Summary, Importance: group.Importance, Order: group.Order, FileCategories: append([]model.FileCategory(nil), group.FileCategories...)}
 		for _, id := range group.Members {
 			semantic.Fragments = append(semantic.Fragments, byID[id])
 		}
@@ -185,7 +189,7 @@ func (d Draft) Status() Status {
 		}
 	}
 	for _, group := range d.Groups {
-		item := GroupStatus{ID: group.ID, FragmentCount: len(group.Members), MissingSummary: strings.TrimSpace(group.Summary) == ""}
+		item := GroupStatus{ID: group.ID, FragmentCount: len(group.Members), MissingSummary: strings.TrimSpace(group.Summary) == "", MissingImportance: !group.Importance.Valid()}
 		paths := map[string]bool{}
 		categorized := map[string]bool{}
 		for _, id := range group.Members {
@@ -193,6 +197,9 @@ func (d Draft) Status() Status {
 			paths[fragment.Path] = true
 			if strings.TrimSpace(fragment.Description) == "" {
 				item.MissingDescriptionIDs = append(item.MissingDescriptionIDs, id)
+			}
+			if !fragment.Importance.Valid() {
+				item.MissingImportanceIDs = append(item.MissingImportanceIDs, id)
 			}
 		}
 		for _, category := range group.FileCategories {
@@ -261,6 +268,9 @@ func (d *Draft) applyOperation(operation Operation) error {
 		}
 		if operation.Summary != nil {
 			group.Summary = *operation.Summary
+		}
+		if operation.Importance != nil {
+			group.Importance = *operation.Importance
 		}
 		if operation.Order != nil {
 			value := *operation.Order
@@ -551,6 +561,9 @@ func (d Draft) structuralErrors() []string {
 			result = append(result, fmt.Sprintf("duplicate fragment ID: %s", fragment.ID))
 		}
 		ids[fragment.ID] = true
+		if fragment.Importance != "" && !fragment.Importance.Valid() {
+			result = append(result, fmt.Sprintf("fragment %s has invalid importance %q", fragment.ID, fragment.Importance))
+		}
 	}
 	groupsSeen, assigned := map[string]bool{}, map[string]string{}
 	for _, group := range d.Groups {
@@ -560,6 +573,9 @@ func (d Draft) structuralErrors() []string {
 			result = append(result, fmt.Sprintf("duplicate group ID: %s", group.ID))
 		}
 		groupsSeen[group.ID] = true
+		if group.Importance != "" && !group.Importance.Valid() {
+			result = append(result, fmt.Sprintf("group %s has invalid importance %q", group.ID, group.Importance))
+		}
 		for _, id := range group.Members {
 			if !ids[id] {
 				result = append(result, fmt.Sprintf("unknown fragment ID %s in group %s", id, group.ID))

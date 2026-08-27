@@ -153,7 +153,14 @@ func runGroupingStatus(args []string) error {
 	if status.ReadyToFinalize {
 		fmt.Println("ready to finalize")
 	} else {
-		fmt.Printf("not ready to finalize: %d unassigned, %d undescribed\n", len(status.UnassignedFragmentIDs), len(status.UndescribedFragmentIDs))
+		missingImportance := 0
+		for _, group := range status.Groups {
+			if group.MissingImportance {
+				missingImportance++
+			}
+			missingImportance += len(group.MissingImportanceIDs)
+		}
+		fmt.Printf("not ready to finalize: %d unassigned, %d undescribed, %d missing importance\n", len(status.UnassignedFragmentIDs), len(status.UndescribedFragmentIDs), missingImportance)
 	}
 	return nil
 }
@@ -220,7 +227,7 @@ func runGroupingInspect(args []string) error {
 		if *jsonOut {
 			return printJSON(inspection)
 		}
-		fmt.Printf("%s  %s  assignment=%s  category=%s\n", inspection.Fragment.ID, inspection.Fragment.Path, strings.Join(inspection.Assignments, ","), inspection.CategorySuggestion)
+		fmt.Printf("%s  %s  assignment=%s  category=%s  importance=%s\n", inspection.Fragment.ID, inspection.Fragment.Path, strings.Join(inspection.Assignments, ","), inspection.CategorySuggestion, inspection.Fragment.Importance)
 		if inspection.Fragment.Description != "" {
 			fmt.Printf("description: %s\n", inspection.Fragment.Description)
 		}
@@ -245,10 +252,10 @@ func runGroupingInspect(args []string) error {
 	if *jsonOut {
 		return printJSON(result)
 	}
-	fmt.Printf("%s: %s (%d fragments)\n", group.ID, group.Title, len(group.Members))
+	fmt.Printf("%s: %s (%d fragments, importance=%s)\n", group.ID, group.Title, len(group.Members), group.Importance)
 	for _, id := range group.Members {
 		inspection, _ := draft.FragmentInspection(id)
-		fmt.Printf("  %s: %s\n", id, inspection.Fragment.Description)
+		fmt.Printf("  %s [%s]: %s\n", id, inspection.Fragment.Importance, inspection.Fragment.Description)
 	}
 	return nil
 }

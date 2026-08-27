@@ -13,7 +13,7 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 2. Run `semdiff commits <base>..<head> --json` to understand the change narrative. Do not load the complete diff up front.
 3. Run `semdiff grouping inspect --suggestions --json` and review suggestions by file and neighboring code. Use `semdiff show --draft .semdiff/grouping-draft.json <id> --json` for the relevant candidates.
 4. Compose authored fragments from the suggestions with `merge_fragments`: one `member` promotes a semantically complete suggestion, while several same-path `members` become one multi-range fragment. Use `add_fragment`, `update_fragment`, and `delete_fragments` only when the intended definition needs explicit ranges. Only authored fragments appear in status and require assignment.
-5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Set each group's `order` so prerequisites appear before groups that depend on them. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
+5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Assign `importance` using `core`, `supporting`, or `incidental`: evaluate Groups relative to the PR as a whole and Fragments relative to their containing Group. Set each group's `order` so prerequisites appear before groups that depend on them. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
 6. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. For every file referenced by a group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 7. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
 8. Before finalizing, review each file for over-fragmentation. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
@@ -22,10 +22,10 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 The required shape is:
 
 ```json
-{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds the domain type and connects its validation at the call site."}]}]}
+{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","importance":"core","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds the domain type and connects its validation at the call site.","importance":"core"}]}]}
 ```
 
-Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
+Every Group and Fragment must have `importance` set to `core`, `supporting`, or `incidental`. Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
 
 ## Grouping drafts
 
@@ -36,8 +36,8 @@ An apply request contains a batch of operations. For example:
 ```json
 {
   "operations": [
-    {"op":"upsert_group","group_id":"domain-change","title":"Introduce domain change","summary":"Explains the motivation and approach.","order":1},
-    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"domain-contract","description":"Defines the shared domain contract and connects its validation."}},
+    {"op":"upsert_group","group_id":"domain-change","title":"Introduce domain change","summary":"Explains the motivation and approach.","importance":"core","order":1},
+    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"domain-contract","description":"Defines the shared domain contract and connects its validation.","importance":"core"}},
     {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
     {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
   ]

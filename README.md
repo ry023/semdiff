@@ -44,6 +44,7 @@ This workflow uses draft schema version 2. Re-run `grouping init --force` to rep
       "id": "domain-change",
       "title": "Introduce domain change",
       "summary": "Introduces the shared domain boundary and its validation.",
+      "importance": "core",
       "order": 1,
       "file_categories": [
         {"path": "src/domain.ts", "category": "logic"}
@@ -62,7 +63,8 @@ This workflow uses draft schema version 2. Re-run `grouping init --force` to rep
               "new": {"start": 83, "lines": 4}
             }
           ],
-          "description": "Defines the domain contract and wires its validation."
+          "description": "Defines the domain contract and wires its validation.",
+          "importance": "core"
         }
       ]
     }
@@ -71,6 +73,8 @@ This workflow uses draft schema version 2. Re-run `grouping init --force` to rep
 ```
 
 Line numbers are one-based and `lines` must be positive. Omit `old` for a pure addition and omit `new` for a pure deletion. Multiple ranges let one semantic fragment select discontiguous edits. Set `file_metadata: true` on the fragment that owns a rename, mode, binary, file-creation, or file-deletion metadata change.
+
+Every Group and authored Fragment has an `importance` of `core`, `supporting`, or `incidental`. Group importance is relative to the PR as a whole; Fragment importance is relative to its containing Group. `core` identifies the purpose-defining change, `supporting` identifies work that implements, adapts, or verifies it, and `incidental` identifies mechanical or otherwise non-essential fallout.
 
 Validation compares the ranges with the current `base_sha..head_sha` diff. Every added line, deleted line, and file metadata change must be selected exactly once. Unchanged lines may fall inside a range and do not affect coverage.
 
@@ -86,7 +90,8 @@ Draft operations are atomic and can be read from a file or standard input. Fragm
       "members": ["F-candidate-1", "F-candidate-2"],
       "fragment": {
         "id": "domain-contract",
-        "description": "Defines the domain contract and connects its validation."
+        "description": "Defines the domain contract and connects its validation.",
+        "importance": "core"
       }
     },
     {
@@ -94,6 +99,7 @@ Draft operations are atomic and can be read from a file or standard input. Fragm
       "group_id": "domain-change",
       "title": "Introduce domain change",
       "summary": "Introduces the shared domain boundary.",
+      "importance": "core",
       "order": 1
     },
     {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
