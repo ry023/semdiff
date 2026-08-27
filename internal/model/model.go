@@ -5,11 +5,23 @@ type Importance string
 const (
 	ImportanceCore       Importance = "core"
 	ImportanceSupporting Importance = "supporting"
-	ImportanceIncidental Importance = "incidental"
+	ImportanceSide       Importance = "side"
 )
 
 func (i Importance) Valid() bool {
-	return i == ImportanceCore || i == ImportanceSupporting || i == ImportanceIncidental
+	return i == ImportanceCore || i == ImportanceSupporting || i == ImportanceSide
+}
+
+type ReviewLevel string
+
+const (
+	ReviewLevelCareful ReviewLevel = "careful"
+	ReviewLevelNormal  ReviewLevel = "normal"
+	ReviewLevelSkim    ReviewLevel = "skim"
+)
+
+func (r ReviewLevel) Valid() bool {
+	return r == ReviewLevelCareful || r == ReviewLevelNormal || r == ReviewLevelSkim
 }
 
 type Range struct {
@@ -80,7 +92,7 @@ type Fragment struct {
 	Ranges       []FragmentRange `json:"ranges,omitempty"`
 	FileMetadata bool            `json:"file_metadata,omitempty"`
 	Description  string          `json:"description,omitempty"`
-	Importance   Importance      `json:"importance,omitempty"`
+	ReviewLevel  ReviewLevel     `json:"review_level"`
 }
 
 type GroupsFile struct {

@@ -268,26 +268,26 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 	}
 }
 
-func TestFileImportanceUsesStrongestFragment(t *testing.T) {
+func TestFileReviewLevelUsesMostCarefulFragment(t *testing.T) {
 	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{
 		ID: "g", Title: "Group", Importance: model.ImportanceCore,
 		Fragments: []model.Fragment{
-			{ID: "F1", Path: "a.go", Importance: model.ImportanceIncidental},
-			{ID: "F2", Path: "a.go", Importance: model.ImportanceSupporting},
+			{ID: "F1", Path: "a.go", ReviewLevel: model.ReviewLevelSkim},
+			{ID: "F2", Path: "a.go", ReviewLevel: model.ReviewLevelNormal},
 		},
 	}}}, model.FragmentSet{Fragments: []model.MaterializedFragment{{ID: "F1", Path: "a.go"}, {ID: "F2", Path: "a.go"}}})
-	if got := page.Groups[0].Files[0].Importance; got != model.ImportanceSupporting {
-		t.Fatalf("file importance = %q", got)
+	if got := page.Groups[0].Files[0].ReviewLevel; got != model.ReviewLevelNormal {
+		t.Fatalf("file review level = %q", got)
 	}
-	if got := page.SidebarFiles[0].Importance; got != model.ImportanceSupporting {
-		t.Fatalf("sidebar file importance = %q", got)
+	if got := page.SidebarFiles[0].ReviewLevel; got != model.ReviewLevelNormal {
+		t.Fatalf("sidebar file review level = %q", got)
 	}
 }
 
 func TestHandlerServesImportanceUIAssetsAndData(t *testing.T) {
 	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{
 		ID: "behavior", Title: "Behavior", Importance: model.ImportanceCore,
-		Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "Adapts the caller.", Importance: model.ImportanceSupporting}},
+		Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "Adapts the caller.", ReviewLevel: model.ReviewLevelCareful}},
 	}}}, model.FragmentSet{Fragments: []model.MaterializedFragment{{ID: "F1", Path: "a.go", Patch: "@@ -1,1 +1,1 @@\n-old\n+new\n"}}})
 	handler, err := Handler(page)
 	if err != nil {
@@ -295,9 +295,9 @@ func TestHandlerServesImportanceUIAssetsAndData(t *testing.T) {
 	}
 	for path, want := range map[string]string{
 		"/":                `<script src="/importance.js"></script>`,
-		"/importance.css":  ".importance-core",
-		"/importance.js":   "group-importance",
-		"/importance.json": `"behavior":"core"`,
+		"/importance.css":  ".review-level-careful",
+		"/importance.js":   "fragment-review-level",
+		"/importance.json": `"F1":"careful"`,
 	} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest("GET", path, nil))

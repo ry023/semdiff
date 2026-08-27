@@ -13,7 +13,7 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 2. Run `semdiff commits <base>..<head> --json` to understand the change narrative. Do not load the complete diff up front.
 3. Run `semdiff grouping inspect --suggestions --json` and review suggestions by file and neighboring code. Use `semdiff show --draft .semdiff/grouping-draft.json <id> --json` for the relevant candidates.
 4. Compose authored fragments from the suggestions with `merge_fragments`: one `member` promotes a semantically complete suggestion, while several same-path `members` become one multi-range fragment. Use `add_fragment`, `update_fragment`, and `delete_fragments` only when the intended definition needs explicit ranges. Only authored fragments appear in status and require assignment.
-5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Assign `importance` using `core`, `supporting`, or `incidental`: evaluate Groups relative to the PR as a whole and Fragments relative to their containing Group. Set each group's `order` so prerequisites appear before groups that depend on them. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
+5. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Assign each fragment one primary membership even when it relates to several concerns. Assign Group `importance` using `core`, `supporting`, or `side` relative to the PR as a whole, following the removal test below. Assign Fragment `review_level` using `careful`, `normal`, or `skim` to tell the reviewer how closely to read it; use `normal` unless the fragment clearly warrants more or less attention. Set each group's `order` so prerequisites appear before groups that depend on them. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
 6. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. For every file referenced by a group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 7. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
 8. Before finalizing, review each file for over-fragmentation. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
@@ -22,14 +22,24 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 The required shape is:
 
 ```json
-{"version":1,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","importance":"core","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds the domain type and connects its validation at the call site.","importance":"core"}]}]}
+{"version":2,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","importance":"core","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds the domain type and connects its validation at the call site.","review_level":"careful"}]}]}
 ```
 
-Every Group and Fragment must have `importance` set to `core`, `supporting`, or `incidental`. Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
+Every Group must have `importance` set to `core`, `supporting`, or `side`. Every Fragment must have `review_level` set to `careful`, `normal`, or `skim`; omitted draft values default to `normal`. Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
+
+## Group importance
+
+Importance tells the reviewer how a Group relates to the purpose of the PR, not how risky, large, difficult, or mechanically complex it is. Classify by mentally removing the whole Group:
+
+- `core`: removing it removes the reason the PR exists.
+- `supporting`: the core purpose remains recognizable, but becomes incomplete, broken, unexplained, or unverified.
+- `side`: the core purpose and its completeness remain substantially intact; this is a separately meaningful change bundled into the same PR.
+
+Do not classify from file type or change mechanics alone. Required generated output, configuration, tests, documentation, renames, or formatting can be `supporting` when the core change would be incomplete without them. Opportunistic cleanup or formatting can be `side` when removing it would not weaken the core change. `side` does not mean invalid or unreviewable; it means the Group is not part of completing the PR's central purpose.
 
 ## Grouping drafts
 
-`semdiff grouping init` creates a draft schema version 2 file at `.semdiff/grouping-draft.json` by default. Recreate a version 1 draft with `grouping init --force`; do not continue it because version 1 reified Git spans as authored fragments. The draft is the working state; `groups.json` is only produced by `grouping finalize`. Apply operations can be repeated and can add, revise, move, or remove decisions. Use `--draft <path>` when maintaining more than one draft.
+`semdiff grouping init` creates a draft schema version 3 file at `.semdiff/grouping-draft.json` by default. Recreate an older draft with `grouping init --force`; do not continue it because the schema and authored Fragment fields have changed. The draft is the working state; `groups.json` is only produced by `grouping finalize`. Apply operations can be repeated and can add, revise, move, or remove decisions. Use `--draft <path>` when maintaining more than one draft.
 
 An apply request contains a batch of operations. For example:
 
@@ -37,7 +47,7 @@ An apply request contains a batch of operations. For example:
 {
   "operations": [
     {"op":"upsert_group","group_id":"domain-change","title":"Introduce domain change","summary":"Explains the motivation and approach.","importance":"core","order":1},
-    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"domain-contract","description":"Defines the shared domain contract and connects its validation.","importance":"core"}},
+    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"domain-contract","description":"Defines the shared domain contract and connects its validation.","review_level":"careful"}},
     {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
     {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
   ]
@@ -91,7 +101,7 @@ Choose Group `order` as a reviewer-oriented dependency order, not alphabetical o
 
 Infer dependencies from imports and call sites, type and schema usage, configuration consumers, commit chronology, and the semantic descriptions—not merely from directory layout. Keep tests in the same Group as the behavior they verify unless the tests form an independently reviewable concern; when they do form a separate Group, place that Group after the behavior it verifies.
 
-When Groups are independent, order them to minimize context switching and make the change read as a coherent narrative—for example, shared foundations before feature-specific uses and core behavior before peripheral adaptation. Do not invent a dependency solely to force a tidy sequence. Before finalizing, scan the ordered summaries from first to last and revise `order` if a Group requires knowledge that is introduced only later.
+When Groups are independent, order them to minimize context switching and make the change read as a coherent narrative—for example, shared foundations before feature-specific uses, and core or supporting Groups before side Groups. Do not invent a dependency solely to force a tidy sequence. Before finalizing, scan the ordered summaries from first to last and revise `order` if a Group requires knowledge that is introduced only later.
 
 ## Group summaries
 

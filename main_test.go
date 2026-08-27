@@ -84,7 +84,7 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 			}
 		}
 		definition.Description = "Adds the logic contract."
-		definition.Importance = model.ImportanceCore
+		definition.ReviewLevel = model.ReviewLevelCareful
 		request.Operations = append(request.Operations, groupingdraft.Operation{Op: "add_fragment", Fragment: &definition})
 	}
 	request.Operations = append(request.Operations,

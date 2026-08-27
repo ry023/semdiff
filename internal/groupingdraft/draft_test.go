@@ -125,7 +125,7 @@ func TestFinalizeEmbedsDefinitions(t *testing.T) {
 	draft := fixtureDraft()
 	for _, suggestion := range draft.Suggestions {
 		suggestion.Description = "Describes the change."
-		suggestion.Importance = model.ImportanceCore
+		suggestion.ReviewLevel = model.ReviewLevelCareful
 		draft.Fragments = append(draft.Fragments, suggestion)
 	}
 	core := model.ImportanceCore
@@ -170,7 +170,7 @@ func TestLoadRejectsVersionOneDraft(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"draft_version":1,"base_sha":"base","head_sha":"head","changes":[],"fragments":[],"groups":[]}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "draft_version must be 2") {
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "draft_version must be 3") {
 		t.Fatalf("version 1 draft was accepted: %v", err)
 	}
 }

@@ -16,11 +16,11 @@ Git zero-context hunks are stored as draft suggestions, but they never populate 
 
 ## Data model
 
-The only supported `groups.json` schema is version 1:
+The only supported `groups.json` schema is version 2:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "base_sha": "<full SHA>",
   "head_sha": "<full SHA>",
   "groups": [
@@ -48,7 +48,7 @@ The only supported `groups.json` schema is version 1:
             }
           ],
           "description": "Defines the shared command contract and routes execution through it.",
-          "importance": "core"
+          "review_level": "careful"
         }
       ]
     }
@@ -72,13 +72,23 @@ The old and new sides select changed lines independently. Unchanged lines inside
 
 A fragment ID is unique within one draft or groups file. It is a stable editing and lookup handle, not a hash-derived identity. The fragment's path and ranges are its actual definition. IDs do not need to persist when `base_sha` or `head_sha` changes.
 
-### Importance
+### Group importance and Fragment review level
 
-Groups and authored Fragments use the same `importance` vocabulary: `core`, `supporting`, or `incidental`. A Group is evaluated relative to the PR as a whole, while a Fragment is evaluated relative to its containing Group. The labels describe the change's role, not review order, risk, size, or implementation quality.
+Groups use `importance` to describe their place in the PR as a whole:
 
-- `core` defines the purpose or essential behavior of its evaluation scope.
+- `core` defines the PR's purpose or essential behavior.
 - `supporting` implements, adapts, or verifies the core change.
-- `incidental` is mechanical or non-essential fallout, such as formatting or unrelated cleanup.
+- `side` is a separately meaningful change bundled into the PR but not needed to complete its core purpose.
+
+Classify a Group by asking what happens if it is removed: removing a core Group removes the reason for the PR; removing a supporting Group leaves that purpose incomplete, broken, unexplained, or unverified; removing a side Group leaves the core purpose and its completeness substantially intact. Change mechanics do not determine importance—a generated update required for correctness is supporting, while opportunistic formatting may be side.
+
+Authored Fragments use `review_level` as direct guidance about how closely to read the local change:
+
+- `careful` requests close review.
+- `normal` requests ordinary review and is the drafting default.
+- `skim` requests only a quick check.
+
+Group importance and Fragment review level are independent. For example, a supporting Group may contain a careful Fragment. Draft operations may omit `review_level`; normalization assigns `normal`, and finalized files always contain the explicit value.
 
 ## Validation
 
@@ -90,7 +100,7 @@ A valid groups file satisfies all of the following:
 - Group and fragment IDs are unique and non-empty.
 - Every group has a title and summary.
 - Every group has a valid importance.
-- Every fragment has a path, description, valid importance, and at least one range or `file_metadata` selection.
+- Every fragment has a path, description, valid review level, and at least one range or `file_metadata` selection.
 - Every range has positive coordinates.
 - Every coverage atom is selected by exactly one fragment.
 - Every path used by a group has exactly one file category in that group.
@@ -130,7 +140,7 @@ view <groups-file>                 render semantic groups
 
 ## Draft model
 
-Draft schema version 2 separates suggestions from authored fragments. Version 1 drafts must be recreated; the final `groups.json` schema remains version 1. The draft contains:
+Draft schema version 3 separates suggestions from authored fragments and stores Fragment review levels independently from Group importance. Older drafts must be recreated; the final `groups.json` schema is version 2. The draft contains:
 
 - resolved base/head SHAs;
 - a lightweight mechanical change map without patches;

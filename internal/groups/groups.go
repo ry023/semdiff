@@ -21,6 +21,14 @@ func Load(path string) (model.GroupsFile, error) {
 	if err := decoder.Decode(&result); err != nil {
 		return result, fmt.Errorf("decode groups file: %w", err)
 	}
+	for groupIndex := range result.Groups {
+		for fragmentIndex := range result.Groups[groupIndex].Fragments {
+			fragment := &result.Groups[groupIndex].Fragments[fragmentIndex]
+			if fragment.ReviewLevel == "" {
+				fragment.ReviewLevel = model.ReviewLevelNormal
+			}
+		}
+	}
 	return result, nil
 }
 
@@ -47,8 +55,8 @@ type lineKey struct {
 func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationReport {
 	var report ValidationReport
 	add := func(format string, args ...any) { report.Errors = append(report.Errors, fmt.Sprintf(format, args...)) }
-	if g.Version != 1 {
-		add("version must be 1 (got %d)", g.Version)
+	if g.Version != 2 {
+		add("version must be 2 (got %d)", g.Version)
 	}
 	if g.BaseSHA != changes.BaseSHA {
 		add("base_sha mismatch: groups=%s changes=%s", g.BaseSHA, changes.BaseSHA)
@@ -89,7 +97,7 @@ func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationRepor
 			add("group %s has an empty summary", group.ID)
 		}
 		if !group.Importance.Valid() {
-			add("group %s has invalid importance %q (must be core, supporting, or incidental)", group.ID, group.Importance)
+			add("group %s has invalid importance %q (must be core, supporting, or side)", group.ID, group.Importance)
 		}
 		groupPaths := map[string]bool{}
 		for _, fragment := range group.Fragments {
@@ -126,8 +134,8 @@ func validateFragment(fragment model.Fragment, groupID string, changed map[lineK
 	if strings.TrimSpace(fragment.Description) == "" {
 		add("fragment %s in group %s has an empty description", fragment.ID, groupID)
 	}
-	if !fragment.Importance.Valid() {
-		add("fragment %s in group %s has invalid importance %q (must be core, supporting, or incidental)", fragment.ID, groupID, fragment.Importance)
+	if !fragment.ReviewLevel.Valid() {
+		add("fragment %s in group %s has invalid review_level %q (must be careful, normal, or skim)", fragment.ID, groupID, fragment.ReviewLevel)
 	}
 	if len(fragment.Ranges) == 0 && !fragment.FileMetadata {
 		add("fragment %s has neither ranges nor file_metadata", fragment.ID)

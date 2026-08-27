@@ -32,13 +32,13 @@ semdiff view groups.json --addr 127.0.0.1:8080
 
 `classify` はパスから標準カテゴリ `logic`、`component`、`config`、`implementation`、`test`、`docs`、`unknown` を提案します。Markdown や reStructuredText などのドキュメント拡張子、`README` や `CHANGELOG` などの定番ファイル名、`docs/` や `guides/` などのドキュメント用ディレクトリ配下を `docs` に分類します。
 
-この workflow では draft schema version 2 を使用します。version 1 の draft は `grouping init --force` で作り直してください。最終的な `groups.json` の schema は引き続き version 1 です。
+この workflow では draft schema version 3、最終的な `groups.json` schema version 2 を使用します。古い draft は `grouping init --force` で作り直してください。
 
 `groups.json` が source of truth です。各 fragment はファイルパス、1つ以上の変更前・変更後の行範囲、意味的な説明を保持します。
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "base_sha": "<full base SHA>",
   "head_sha": "<full head SHA>",
   "groups": [
@@ -46,6 +46,7 @@ semdiff view groups.json --addr 127.0.0.1:8080
       "id": "domain-change",
       "title": "Introduce domain change",
       "summary": "Introduces the shared domain boundary and its validation.",
+      "importance": "core",
       "order": 1,
       "file_categories": [
         {"path": "src/domain.ts", "category": "logic"}
@@ -64,7 +65,8 @@ semdiff view groups.json --addr 127.0.0.1:8080
               "new": {"start": 83, "lines": 4}
             }
           ],
-          "description": "Defines the domain contract and wires its validation."
+          "description": "Defines the domain contract and wires its validation.",
+          "review_level": "careful"
         }
       ]
     }
@@ -75,6 +77,8 @@ semdiff view groups.json --addr 127.0.0.1:8080
 行番号は1始まりで、`lines` には正の値を指定します。純粋な追加では `old` を、純粋な削除では `new` を省略します。複数の range を指定すると、離れた変更箇所を1つの意味的な fragment として選択できます。
 
 rename、mode、binary、ファイル作成、ファイル削除など、行以外の変更を所有する fragment には `file_metadata: true` を指定します。
+
+Group の `importance` は PR 全体における位置づけを `core`、`supporting`、`side` で表します。`core` はPRが存在する理由、`supporting` はcoreを完成させる変更、`side` は同じPRに含まれた別の意味ある変更です。Fragment の `review_level` は、その変更をどの程度丁寧に読むべきかを `careful`、`normal`、`skim` で表します。draft で省略した場合は `normal` が設定され、最終ファイルには明示的に保存されます。
 
 validation は、指定された range と現在の `base_sha..head_sha` の diff を比較します。追加行、削除行、ファイル metadata の各変更は、必ずちょうど1つの fragment に選択されなければなりません。range に未変更行が含まれていても構いません。未変更行は coverage に影響しません。
 
@@ -90,7 +94,8 @@ Draft 操作は atomic に適用され、ファイルまたは標準入力から
       "members": ["F-candidate-1", "F-candidate-2"],
       "fragment": {
         "id": "domain-contract",
-        "description": "Defines the domain contract and connects its validation."
+        "description": "Defines the domain contract and connects its validation.",
+        "review_level": "careful"
       }
     },
     {
@@ -98,6 +103,7 @@ Draft 操作は atomic に適用され、ファイルまたは標準入力から
       "group_id": "domain-change",
       "title": "Introduce domain change",
       "summary": "Introduces the shared domain boundary.",
+      "importance": "core",
       "order": 1
     },
     {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},

@@ -26,7 +26,7 @@ const defaultContextLines = 5
 type FragmentView struct {
 	model.MaterializedFragment
 	Description      string
-	Importance       model.Importance
+	ReviewLevel      model.ReviewLevel
 	RangeLabel       string
 	HeaderHTML       template.HTML
 	HunkHTML         template.HTML
@@ -34,18 +34,18 @@ type FragmentView struct {
 	LowerContextHTML template.HTML
 }
 type FileView struct {
-	Path       string
-	AnchorID   string
-	Directory  string
-	Name       string
-	Status     string
-	StatusIcon template.HTML
-	Additions  int
-	Deletions  int
-	Diffstat   []string
-	HeaderHTML template.HTML
-	Fragments  []FragmentView
-	Importance model.Importance
+	Path        string
+	AnchorID    string
+	Directory   string
+	Name        string
+	Status      string
+	StatusIcon  template.HTML
+	Additions   int
+	Deletions   int
+	Diffstat    []string
+	HeaderHTML  template.HTML
+	Fragments   []FragmentView
+	ReviewLevel model.ReviewLevel
 }
 type GroupView struct {
 	ID, Title, Summary string
@@ -79,13 +79,13 @@ type SidebarOccurrence struct {
 	GroupID, GroupTitle string
 	FileAnchorID        string
 	FragmentCount       int
-	Importance          model.Importance
+	ReviewLevel         model.ReviewLevel
 }
 
 type SidebarFile struct {
 	Path, Name  string
 	StatusIcon  template.HTML
-	Importance  model.Importance
+	ReviewLevel model.ReviewLevel
 	Occurrences []SidebarOccurrence
 }
 
@@ -119,7 +119,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 		fileMap := map[string][]model.MaterializedFragment{}
 		descriptions := map[string]string{}
 		rangeLabels := map[string]string{}
-		importances := map[string]model.Importance{}
+		reviewLevels := map[string]model.ReviewLevel{}
 		var paths []string
 		for _, reference := range group.Fragments {
 			id := reference.ID
@@ -130,7 +130,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			fileMap[f.Path] = append(fileMap[f.Path], f)
 			descriptions[id] = reference.Description
 			rangeLabels[id] = formatRanges(reference)
-			importances[id] = reference.Importance
+			reviewLevels[id] = reference.ReviewLevel
 			allFiles[f.Path] = true
 			gv.FragmentCount++
 		}
@@ -141,8 +141,8 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
 				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
-				file.Fragments[i].Importance = importances[file.Fragments[i].ID]
-				file.Importance = strongerImportance(file.Importance, file.Fragments[i].Importance)
+				file.Fragments[i].ReviewLevel = reviewLevels[file.Fragments[i].ID]
+				file.ReviewLevel = strongerReviewLevel(file.ReviewLevel, file.Fragments[i].ReviewLevel)
 			}
 			gv.Files = append(gv.Files, file)
 		}
@@ -181,9 +181,9 @@ func (p *Page) buildSidebar() {
 			}
 			sidebarFile.Occurrences = append(sidebarFile.Occurrences, SidebarOccurrence{
 				GroupID: group.ID, GroupTitle: group.Title,
-				FileAnchorID: file.AnchorID, FragmentCount: len(file.Fragments), Importance: file.Importance,
+				FileAnchorID: file.AnchorID, FragmentCount: len(file.Fragments), ReviewLevel: file.ReviewLevel,
 			})
-			sidebarFile.Importance = strongerImportance(sidebarFile.Importance, file.Importance)
+			sidebarFile.ReviewLevel = strongerReviewLevel(sidebarFile.ReviewLevel, file.ReviewLevel)
 		}
 	}
 	files := make([]SidebarFile, 0, len(byPath))
@@ -193,8 +193,8 @@ func (p *Page) buildSidebar() {
 	p.SidebarDirectories, p.SidebarFiles = buildSidebarTree(files)
 }
 
-func strongerImportance(left, right model.Importance) model.Importance {
-	rank := map[model.Importance]int{model.ImportanceIncidental: 1, model.ImportanceSupporting: 2, model.ImportanceCore: 3}
+func strongerReviewLevel(left, right model.ReviewLevel) model.ReviewLevel {
+	rank := map[model.ReviewLevel]int{model.ReviewLevelSkim: 1, model.ReviewLevelNormal: 2, model.ReviewLevelCareful: 3}
 	if rank[right] > rank[left] {
 		return right
 	}
@@ -782,14 +782,14 @@ func Handler(page Page) (http.Handler, error) {
 		return nil, err
 	}
 	importanceData := struct {
-		Groups    map[string]model.Importance `json:"groups"`
-		Fragments map[string]model.Importance `json:"fragments"`
-	}{Groups: map[string]model.Importance{}, Fragments: map[string]model.Importance{}}
+		Groups    map[string]model.Importance  `json:"groups"`
+		Fragments map[string]model.ReviewLevel `json:"fragments"`
+	}{Groups: map[string]model.Importance{}, Fragments: map[string]model.ReviewLevel{}}
 	for _, group := range page.Groups {
 		importanceData.Groups[group.ID] = group.Importance
 		for _, file := range group.Files {
 			for _, fragment := range file.Fragments {
-				importanceData.Fragments[fragment.ID] = fragment.Importance
+				importanceData.Fragments[fragment.ID] = fragment.ReviewLevel
 			}
 		}
 	}

@@ -30,13 +30,13 @@ semdiff view groups.json --addr 127.0.0.1:8080
 
 `classify` suggests the standard categories `logic`, `component`, `config`, `implementation`, `test`, `docs`, and `unknown` from paths. Documentation extensions such as Markdown and reStructuredText, conventional documentation filenames such as `README` and `CHANGELOG`, and files under documentation directories such as `docs/` and `guides/` are classified as `docs`.
 
-This workflow uses draft schema version 2. Re-run `grouping init --force` to replace a version 1 draft. The final `groups.json` schema remains version 1.
+This workflow uses draft schema version 3 and final `groups.json` schema version 2. Re-run `grouping init --force` to replace an older draft.
 
 `groups.json` is the source of truth. Every fragment contains its path, one or more old/new ranges, and its semantic description:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "base_sha": "<full base SHA>",
   "head_sha": "<full head SHA>",
   "groups": [
@@ -64,7 +64,7 @@ This workflow uses draft schema version 2. Re-run `grouping init --force` to rep
             }
           ],
           "description": "Defines the domain contract and wires its validation.",
-          "importance": "core"
+          "review_level": "careful"
         }
       ]
     }
@@ -74,7 +74,7 @@ This workflow uses draft schema version 2. Re-run `grouping init --force` to rep
 
 Line numbers are one-based and `lines` must be positive. Omit `old` for a pure addition and omit `new` for a pure deletion. Multiple ranges let one semantic fragment select discontiguous edits. Set `file_metadata: true` on the fragment that owns a rename, mode, binary, file-creation, or file-deletion metadata change.
 
-Every Group and authored Fragment has an `importance` of `core`, `supporting`, or `incidental`. Group importance is relative to the PR as a whole; Fragment importance is relative to its containing Group. `core` identifies the purpose-defining change, `supporting` identifies work that implements, adapts, or verifies it, and `incidental` identifies mechanical or otherwise non-essential fallout.
+Every Group has an `importance` of `core`, `supporting`, or `side`, describing its place in the PR as a whole. `core` is why the PR exists, `supporting` completes the core change, and `side` is a separately meaningful change bundled into the same PR. Every authored Fragment has a `review_level` of `careful`, `normal`, or `skim`, telling the reviewer how closely to read that local change. Omitted Fragment review levels default to `normal` while drafting and are written explicitly to the final file.
 
 Validation compares the ranges with the current `base_sha..head_sha` diff. Every added line, deleted line, and file metadata change must be selected exactly once. Unchanged lines may fall inside a range and do not affect coverage.
 
@@ -91,7 +91,7 @@ Draft operations are atomic and can be read from a file or standard input. Fragm
       "fragment": {
         "id": "domain-contract",
         "description": "Defines the domain contract and connects its validation.",
-        "importance": "core"
+        "review_level": "careful"
       }
     },
     {
