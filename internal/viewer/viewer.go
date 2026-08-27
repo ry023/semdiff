@@ -3,6 +3,7 @@ package viewer
 import (
 	"bytes"
 	"embed"
+	"fmt"
 	"html/template"
 	"net/http"
 	pathpkg "path"
@@ -32,6 +33,7 @@ type FragmentView struct {
 }
 type FileView struct {
 	Path       string
+	AnchorID   string
 	Directory  string
 	Name       string
 	Status     string
@@ -44,6 +46,7 @@ type FileView struct {
 }
 type GroupView struct {
 	ID, Title, Summary string
+	AnchorID           string
 	SummaryHTML        template.HTML
 	Order              *int
 	Files              []FileView
@@ -63,7 +66,28 @@ type CategoryView struct {
 type Page struct {
 	BaseSHA, HeadSHA         string
 	Groups                   []GroupView
+	SidebarDirectories       []SidebarDirectory
+	SidebarFiles             []SidebarFile
 	FragmentCount, FileCount int
+}
+
+type SidebarOccurrence struct {
+	GroupID, GroupTitle string
+	FileAnchorID        string
+	FragmentCount       int
+}
+
+type SidebarFile struct {
+	Path, Name  string
+	StatusIcon  template.HTML
+	Occurrences []SidebarOccurrence
+}
+
+type SidebarDirectory struct {
+	Name        string
+	FileCount   int
+	Directories []SidebarDirectory
+	Files       []SidebarFile
 }
 
 func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]string) Page {
@@ -84,8 +108,8 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 	}
 	p := Page{BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 	allFiles := map[string]bool{}
-	for _, group := range g.Groups {
-		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, SummaryHTML: renderMarkdown(group.Summary), Order: group.Order}
+	for groupIndex, group := range g.Groups {
+		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, SummaryHTML: renderMarkdown(group.Summary), Order: group.Order, AnchorID: fmt.Sprintf("group-%d", groupIndex)}
 		fileMap := map[string][]model.MaterializedFragment{}
 		descriptions := map[string]string{}
 		rangeLabels := map[string]string{}
@@ -103,8 +127,9 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			gv.FragmentCount++
 		}
 		sort.Strings(paths)
-		for _, path := range paths {
+		for fileIndex, path := range paths {
 			file := buildFileView(path, fileMap[path], fileContents[path], byPath[path])
+			file.AnchorID = fmt.Sprintf("file-%d-%d", groupIndex, fileIndex)
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
 				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
@@ -125,7 +150,70 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 		return *p.Groups[i].Order < *p.Groups[j].Order
 	})
 	p.FileCount = len(allFiles)
+	p.buildSidebar()
 	return p
+}
+
+type sidebarDirectoryBuilder struct {
+	name        string
+	directories map[string]*sidebarDirectoryBuilder
+	files       []SidebarFile
+}
+
+func (p *Page) buildSidebar() {
+	byPath := map[string]*SidebarFile{}
+	for _, group := range p.Groups {
+		for _, file := range group.Files {
+			sidebarFile := byPath[file.Path]
+			if sidebarFile == nil {
+				sidebarFile = &SidebarFile{Path: file.Path, Name: file.Name, StatusIcon: file.StatusIcon}
+				byPath[file.Path] = sidebarFile
+			}
+			sidebarFile.Occurrences = append(sidebarFile.Occurrences, SidebarOccurrence{
+				GroupID: group.ID, GroupTitle: group.Title,
+				FileAnchorID: file.AnchorID, FragmentCount: len(file.Fragments),
+			})
+		}
+	}
+	paths := make([]string, 0, len(byPath))
+	for path := range byPath {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	root := &sidebarDirectoryBuilder{directories: map[string]*sidebarDirectoryBuilder{}}
+	for _, path := range paths {
+		parts := strings.Split(path, "/")
+		directory := root
+		for _, part := range parts[:len(parts)-1] {
+			child := directory.directories[part]
+			if child == nil {
+				child = &sidebarDirectoryBuilder{name: part, directories: map[string]*sidebarDirectoryBuilder{}}
+				directory.directories[part] = child
+			}
+			directory = child
+		}
+		directory.files = append(directory.files, *byPath[path])
+	}
+	p.SidebarDirectories, p.SidebarFiles = materializeSidebarDirectory(root)
+}
+
+func materializeSidebarDirectory(builder *sidebarDirectoryBuilder) ([]SidebarDirectory, []SidebarFile) {
+	names := make([]string, 0, len(builder.directories))
+	for name := range builder.directories {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	directories := make([]SidebarDirectory, 0, len(names))
+	for _, name := range names {
+		child := builder.directories[name]
+		grandchildren, files := materializeSidebarDirectory(child)
+		directory := SidebarDirectory{Name: child.name, Directories: grandchildren, Files: files, FileCount: len(files)}
+		for _, grandchild := range grandchildren {
+			directory.FileCount += grandchild.FileCount
+		}
+		directories = append(directories, directory)
+	}
+	return directories, builder.files
 }
 
 func formatRanges(fragment model.Fragment) string {

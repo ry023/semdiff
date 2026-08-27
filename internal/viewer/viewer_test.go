@@ -113,7 +113,7 @@ func TestBuildAndHandler(t *testing.T) {
 	if strings.Contains(body, "@@ -5,3 +5,3 @@") {
 		t.Fatal("hunk headers should not be rendered")
 	}
-	if !strings.Contains(body, `<details class="group" open>`) {
+	if !strings.Contains(body, `<details id="group-1" class="group main-group" data-group-id="first" open>`) {
 		t.Fatal("groups should be open by default")
 	}
 	if strings.Contains(body, `<details class="category" open>`) {
@@ -192,6 +192,54 @@ func TestFileViewSplitsDirectoryAndName(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
 	if !strings.Contains(response.Body.String(), `<h3><span class="file-path">web/src/</span><span class="file-name">Button.tsx</span></h3>`) {
 		t.Fatal("nested file heading did not render separate path and name spans")
+	}
+}
+
+func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
+	inv := model.FragmentSet{Fragments: []model.MaterializedFragment{
+		{ID: "F1", Path: "docs/design/a.go", Patch: "@@ -1,1 +1,1 @@\n-old\n+new\n"},
+		{ID: "F2", Path: "docs/design/a.go", Patch: "@@ -3,1 +3,1 @@\n-old\n+new\n"},
+		{ID: "F3", Path: "docs/design/a.go", Patch: "@@ -5,1 +5,1 @@\n-old\n+new\n"},
+		{ID: "F4", Path: "root.go", Patch: "@@ -1,1 +1,1 @@\n-old\n+new\n"},
+	}}
+	groups := model.GroupsFile{Groups: []model.SemanticGroup{
+		{ID: "schema", Title: "Schema", Fragments: []model.Fragment{{ID: "F1", Path: "docs/design/a.go"}, {ID: "F2", Path: "docs/design/a.go"}, {ID: "F4", Path: "root.go"}}},
+		{ID: "cleanup", Title: "Cleanup", Fragments: []model.Fragment{{ID: "F3", Path: "docs/design/a.go"}}},
+	}}
+	page := Build(groups, inv)
+	if len(page.SidebarDirectories) != 1 || page.SidebarDirectories[0].Name != "docs" || page.SidebarDirectories[0].FileCount != 1 {
+		t.Fatalf("unexpected sidebar root directories: %+v", page.SidebarDirectories)
+	}
+	design := page.SidebarDirectories[0].Directories[0]
+	if design.Name != "design" || len(design.Files) != 1 || design.Files[0].Path != "docs/design/a.go" {
+		t.Fatalf("nested file tree was not preserved: %+v", design)
+	}
+	occurrences := design.Files[0].Occurrences
+	if len(occurrences) != 2 || occurrences[0].GroupID != "schema" || occurrences[0].FragmentCount != 2 || occurrences[1].GroupID != "cleanup" || occurrences[1].FragmentCount != 1 {
+		t.Fatalf("file occurrences were not grouped by semantic group: %+v", occurrences)
+	}
+	if len(page.SidebarFiles) != 1 || page.SidebarFiles[0].Path != "root.go" {
+		t.Fatalf("root-level file missing from sidebar: %+v", page.SidebarFiles)
+	}
+	handler, err := Handler(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
+	body := response.Body.String()
+	for _, want := range []string{
+		`<aside class="sidebar" aria-label="Change navigation">`,
+		`class="sidebar-pane sidebar-groups"`,
+		`class="sidebar-pane sidebar-files"`,
+		`data-group-id="cleanup" data-file-path="docs/design/a.go"`,
+		`var mainFiles=Array.from(document.querySelectorAll('.main-file'))`,
+		`syncSidebar(fileAtViewport(),false)`,
+		`focusInPane(fileTarget,filePane)`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("rendered sidebar is missing %q", want)
+		}
 	}
 }
 
