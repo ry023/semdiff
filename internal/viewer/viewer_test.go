@@ -296,3 +296,30 @@ func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
 		t.Fatalf("same-file fragments rendered in %d diff views, want 1", got)
 	}
 }
+
+func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
+	fragment := model.MaterializedFragment{
+		ID: "F1", Path: "a.go", NewStart: 10, NewLines: 21,
+		Patch: "@@ -10,1 +10,1 @@\n-old one\n+new one\n@@ -30,1 +30,1 @@\n-old two\n+new two\n",
+	}
+	group := model.GroupsFile{Groups: []model.SemanticGroup{{
+		ID: "g", Title: "Group", Fragments: []model.Fragment{{
+			ID: "F1", Path: "a.go", Ranges: []model.FragmentRange{
+				{Old: &model.Range{Start: 10, Lines: 1}, New: &model.Range{Start: 10, Lines: 1}},
+				{Old: &model.Range{Start: 30, Lines: 1}, New: &model.Range{Start: 30, Lines: 1}},
+			},
+		}},
+	}}}
+	page := Build(group, model.FragmentSet{Fragments: []model.MaterializedFragment{fragment}}, map[string]string{"a.go": strings.Repeat("line\n", 40)})
+	view := page.Groups[0].Files[0].Fragments[0]
+	between := string(view.HunkHTML)
+	if !strings.Contains(between, "Show 19 lines below") || !strings.Contains(between, "Show 19 lines above") {
+		t.Fatalf("multi-range fragment has no bidirectional expansion between ranges: %q", between)
+	}
+	if strings.Count(between, `class="context-expand context-gap"`) != 1 {
+		t.Fatalf("got unexpected number of internal range gaps: %q", between)
+	}
+	if !strings.Contains(string(view.UpperContextHTML), "Show 9 lines above") || !strings.Contains(string(view.LowerContextHTML), "Show 10 lines below") {
+		t.Fatalf("outer fragment context changed: upper=%q lower=%q", view.UpperContextHTML, view.LowerContextHTML)
+	}
+}

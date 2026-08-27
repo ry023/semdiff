@@ -295,8 +295,8 @@ func sourceLines(content string) []string {
 
 func buildFragmentView(f model.MaterializedFragment, content string, siblings []model.MaterializedFragment) FragmentView {
 	header, hunk := splitPatch(f.Patch)
-	view := FragmentView{MaterializedFragment: f, HeaderHTML: colorPatch(header), HunkHTML: colorPatch(hunk)}
 	lines := sourceLines(content)
+	view := FragmentView{MaterializedFragment: f, HeaderHTML: colorPatch(header), HunkHTML: colorPatchWithContext(hunk, lines)}
 	start := fragmentStart(f) - 1
 	if start < 0 || start > len(lines) {
 		return view
@@ -321,6 +321,71 @@ func buildFragmentView(f model.MaterializedFragment, content string, siblings []
 	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperStart+1, "up")
 	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], end+1, "down")
 	return view
+}
+
+// colorPatchWithContext keeps each materialized hunk as an independently
+// expandable range. A multi-range fragment has one outer set of controls, but
+// without controls between its hunks the source lines in those gaps can never
+// be revealed.
+func colorPatchWithContext(patch string, lines []string) template.HTML {
+	blocks := splitHunkBlocks(patch)
+	if len(blocks) < 2 || len(lines) == 0 {
+		return colorPatch(patch)
+	}
+	var out strings.Builder
+	for i, block := range blocks {
+		if i > 0 {
+			_, previousEnd := hunkNewBounds(blocks[i-1])
+			currentStart, _ := hunkNewBounds(block)
+			previousEnd = max(0, min(previousEnd, len(lines)))
+			currentStart = max(previousEnd, min(currentStart, len(lines)))
+			out.WriteString(string(expandableGap(lines[previousEnd:currentStart], previousEnd+1)))
+		}
+		out.WriteString(string(colorPatch(block)))
+	}
+	return template.HTML(out.String())
+}
+
+func splitHunkBlocks(patch string) []string {
+	trimmed := strings.TrimSuffix(patch, "\n")
+	if trimmed == "" {
+		return nil
+	}
+	var blocks []string
+	var current []string
+	for _, line := range strings.Split(trimmed, "\n") {
+		if strings.HasPrefix(line, "@@ ") && len(current) > 0 {
+			blocks = append(blocks, strings.Join(current, "\n")+"\n")
+			current = nil
+		}
+		current = append(current, line)
+	}
+	if len(current) > 0 {
+		blocks = append(blocks, strings.Join(current, "\n")+"\n")
+	}
+	return blocks
+}
+
+func hunkNewBounds(hunk string) (int, int) {
+	header := strings.SplitN(hunk, "\n", 2)[0]
+	fields := strings.Fields(header)
+	if len(fields) < 3 {
+		return 0, 0
+	}
+	start, count := rangeBounds(fields[2])
+	start = max(0, start-1)
+	return start, start + count
+}
+
+func rangeBounds(field string) (int, int) {
+	field = strings.TrimLeft(field, "+-")
+	parts := strings.SplitN(field, ",", 2)
+	start, _ := strconv.Atoi(parts[0])
+	count := 1
+	if len(parts) == 2 {
+		count, _ = strconv.Atoi(parts[1])
+	}
+	return start, count
 }
 
 func buildFileView(path string, fragments []model.MaterializedFragment, content string, siblings []model.MaterializedFragment) FileView {
