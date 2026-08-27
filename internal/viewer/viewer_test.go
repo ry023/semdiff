@@ -295,8 +295,8 @@ func TestHandlerServesImportanceUIAssetsAndData(t *testing.T) {
 	}
 	for path, want := range map[string]string{
 		"/":                `<script src="/importance.js"></script>`,
-		"/importance.css":  ".label-tooltip.is-visible",
-		"/importance.js":   "showTooltip(element)",
+		"/importance.css":  ".review-level svg",
+		"/importance.js":   "function reviewIcon(value)",
 		"/importance.json": `"F1":"careful"`,
 	} {
 		response := httptest.NewRecorder()
