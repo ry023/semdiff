@@ -62,6 +62,25 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 	}
 }
 
+func TestQuestionUIUsesCollapsibleThreadsAndSharedGroupActions(t *testing.T) {
+	page := Page{Groups: []GroupView{{ID: "group"}}}
+	store := questions.Store{Path: filepath.Join(t.TempDir(), "questions.json")}
+	handler, err := HandlerWithQuestions(page, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		"/questions.js":  "article=document.createElement('details')",
+		"/questions.css": ".group-actions .group-ask{float:none;margin:0}",
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), want) {
+			t.Fatalf("%s does not contain %q: %s", path, want, response.Body.String())
+		}
+	}
+}
+
 func TestBuildAndHandler(t *testing.T) {
 	one, two := 1, 2
 	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, Fragments: []model.Fragment{{ID: "F2", Path: "b.go"}}}, {ID: "first", Title: "First", Summary: "Start here\nMore context.", Order: &one, FileCategories: []model.FileCategory{{Path: "a.go", Category: "logic"}}, Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "Explains the <safe> change."}}}}}
