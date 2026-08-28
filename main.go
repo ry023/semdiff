@@ -19,6 +19,7 @@ import (
 	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/ry023/semdiff/internal/questions"
 	"github.com/ry023/semdiff/internal/viewer"
 )
 
@@ -42,6 +43,8 @@ func usage() {
 	semdiff grouping status [--draft <path>] [--json]
 	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
 	semdiff grouping finalize <groups-file> [--draft <path>] [--json]
+	semdiff questions wait <groups-file> [--json]
+	semdiff questions answer <groups-file> <question-id> --stdin [--json]
 	semdiff view <groups-file> [--addr 127.0.0.1:8080]`)
 }
 
@@ -54,6 +57,8 @@ func run(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "grouping":
 		return runGrouping(ctx, r, args[1:])
+	case "questions":
+		return runQuestions(ctx, args[1:])
 	case "commits":
 		fs := flag.NewFlagSet("commits", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
@@ -221,7 +226,8 @@ func run(ctx context.Context, args []string) error {
 			paths = append(paths, fragment.Path)
 		}
 		fileContents := r.FileContents(ctx, inv.BaseSHA, inv.HeadSHA, paths)
-		h, err := viewer.Handler(viewer.Build(g, inv, fileContents))
+		questionStore := questions.Store{Path: questions.DefaultPath(positional[0], g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
+		h, err := viewer.HandlerWithQuestions(viewer.Build(g, inv, fileContents), questionStore)
 		if err != nil {
 			return err
 		}

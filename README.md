@@ -20,11 +20,15 @@ semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
 semdiff grouping finalize groups.json --json
+semdiff questions wait groups.json --json
+semdiff questions answer groups.json Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show groups.json F-0123456789ab --json
 semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
 ```
+
+The viewer can attach questions to a semantic Group or Fragment. Keep `semdiff view` running, then let an AI agent run `semdiff questions wait groups.json --json`. The wait command claims one pending question and exits; after investigating the anchored change, the agent submits its response with `semdiff questions answer groups.json <question-id> --stdin`. The viewer remains open and polls for the answer. Question state is stored separately from `groups.json` under `.semdiff/questions/`.
 
 `fragments` emits Git-derived zero-context ranges as initial suggestions. They are not canonical fragment boundaries. `grouping init` stores suggestions separately from authored fragments in `.semdiff/grouping-draft.json`, so each Git span does not become an assignment obligation. Inspect them with `grouping inspect --suggestions`, then use `merge_fragments`, `add_fragment`, `update_fragment`, and `delete_fragments` to compose semantic fragments before finalizing.
 

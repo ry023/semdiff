@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	pathpkg "path"
 	"sort"
@@ -14,11 +15,12 @@ import (
 
 	categorydraft "github.com/ry023/semdiff/internal/categories"
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/ry023/semdiff/internal/questions"
 	"github.com/yuin/goldmark"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-//go:embed index.html importance.css importance.js
+//go:embed index.html importance.css importance.js questions.css questions.js
 var assets embed.FS
 
 const defaultContextLines = 5
@@ -771,12 +773,22 @@ func rangeStart(field string) int {
 }
 
 func Handler(page Page) (http.Handler, error) {
+	return handler(page, nil)
+}
+
+func HandlerWithQuestions(page Page, store questions.Store) (http.Handler, error) {
+	return handler(page, &store)
+}
+
+func handler(page Page, questionStore *questions.Store) (http.Handler, error) {
 	index, err := assets.ReadFile("index.html")
 	if err != nil {
 		return nil, err
 	}
 	source := strings.Replace(string(index), "</head>", `<link rel="stylesheet" href="/importance.css"></head>`, 1)
+	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="/questions.css"></head>`, 1)
 	source = strings.Replace(source, "</body>", `<script src="/importance.js"></script></body>`, 1)
+	source = strings.Replace(source, "</body>", `<script src="/questions.js"></script></body>`, 1)
 	t, err := template.New("index.html").Parse(source)
 	if err != nil {
 		return nil, err
@@ -808,10 +820,74 @@ func Handler(page Page) (http.Handler, error) {
 		content, _ := assets.ReadFile("importance.js")
 		_, _ = w.Write(content)
 	})
+	mux.HandleFunc("/questions.css", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		content, _ := assets.ReadFile("questions.css")
+		_, _ = w.Write(content)
+	})
+	mux.HandleFunc("/questions.js", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		content, _ := assets.ReadFile("questions.js")
+		_, _ = w.Write(content)
+	})
 	mux.HandleFunc("/importance.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(importanceJSON)
 	})
+	if questionStore != nil {
+		validGroups := map[string]bool{}
+		validFragments := map[string]string{}
+		for _, group := range page.Groups {
+			validGroups[group.ID] = true
+			for _, file := range group.Files {
+				for _, fragment := range file.Fragments {
+					validFragments[fragment.ID] = group.ID
+				}
+			}
+		}
+		mux.HandleFunc("/api/questions", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.Method {
+			case http.MethodGet:
+				items, err := questionStore.List()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(items)
+			case http.MethodPost:
+				var request struct {
+					Anchor   questions.Anchor `json:"anchor"`
+					Question string           `json:"question"`
+				}
+				body := http.MaxBytesReader(w, r.Body, 64<<10)
+				decoder := json.NewDecoder(body)
+				decoder.DisallowUnknownFields()
+				if err := decoder.Decode(&request); err != nil && err != io.EOF {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				valid := request.Anchor.Type == "group" && validGroups[request.Anchor.GroupID]
+				if request.Anchor.Type == "fragment" {
+					valid = validFragments[request.Anchor.FragmentID] == request.Anchor.GroupID
+				}
+				if !valid {
+					http.Error(w, "unknown question anchor", http.StatusBadRequest)
+					return
+				}
+				item, err := questionStore.Add(request.Anchor, request.Question)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(item)
+			default:
+				w.Header().Set("Allow", "GET, POST")
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

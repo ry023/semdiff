@@ -1,13 +1,47 @@
 package viewer
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/ry023/semdiff/internal/questions"
 )
+
+func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
+	page := Page{BaseSHA: "base", HeadSHA: "head", Groups: []GroupView{{
+		ID: "group", Files: []FileView{{Fragments: []FragmentView{{MaterializedFragment: model.MaterializedFragment{ID: "fragment"}}}}},
+	}}}
+	store := questions.Store{Path: filepath.Join(t.TempDir(), "questions.json"), BaseSHA: "base", HeadSHA: "head"}
+	handler, err := HandlerWithQuestions(page, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/questions", bytes.NewBufferString(`{"anchor":{"type":"fragment","group_id":"group","fragment_id":"fragment"},"question":"Why?"}`))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("POST status = %d: %s", response.Code, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/questions", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"question":"Why?"`) {
+		t.Fatalf("unexpected GET response: %d %s", response.Code, response.Body.String())
+	}
+
+	invalid := httptest.NewRequest(http.MethodPost, "/api/questions", bytes.NewBufferString(`{"anchor":{"type":"group","group_id":"missing"},"question":"Why?"}`))
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, invalid)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid anchor status = %d", response.Code)
+	}
+}
 
 func TestBuildAndHandler(t *testing.T) {
 	one, two := 1, 2

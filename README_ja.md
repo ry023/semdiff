@@ -22,11 +22,15 @@ semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
 semdiff grouping finalize groups.json --json
+semdiff questions wait groups.json --json
+semdiff questions answer groups.json Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show groups.json F-0123456789ab --json
 semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
 ```
+
+Viewer では意味的な Group または Fragment に質問を紐づけられます。`semdiff view` を起動したまま、AI Agent に `semdiff questions wait groups.json --json` を実行させてください。`wait` は pending の質問を1件claimして終了します。Agentは対象の変更を調査し、`semdiff questions answer groups.json <question-id> --stdin` で回答を登録します。Viewerは閉じず、pollingによって回答を表示します。質問状態は `groups.json` と分離して `.semdiff/questions/` に保存されます。
 
 `fragments` は、Git から取得したコンテキストなしの変更範囲を初期候補として出力します。この範囲は fragment の確定境界ではありません。`grouping init` は `.semdiff/grouping-draft.json` 内で候補と authored fragment を分離して保存するため、Git の各変更範囲がそのまま割り当て義務にはなりません。`grouping inspect --suggestions` で候補を確認し、finalize の前に `merge_fragments`、`add_fragment`、`update_fragment`、`delete_fragments` を使って意味的な fragment を構成します。
 
