@@ -859,6 +859,7 @@ func handler(page Page, questionStore *questions.Store) (http.Handler, error) {
 				var request struct {
 					Anchor   questions.Anchor `json:"anchor"`
 					Question string           `json:"question"`
+					ThreadID string           `json:"thread_id,omitempty"`
 				}
 				body := http.MaxBytesReader(w, r.Body, 64<<10)
 				decoder := json.NewDecoder(body)
@@ -867,15 +868,21 @@ func handler(page Page, questionStore *questions.Store) (http.Handler, error) {
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
 				}
-				valid := request.Anchor.Type == "group" && validGroups[request.Anchor.GroupID]
-				if request.Anchor.Type == "fragment" {
-					valid = validFragments[request.Anchor.FragmentID] == request.Anchor.GroupID
+				var item questions.Thread
+				var err error
+				if request.ThreadID != "" {
+					item, err = questionStore.FollowUp(request.ThreadID, request.Question)
+				} else {
+					valid := request.Anchor.Type == "group" && validGroups[request.Anchor.GroupID]
+					if request.Anchor.Type == "fragment" {
+						valid = validFragments[request.Anchor.FragmentID] == request.Anchor.GroupID
+					}
+					if !valid {
+						http.Error(w, "unknown question anchor", http.StatusBadRequest)
+						return
+					}
+					item, err = questionStore.Add(request.Anchor, request.Question)
 				}
-				if !valid {
-					http.Error(w, "unknown question anchor", http.StatusBadRequest)
-					return
-				}
-				item, err := questionStore.Add(request.Anchor, request.Question)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return

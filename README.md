@@ -28,7 +28,7 @@ semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
 ```
 
-The viewer can attach questions to a semantic Group or Fragment. Keep `semdiff view` running, then let an AI agent run `semdiff questions wait groups.json --json`. The wait command claims one pending question and exits; after investigating the anchored change, the agent submits its response with `semdiff questions answer groups.json <question-id> --stdin`. The viewer remains open and polls for the answer. Question state is stored separately from `groups.json` under `.semdiff/questions/`.
+The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then let an AI agent run `semdiff questions wait groups.json --json`. The wait command claims one pending turn and exits, returning that thread's prior conversation in `history`; after investigating the anchored change, the agent submits its response with `semdiff questions answer groups.json <question-id> --stdin`. The viewer remains open and polls for the answer. Thread state is stored separately from `groups.json` under `.semdiff/questions/`.
 
 `fragments` emits Git-derived zero-context ranges as initial suggestions. They are not canonical fragment boundaries. `grouping init` stores suggestions separately from authored fragments in `.semdiff/grouping-draft.json`, so each Git span does not become an assignment obligation. Inspect them with `grouping inspect --suggestions`, then use `merge_fragments`, `add_fragment`, `update_fragment`, and `delete_fragments` to compose semantic fragments before finalizing.
 

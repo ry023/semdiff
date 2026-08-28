@@ -2,6 +2,8 @@ package viewer
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -27,6 +29,23 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusCreated {
 		t.Fatalf("POST status = %d: %s", response.Code, response.Body.String())
+	}
+	var thread questions.Thread
+	if err := json.Unmarshal(response.Body.Bytes(), &thread); err != nil {
+		t.Fatal(err)
+	}
+	item, err := store.Wait(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Answer(item.ID, "Because."); err != nil {
+		t.Fatal(err)
+	}
+	followUp := httptest.NewRequest(http.MethodPost, "/api/questions", bytes.NewBufferString(`{"thread_id":"`+thread.ID+`","question":"Can you elaborate?"}`))
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, followUp)
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"turns"`) {
+		t.Fatalf("follow-up response: %d %s", response.Code, response.Body.String())
 	}
 
 	response = httptest.NewRecorder()

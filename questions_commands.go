@@ -63,14 +63,14 @@ func runQuestions(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		question, err := store.Answer(positional[1], string(body))
+		thread, err := store.Answer(positional[1], string(body))
 		if err != nil {
 			return err
 		}
 		if *jsonOut {
-			return printJSON(question)
+			return printJSON(thread)
 		}
-		fmt.Printf("answered %s\n", question.ID)
+		fmt.Printf("answered %s\n", positional[1])
 		return nil
 	default:
 		return fmt.Errorf("unknown questions command %q", args[0])
