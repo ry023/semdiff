@@ -14,49 +14,53 @@ import (
 
 	"github.com/ry023/semdiff/internal/config"
 	"github.com/ry023/semdiff/internal/gitdiff"
+	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/questions"
 	"github.com/ry023/semdiff/internal/reviews"
 	"github.com/ry023/semdiff/internal/viewer"
 )
 
-func reviewStoreFromFlags(args []string, name string) (reviews.Store, []string, error) {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
 	remote := fs.String("remote", "", "Git remote name")
 	repository := fs.String("repository", "", "artifact repository URL or path")
 	branch := fs.String("branch", "", "artifact branch")
+	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
 	positional, err := parseInterspersed(fs, args)
-	if err != nil {
-		return reviews.Store{}, nil, err
-	}
-	storeConfig, err := config.Load(".")
-	if err != nil {
-		return reviews.Store{}, nil, err
-	}
-	storeConfig, err = config.Override(storeConfig, *remote, *repository, *branch)
-	if err != nil {
-		return reviews.Store{}, nil, err
-	}
-	return reviews.Store{Dir: ".", Config: storeConfig}, positional, nil
-}
-
-func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	store, positional, err := reviewStoreFromFlags(args, "publish")
 	if err != nil {
 		return err
 	}
-	if len(positional) != 1 {
-		return errors.New("publish requires <groups-file>")
+	if len(positional) > 1 {
+		return errors.New("publish accepts at most one <groups-file>")
 	}
-	g, inv, report, err := loadAndValidate(ctx, runner, positional[0])
+	storeConfig, err := config.Load(".")
+	if err != nil {
+		return err
+	}
+	storeConfig, err = config.Override(storeConfig, *remote, *repository, *branch)
+	if err != nil {
+		return err
+	}
+	store := reviews.Store{Dir: ".", Config: storeConfig}
+	groupsPath := ""
+	if len(positional) == 1 {
+		groupsPath = positional[0]
+	} else {
+		draft, err := groupingdraft.Load(*draftPath)
+		if err != nil {
+			return fmt.Errorf("locate default groups file from draft: %w", err)
+		}
+		groupsPath = reviews.LocalPath(draft.BaseSHA, draft.HeadSHA)
+	}
+	g, _, report, err := loadAndValidate(ctx, runner, groupsPath)
 	if err != nil {
 		return err
 	}
 	if len(report.Errors) > 0 {
 		return fmt.Errorf("groups file is invalid: %s", strings.Join(report.Errors, "; "))
 	}
-	_ = inv
-	path, err := store.Publish(ctx, positional[0], g)
+	path, err := store.Publish(ctx, groupsPath, g)
 	if err != nil {
 		return err
 	}

@@ -21,18 +21,20 @@ semdiff grouping inspect --suggestions --json
 semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
-semdiff grouping finalize groups.json --json
+semdiff grouping finalize --json
 semdiff questions wait groups.json --json
 semdiff questions answer groups.json Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show groups.json F-0123456789ab --json
 semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
-semdiff publish groups.json
+semdiff publish
 semdiff reviews view --addr 127.0.0.1:8080
 ```
 
 ## チームとの共有
+
+`grouping finalize` は出力引数を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な出力パスも引き続き利用できます。引数なしの `publish` は現在の grouping draft からこのファイルを特定します。
 
 `publish` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。質問スレッドはローカルのままで、共有・アップロードされません。設定なしでは現在のリポジトリの `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の publish 時に orphan branch として作成されます。
 

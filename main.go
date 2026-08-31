@@ -42,11 +42,11 @@ func usage() {
 	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
 	semdiff grouping status [--draft <path>] [--json]
 	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
-	semdiff grouping finalize <groups-file> [--draft <path>] [--json]
+	semdiff grouping finalize [<groups-file>] [--draft <path>] [--json]
 	semdiff questions wait <groups-file> [--json]
 	semdiff questions answer <groups-file> <question-id> --stdin [--json]
 	semdiff view <groups-file> [--addr 127.0.0.1:8080]
-	semdiff publish <groups-file> [--remote origin|--repository <url>] [--branch semdiff/reviews]
+	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
 	semdiff reviews view [--addr 127.0.0.1:8080] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
 

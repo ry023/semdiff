@@ -127,7 +127,7 @@ grouping init <base>..<head>       create a resumable draft
 grouping inspect --suggestions     inspect Git-derived navigation candidates
 grouping inspect/status            inspect authored draft work
 grouping apply <operations>        edit definitions and decisions atomically
-grouping finalize <groups-file>    validate coverage and write groups.json
+grouping finalize [groups-file]    validate coverage and write groups.json under .semdiff/reviews by default
 show --draft <path> <fragment-id>  materialize an editable draft fragment
 show <groups-file> <fragment-id>   materialize a finalized fragment
 validate <groups-file>             recompute and validate coverage

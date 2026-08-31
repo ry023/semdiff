@@ -19,18 +19,20 @@ semdiff grouping inspect --suggestions --json
 semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
-semdiff grouping finalize groups.json --json
+semdiff grouping finalize --json
 semdiff questions wait groups.json --json
 semdiff questions answer groups.json Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show groups.json F-0123456789ab --json
 semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
-semdiff publish groups.json
+semdiff publish
 semdiff reviews view --addr 127.0.0.1:8080
 ```
 
 ## Sharing reviews
+
+With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit output path remains supported for workflows that need one. Running `publish` without an argument locates this file from the current grouping draft.
 
 `publish` stores only the review artifact, `groups.json`, on a Git artifact branch. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first publish creates that branch as an orphan branch.
 

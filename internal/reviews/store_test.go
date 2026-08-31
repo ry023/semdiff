@@ -59,3 +59,11 @@ func TestPublishCreatesAndPreservesArtifactBranch(t *testing.T) {
 		t.Fatalf("artifact tree missing published files: %s", tree)
 	}
 }
+
+func TestLocalPathUsesIgnoredStructuredDirectory(t *testing.T) {
+	base, head := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	want := filepath.Join(".semdiff", "reviews", base+"..."+head, "groups.json")
+	if got := LocalPath(base, head); got != want {
+		t.Fatalf("LocalPath() = %q, want %q", got, want)
+	}
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/ry023/semdiff/internal/reviews"
 )
 
 func TestParseInterspersedKeepsStdinMarker(t *testing.T) {
@@ -61,7 +62,7 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	draftPath := filepath.Join(t.TempDir(), "draft.json")
-	groupsPath := filepath.Join(t.TempDir(), "groups.json")
+	groupsPath := reviews.LocalPath(inv.BaseSHA, inv.HeadSHA)
 	draft := groupingdraft.New(inv, nil)
 	if err := groupingdraft.SaveAtomic(draftPath, draft); err != nil {
 		t.Fatal(err)
@@ -101,10 +102,18 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	if err := runGroupingApply([]string{operationsPath, "--draft", draftPath}); err != nil {
 		t.Fatal(err)
 	}
-	if err := runGroupingFinalize(context.Background(), draftRunner, []string{groupsPath, "--draft", draftPath}); err != nil {
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := groups.Load(groupsPath)
+	if err := os.Chdir(repo); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldWorkingDirectory)
+	if err := runGroupingFinalize(context.Background(), draftRunner, []string{"--draft", draftPath}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := groups.Load(filepath.Join(repo, groupsPath))
 	if err != nil {
 		t.Fatal(err)
 	}

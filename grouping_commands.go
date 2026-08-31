@@ -16,6 +16,7 @@ import (
 	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/ry023/semdiff/internal/reviews"
 )
 
 const defaultGroupingDraftPath = ".semdiff/grouping-draft.json"
@@ -268,8 +269,8 @@ func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []stri
 	if err != nil {
 		return err
 	}
-	if len(positional) != 1 {
-		return errors.New("grouping finalize requires <groups-file>")
+	if len(positional) > 1 {
+		return errors.New("grouping finalize accepts at most one <groups-file>")
 	}
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {
@@ -301,7 +302,11 @@ func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []stri
 		}
 		return fmt.Errorf("current change map does not match grouping draft: %s", strings.Join(issues, "; "))
 	}
-	if err := saveJSONAtomic(positional[0], groupsFile); err != nil {
+	outputPath := reviews.LocalPath(draft.BaseSHA, draft.HeadSHA)
+	if len(positional) == 1 {
+		outputPath = positional[0]
+	}
+	if err := saveJSONAtomic(outputPath, groupsFile); err != nil {
 		return err
 	}
 	if *jsonOut {
@@ -309,9 +314,9 @@ func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []stri
 			Valid    bool   `json:"valid"`
 			Output   string `json:"output"`
 			Revision int    `json:"revision"`
-		}{true, positional[0], draft.Revision})
+		}{true, outputPath, draft.Revision})
 	}
-	fmt.Printf("finalized groups file: %s\n", positional[0])
+	fmt.Printf("finalized groups file: %s\n", outputPath)
 	return nil
 }
 

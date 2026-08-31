@@ -29,6 +29,10 @@ type Entry struct {
 
 func Path(baseSHA, headSHA string) string { return baseSHA + "..." + headSHA + "/groups.json" }
 
+func LocalPath(baseSHA, headSHA string) string {
+	return filepath.Join(".semdiff", "reviews", baseSHA+"..."+headSHA, "groups.json")
+}
+
 func (s Store) endpoint() string {
 	if s.Config.Repository != "" {
 		return s.Config.Repository

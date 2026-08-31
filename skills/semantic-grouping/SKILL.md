@@ -17,7 +17,7 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 6. For every fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. For every file referenced by a group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 7. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
 8. Before finalizing, review each file for over-fragmentation. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
-9. Run `semdiff grouping finalize groups.json --json`. Finalize succeeds only when every authored fragment is assigned and described, every Group has a complete summary and file categories, and every changed line and metadata change is selected exactly once.
+9. Run `semdiff grouping finalize --json`. With no explicit output path, finalize writes the result to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`; use an explicit path only when the user or surrounding workflow requires one. Finalize succeeds only when every authored fragment is assigned and described, every Group has a complete summary and file categories, and every changed line and metadata change is selected exactly once.
 
 The required shape is:
 
@@ -39,7 +39,7 @@ Do not classify from file type or change mechanics alone. Required generated out
 
 ## Grouping drafts
 
-`semdiff grouping init` creates a draft schema version 3 file at `.semdiff/grouping-draft.json` by default. Recreate an older draft with `grouping init --force`; do not continue it because the schema and authored Fragment fields have changed. The draft is the working state; `groups.json` is only produced by `grouping finalize`. Apply operations can be repeated and can add, revise, move, or remove decisions. Use `--draft <path>` when maintaining more than one draft.
+`semdiff grouping init` creates a draft schema version 3 file at `.semdiff/grouping-draft.json` by default. Recreate an older draft with `grouping init --force`; do not continue it because the schema and authored Fragment fields have changed. The draft is the working state; the finalized `groups.json` is written beneath `.semdiff/reviews/` by default so it is not accidentally committed. Apply operations can be repeated and can add, revise, move, or remove decisions. Use `--draft <path>` when maintaining more than one draft.
 
 An apply request contains a batch of operations. For example:
 
