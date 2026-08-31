@@ -164,7 +164,7 @@ func reviewIndexHandler(ctx context.Context, runner gitdiff.Runner, store review
 			paths = append(paths, fragment.Path)
 		}
 		questionPath := filepath.Join(".semdiff", "reviews", filepath.Dir(path), "groups.json")
-		questionStore := questions.Store{Path: questions.DefaultPath(questionPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
+		questionStore := questions.Store{Path: questions.DefaultPath(questionPath, g.BaseSHA, g.HeadSHA), SessionPath: questions.DefaultSessionPath(questionPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 		basePath := "/review/" + key + "/"
 		h, err := viewer.HandlerWithQuestionsAt(viewer.Build(g, gitdiff.Materialize(changes, groups.Fragments(g)), runner.FileContents(r.Context(), changes.BaseSHA, changes.HeadSHA, paths)), questionStore, basePath)
 		if err != nil {

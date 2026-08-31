@@ -43,7 +43,8 @@ func usage() {
 	semdiff grouping status [--draft <path>] [--json]
 	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
 	semdiff grouping finalize [<groups-file>] [--draft <path>] [--json]
-	semdiff questions wait [<groups-file>] [--draft <path>] [--json]
+	semdiff questions wait [<groups-file>] [--session <session-id>] [--draft <path>] [--json]
+	semdiff questions session start [<groups-file>] [--draft <path>] [--json]
 	semdiff questions answer [<groups-file>] <question-id> --stdin [--draft <path>] [--json]
 	semdiff view [<groups-file>] [--draft <path>] [--addr 127.0.0.1:8080]
 	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
@@ -262,7 +263,7 @@ func run(ctx context.Context, args []string) error {
 			paths = append(paths, fragment.Path)
 		}
 		fileContents := r.FileContents(ctx, inv.BaseSHA, inv.HeadSHA, paths)
-		questionStore := questions.Store{Path: questions.DefaultPath(groupsPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
+		questionStore := questions.Store{Path: questions.DefaultPath(groupsPath, g.BaseSHA, g.HeadSHA), SessionPath: questions.DefaultSessionPath(groupsPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 		h, err := viewer.HandlerWithQuestions(viewer.Build(g, inv, fileContents), questionStore)
 		if err != nil {
 			return err

@@ -20,7 +20,8 @@ semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
 semdiff grouping finalize --json
-semdiff questions wait --json
+semdiff questions session start --json
+semdiff questions wait --session S-... --json
 semdiff questions answer Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show F-0123456789ab --json
@@ -56,7 +57,7 @@ review_store:
 
 CLI flags override local configuration, which overrides `semdiff.yaml`, which overrides the defaults. `remote` and `repository` are mutually exclusive.
 
-The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then let an AI agent run `semdiff questions wait --json`. The wait command claims one pending turn and exits, returning that thread's prior conversation in `history`; after investigating the anchored change, the agent submits its response with `semdiff questions answer <question-id> --stdin`. The viewer remains open and polls for the answer. Thread state is stored separately from `groups.json` under `.semdiff/questions/`.
+The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then ask an AI agent to start the `answer-semdiff` skill. The skill starts an answer session, claims pending turns one at a time, answers them, and waits again. Ending answer mode in the viewer stops the session and lets the skill finish. Outside answer mode, Ask buttons are hidden and the viewer shows instructions for starting the skill. Thread state lives under `.semdiff/questions/`; the current answer session lives separately under `.semdiff/sessions/`.
 
 `fragments` emits Git-derived zero-context ranges as initial suggestions. They are not canonical fragment boundaries. `grouping init` stores suggestions separately from authored fragments in `.semdiff/grouping-draft.json`, so each Git span does not become an assignment obligation. Inspect them with `grouping inspect --suggestions`, then use `merge_fragments`, `add_fragment`, `update_fragment`, and `delete_fragments` to compose semantic fragments before finalizing.
 

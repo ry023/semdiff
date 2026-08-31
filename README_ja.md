@@ -22,7 +22,8 @@ semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
 semdiff grouping finalize --json
-semdiff questions wait --json
+semdiff questions session start --json
+semdiff questions wait --session S-... --json
 semdiff questions answer Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show F-0123456789ab --json
@@ -58,7 +59,7 @@ review_store:
 
 CLI flag、ローカル設定、`semdiff.yaml`、既定値の順に優先されます。`remote` と `repository` は同時に指定できません。
 
-Viewer では意味的な Group または Fragment に質問スレッドを紐づけられます。同じスレッドへのfollow-upは過去の回答済みturnを文脈として継続し、新しいAskは独立した文脈を開始します。`semdiff view` を起動したまま、AI Agent に `semdiff questions wait --json` を実行させてください。`wait` は pending のturnを1件claimし、そのスレッドだけの過去の会話を `history` に含めて終了します。Agentは対象の変更を調査し、`semdiff questions answer <question-id> --stdin` で回答を登録します。Viewerは閉じず、pollingによって回答を表示します。スレッド状態は `groups.json` と分離して `.semdiff/questions/` に保存されます。
+Viewer では意味的な Group または Fragment に質問スレッドを紐づけられます。同じスレッドへのfollow-upは過去の回答済みturnを文脈として継続し、新しいAskは独立した文脈を開始します。`semdiff view` を起動したまま、AI Agent に `answer-semdiff` スキルを開始させてください。スキルは回答セッションを開始し、pendingのturnを1件ずつclaimします。Agentは回答を登録したあと次の質問を再び待ち、Viewerの「End answer mode」でセッションを終了するとスキルも完了します。回答モード外ではAskボタンを隠し、開始方法の案内をViewer上部に表示します。スレッド状態は`.semdiff/questions/`、現在の回答セッションは`.semdiff/sessions/`に保存され、どちらも`groups.json`から分離されています。
 
 `fragments` は、Git から取得したコンテキストなしの変更範囲を初期候補として出力します。この範囲は fragment の確定境界ではありません。`grouping init` は `.semdiff/grouping-draft.json` 内で候補と authored fragment を分離して保存するため、Git の各変更範囲がそのまま割り当て義務にはなりません。`grouping inspect --suggestions` で候補を確認し、finalize の前に `merge_fragments`、`add_fragment`、`update_fragment`、`delete_fragments` を使って意味的な fragment を構成します。
 

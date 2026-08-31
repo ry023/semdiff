@@ -74,6 +74,37 @@ func TestFollowUpRequiresPreviousAnswer(t *testing.T) {
 	}
 }
 
+func TestAnswerSessionControlsWaitLoop(t *testing.T) {
+	store := Store{Path: filepath.Join(t.TempDir(), "questions.json"), BaseSHA: "base", HeadSHA: "head"}
+	session, err := store.Sessions().Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Sessions().Start(); err == nil {
+		t.Fatal("second active session started")
+	}
+	if _, err := store.Add(Anchor{Type: "group", GroupID: "group"}, "Why?"); err != nil {
+		t.Fatal(err)
+	}
+	event, err := store.WaitSession(context.Background(), session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.Event != "question" || event.Question == nil || event.Question.Question != "Why?" {
+		t.Fatalf("unexpected question event: %+v", event)
+	}
+	if _, err := store.Sessions().Stop(); err != nil {
+		t.Fatal(err)
+	}
+	event, err = store.WaitSession(context.Background(), session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.Event != "stopped" {
+		t.Fatalf("unexpected stop event: %+v", event)
+	}
+}
+
 func TestVersionOneQuestionsMigrateToIndependentThreads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "questions.json")
 	data := `{"version":1,"base_sha":"base","head_sha":"head","questions":[{"id":"Q-old","anchor":{"type":"group","group_id":"g"},"question":"Old?","status":"answered","answer":"Old answer","created_at":"2026-01-01T00:00:00Z"}]}`

@@ -57,6 +57,11 @@ type WorkItem struct {
 	History  []Message `json:"history"`
 	Question string    `json:"question"`
 }
+type WaitEvent struct {
+	Event     string    `json:"event"`
+	SessionID string    `json:"session_id"`
+	Question  *WorkItem `json:"question,omitempty"`
+}
 type File struct {
 	Version int      `json:"version"`
 	BaseSHA string   `json:"base_sha"`
@@ -64,9 +69,10 @@ type File struct {
 	Threads []Thread `json:"threads"`
 }
 type Store struct {
-	Path    string
-	BaseSHA string
-	HeadSHA string
+	Path        string
+	SessionPath string
+	BaseSHA     string
+	HeadSHA     string
 }
 
 func DefaultPath(groupsPath, baseSHA, headSHA string) string {
@@ -124,27 +130,7 @@ func (s Store) Wait(ctx context.Context) (WorkItem, error) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		var item WorkItem
-		err := s.update(ctx, func(file *File) error {
-			threadIndex, turnIndex := -1, -1
-			var earliest time.Time
-			for ti := range file.Threads {
-				for qi := range file.Threads[ti].Turns {
-					turn := file.Threads[ti].Turns[qi]
-					if turn.Status == StatusPending && (turnIndex < 0 || turn.CreatedAt.Before(earliest)) {
-						threadIndex, turnIndex, earliest = ti, qi, turn.CreatedAt
-					}
-				}
-			}
-			if turnIndex >= 0 {
-				thread := &file.Threads[threadIndex]
-				now := time.Now().UTC()
-				thread.Turns[turnIndex].Status = StatusClaimed
-				thread.Turns[turnIndex].ClaimedAt = &now
-				item = workItem(*thread, turnIndex)
-			}
-			return nil
-		})
+		item, err := s.claim(ctx)
 		if err != nil {
 			return WorkItem{}, err
 		}
@@ -157,6 +143,60 @@ func (s Store) Wait(ctx context.Context) (WorkItem, error) {
 		case <-ticker.C:
 		}
 	}
+}
+
+func (s Store) WaitSession(ctx context.Context, sessionID string) (WaitEvent, error) {
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		session, found, err := s.Sessions().Get()
+		if err != nil {
+			return WaitEvent{}, err
+		}
+		if !found || session.ID != sessionID {
+			return WaitEvent{}, fmt.Errorf("answer session %s is not current", sessionID)
+		}
+		if session.Status == SessionStopped {
+			return WaitEvent{Event: "stopped", SessionID: sessionID}, nil
+		}
+		item, err := s.claim(ctx)
+		if err != nil {
+			return WaitEvent{}, err
+		}
+		if item.ID != "" {
+			return WaitEvent{Event: "question", SessionID: sessionID, Question: &item}, nil
+		}
+		select {
+		case <-ctx.Done():
+			return WaitEvent{}, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s Store) claim(ctx context.Context) (WorkItem, error) {
+	var item WorkItem
+	err := s.update(ctx, func(file *File) error {
+		threadIndex, turnIndex := -1, -1
+		var earliest time.Time
+		for ti := range file.Threads {
+			for qi := range file.Threads[ti].Turns {
+				turn := file.Threads[ti].Turns[qi]
+				if turn.Status == StatusPending && (turnIndex < 0 || turn.CreatedAt.Before(earliest)) {
+					threadIndex, turnIndex, earliest = ti, qi, turn.CreatedAt
+				}
+			}
+		}
+		if turnIndex >= 0 {
+			thread := &file.Threads[threadIndex]
+			now := time.Now().UTC()
+			thread.Turns[turnIndex].Status = StatusClaimed
+			thread.Turns[turnIndex].ClaimedAt = &now
+			item = workItem(*thread, turnIndex)
+		}
+		return nil
+	})
+	return item, err
 }
 
 func (s Store) Answer(id, answer string) (Thread, error) {

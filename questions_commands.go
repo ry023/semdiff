@@ -18,9 +18,41 @@ func runQuestions(ctx context.Context, args []string) error {
 		return errors.New("questions requires wait or answer")
 	}
 	switch args[0] {
+	case "session":
+		if len(args) < 2 || args[1] != "start" {
+			return errors.New("questions session requires start")
+		}
+		fs := flag.NewFlagSet("questions session start", flag.ContinueOnError)
+		jsonOut := fs.Bool("json", false, "JSON output")
+		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
+		positional, err := parseInterspersed(fs, args[2:])
+		if err != nil {
+			return err
+		}
+		if len(positional) > 1 {
+			return errors.New("questions session start accepts at most one <groups-file>")
+		}
+		groupsPath, err := resolveQuestionGroupsPath(positional, *draftPath)
+		if err != nil {
+			return err
+		}
+		store, err := questionStore(groupsPath)
+		if err != nil {
+			return err
+		}
+		session, err := store.Sessions().Start()
+		if err != nil {
+			return err
+		}
+		if *jsonOut {
+			return printJSON(session)
+		}
+		fmt.Printf("started %s\n", session.ID)
+		return nil
 	case "wait":
 		fs := flag.NewFlagSet("questions wait", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
+		sessionID := fs.String("session", "", "answer session ID")
 		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
 		positional, err := parseInterspersed(fs, args[1:])
 		if err != nil {
@@ -29,18 +61,28 @@ func runQuestions(ctx context.Context, args []string) error {
 		if len(positional) > 1 {
 			return errors.New("questions wait accepts at most one <groups-file>")
 		}
-		groupsPath := ""
-		if len(positional) == 1 {
-			groupsPath = positional[0]
-		} else {
-			groupsPath, err = defaultGroupsPath(*draftPath)
-			if err != nil {
-				return fmt.Errorf("locate default groups file from draft: %w", err)
-			}
+		groupsPath, err := resolveQuestionGroupsPath(positional, *draftPath)
+		if err != nil {
+			return err
 		}
 		store, err := questionStore(groupsPath)
 		if err != nil {
 			return err
+		}
+		if *sessionID != "" {
+			event, err := store.WaitSession(ctx, *sessionID)
+			if err != nil {
+				return err
+			}
+			if *jsonOut {
+				return printJSON(event)
+			}
+			if event.Event == "stopped" {
+				fmt.Printf("stopped %s\n", event.SessionID)
+			} else {
+				fmt.Printf("%s  %s\n", event.Question.ID, event.Question.Question)
+			}
+			return nil
 		}
 		question, err := store.Wait(ctx)
 		if err != nil {
@@ -98,12 +140,23 @@ func runQuestions(ctx context.Context, args []string) error {
 	}
 }
 
+func resolveQuestionGroupsPath(positional []string, draftPath string) (string, error) {
+	if len(positional) == 1 {
+		return positional[0], nil
+	}
+	groupsPath, err := defaultGroupsPath(draftPath)
+	if err != nil {
+		return "", fmt.Errorf("locate default groups file from draft: %w", err)
+	}
+	return groupsPath, nil
+}
+
 func questionStore(groupsPath string) (questions.Store, error) {
 	file, err := groups.Load(groupsPath)
 	if err != nil {
 		return questions.Store{}, err
 	}
 	return questions.Store{
-		Path: questions.DefaultPath(groupsPath, file.BaseSHA, file.HeadSHA), BaseSHA: file.BaseSHA, HeadSHA: file.HeadSHA,
+		Path: questions.DefaultPath(groupsPath, file.BaseSHA, file.HeadSHA), SessionPath: questions.DefaultSessionPath(groupsPath, file.BaseSHA, file.HeadSHA), BaseSHA: file.BaseSHA, HeadSHA: file.HeadSHA,
 	}, nil
 }

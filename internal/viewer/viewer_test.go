@@ -23,6 +23,9 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.Sessions().Start(); err != nil {
+		t.Fatal(err)
+	}
 
 	request := httptest.NewRequest(http.MethodPost, "/api/questions", bytes.NewBufferString(`{"anchor":{"type":"fragment","group_id":"group","fragment_id":"fragment"},"question":"Why?"}`))
 	response := httptest.NewRecorder()
@@ -60,6 +63,17 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid anchor status = %d", response.Code)
 	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/questions/session", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"stopped"`) {
+		t.Fatalf("stop session response: %d %s", response.Code, response.Body.String())
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/questions", bytes.NewBufferString(`{"anchor":{"type":"group","group_id":"group"},"question":"Too late?"}`)))
+	if response.Code != http.StatusConflict {
+		t.Fatalf("inactive answer mode accepted a question: %d %s", response.Code, response.Body.String())
+	}
 }
 
 func TestQuestionUIUsesCollapsibleThreadsAndSharedGroupActions(t *testing.T) {
@@ -70,7 +84,7 @@ func TestQuestionUIUsesCollapsibleThreadsAndSharedGroupActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]string{
-		"/questions.js":  "article=document.createElement('details')",
+		"/questions.js":  "End answer mode",
 		"/questions.css": ".group-actions .group-ask{float:none;margin:0}",
 	} {
 		response := httptest.NewRecorder()

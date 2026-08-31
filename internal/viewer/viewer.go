@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -844,6 +845,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 		_, _ = w.Write(importanceJSON)
 	})
 	if questionStore != nil {
+		sessionStore := questionStore.Sessions()
 		validGroups := map[string]bool{}
 		validFragments := map[string]string{}
 		for _, group := range page.Groups {
@@ -865,6 +867,15 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 				}
 				_ = json.NewEncoder(w).Encode(items)
 			case http.MethodPost:
+				active, err := sessionStore.IsActive()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if !active {
+					http.Error(w, "answer mode is not active", http.StatusConflict)
+					return
+				}
 				var request struct {
 					Anchor   questions.Anchor `json:"anchor"`
 					Question string           `json:"question"`
@@ -878,10 +889,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 					return
 				}
 				var item questions.Thread
-				var err error
-				if request.ThreadID != "" {
-					item, err = questionStore.FollowUp(request.ThreadID, request.Question)
-				} else {
+				if request.ThreadID == "" {
 					valid := request.Anchor.Type == "group" && validGroups[request.Anchor.GroupID]
 					if request.Anchor.Type == "fragment" {
 						valid = validFragments[request.Anchor.FragmentID] == request.Anchor.GroupID
@@ -890,14 +898,54 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 						http.Error(w, "unknown question anchor", http.StatusBadRequest)
 						return
 					}
-					item, err = questionStore.Add(request.Anchor, request.Question)
 				}
+				err = sessionStore.WithActive(func() error {
+					var mutateErr error
+					if request.ThreadID != "" {
+						item, mutateErr = questionStore.FollowUp(request.ThreadID, request.Question)
+					} else {
+						item, mutateErr = questionStore.Add(request.Anchor, request.Question)
+					}
+					return mutateErr
+				})
 				if err != nil {
+					if errors.Is(err, questions.ErrNoActiveSession) {
+						http.Error(w, "answer mode is not active", http.StatusConflict)
+						return
+					}
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
 				}
 				w.WriteHeader(http.StatusCreated)
 				_ = json.NewEncoder(w).Encode(item)
+			default:
+				w.Header().Set("Allow", "GET, POST")
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})
+		mux.HandleFunc("/api/questions/session", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.Method {
+			case http.MethodGet:
+				session, found, err := sessionStore.Get()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if !found {
+					_ = json.NewEncoder(w).Encode(struct {
+						Status questions.SessionStatus `json:"status"`
+					}{Status: questions.SessionStopped})
+					return
+				}
+				_ = json.NewEncoder(w).Encode(session)
+			case http.MethodPost:
+				session, err := sessionStore.Stop()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusConflict)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(session)
 			default:
 				w.Header().Set("Allow", "GET, POST")
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
