@@ -44,14 +44,14 @@ Add `--json` to any of these commands for structured output.
 Grouping is an iterative draft workflow:
 
 ```sh
-semdiff grouping init [main..HEAD]
+semdiff grouping init [main..HEAD] [--from path/to/groups.json]
 semdiff grouping inspect --suggestions
 semdiff grouping apply decisions.json
 semdiff grouping status
 semdiff grouping finalize
 ```
 
-- `grouping init` records the base and head commits, Git-derived suggestions, and path classifications in `.semdiff/grouping-draft.json`. Use `--force` to replace an existing draft or `--draft <path>` to use another location.
+- `grouping init` records the base and head commits, Git-derived suggestions, and path classifications in `.semdiff/grouping-draft.json`. `--from <groups-file>` seeds the new draft with a validated, same-base review whose head is on the target's first-parent history; the target change map and suggestions are still recomputed. Use `--force` to replace an existing draft or `--draft <path>` to use another location.
 - `grouping inspect` reads a focused part of the draft. Choose exactly one of `--suggestions`, `--unassigned`, `--group <id>`, or `--fragment <id>`.
 - `grouping apply` atomically applies the operations in a JSON file. Pass `-` instead of a filename to read the request from standard input.
 - `grouping status` reports assignment and description progress, missing review metadata, and whether the draft is ready to finalize.
@@ -88,6 +88,13 @@ semdiff view --addr 127.0.0.1:8080
 ```
 
 Without a groups file or `--draft`, `view` infers the current pull-request range with the same logic as `grouping init`. It prefers an exact finalized review. If none exists, it opens the nearest same-base review on the current head's first-parent history and clearly lists the commits and paths that have not been semantically grouped. Use `semdiff view --exact` to require an exact review.
+
+Use `reviews resolve` when a script or skill needs the same selection without starting the viewer. It returns `found`, `groups_path`, the current and selected SHAs, whether the match is exact, and the first-parent commit distance:
+
+```sh
+semdiff reviews resolve --json
+semdiff reviews resolve --exact --json
+```
 
 To create a self-contained, read-only file instead of starting a server, use `--html`. Question answers are omitted unless explicitly included:
 

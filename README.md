@@ -141,6 +141,8 @@ With no range, `grouping init` uses the current pull request's base branch when 
 
 With no groups file or `--draft`, `semdiff view` independently infers the current range using the same logic as `grouping init`. It opens an exact finalized review when one exists. Otherwise it walks the current head's first-parent history and opens the nearest review with the same merge-base. The viewer marks that snapshot as behind HEAD and lists the unreviewed commits and changed paths separately; it never applies old Fragment ranges to the current diff. Use `--exact` to reject this fallback, or pass a groups file or `--draft <path>` to select a specific snapshot.
 
+`semdiff reviews resolve --json` exposes the same current-range selection for scripts and skills. Use its `groups_path` with `semdiff grouping init --from <groups-path> --force` to seed a new current-range draft from the nearest compatible review. The source must have the same base SHA and a head on the current first-parent history; the new draft always recomputes Git facts and must be validated again before finalization.
+
 `publish` stores only the review artifact, `groups.json`, on a Git artifact branch. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first publish creates that branch as an orphan branch.
 
 Artifacts are stored at `<base-sha>...<head-sha>/groups.json` using full SHAs. `semdiff reviews view` lists the branch and its Refresh button fetches updates.

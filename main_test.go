@@ -196,6 +196,13 @@ func TestResolveViewForRangePrefersExactThenNearestFirstParentReview(t *testing.
 	if _, err := resolveViewForRange(context.Background(), runner, base+".."+currentHead, true); err == nil || !strings.Contains(err.Error(), "no finalized review for current range") {
 		t.Fatalf("exact lookup should reject an ancestor review, got %v", err)
 	}
+	resolution, err := resolveReview(context.Background(), runner, base+".."+currentHead, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resolution.Found || resolution.Exact || resolution.GroupsPath != reviewedPath || resolution.ReviewHeadSHA != reviewedHead || resolution.CommitsBehind != 1 {
+		t.Fatalf("unexpected review resolution: %+v", resolution)
+	}
 
 	exactPath := writeReview(base, currentHead)
 	selection, err = resolveViewForRange(context.Background(), runner, base+".."+currentHead, false)
@@ -204,6 +211,13 @@ func TestResolveViewForRangePrefersExactThenNearestFirstParentReview(t *testing.
 	}
 	if !selection.Exact || selection.GroupsPath != exactPath {
 		t.Fatalf("unexpected exact selection: %+v", selection)
+	}
+	resolution, err = resolveReview(context.Background(), runner, base+".."+currentHead, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resolution.Exact || resolution.CommitsBehind != 0 {
+		t.Fatalf("unexpected exact review resolution: %+v", resolution)
 	}
 }
 
@@ -253,6 +267,20 @@ func TestViewWithoutDraftFallsBackToAncestorReviewAndShowsDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	currentHead := commit("follow-up.txt", "later\n", "follow-up")
+	refreshDraftPath := filepath.Join(t.TempDir(), "refresh-draft.json")
+	if err := runGroupingInit(context.Background(), runner, []string{base + ".." + currentHead, "--from", groupsPath, "--draft", refreshDraftPath}); err != nil {
+		t.Fatal(err)
+	}
+	refreshDraft, err := groupingdraft.Load(refreshDraftPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refreshDraft.BaseSHA != base || refreshDraft.HeadSHA != currentHead || len(refreshDraft.Groups) != 1 || len(refreshDraft.Fragments) != len(fragments) {
+		t.Fatalf("refresh draft did not carry forward the source review: %+v", refreshDraft)
+	}
+	if refreshDraft.Status().ReadyToFinalize {
+		t.Fatal("refresh draft should require grouping the follow-up commit")
+	}
 	git("update-ref", "refs/remotes/origin/main", base)
 	git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
 	git("config", "branch.feature.remote", "origin")

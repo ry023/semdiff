@@ -94,6 +94,30 @@ func New(inv model.ChangeMap, suggestions []categories.Suggestion) Draft {
 	return Draft{Version: Version, BaseSHA: inv.BaseSHA, HeadSHA: inv.HeadSHA, Changes: changes, Suggestions: fragmentSuggestions, Fragments: []model.Fragment{}, CategorySuggestions: suggestions, Groups: []DraftGroup{}}
 }
 
+// NewFromGroups creates a draft for inv that carries forward the authored
+// semantic decisions from source. The caller must verify that source belongs
+// to a compatible earlier review range. The new draft always receives a fresh
+// change map and fresh Git-derived suggestions from inv.
+func NewFromGroups(inv model.ChangeMap, suggestions []categories.Suggestion, source model.GroupsFile) Draft {
+	draft := New(inv, suggestions)
+	for _, group := range source.Groups {
+		copied := DraftGroup{
+			ID:             group.ID,
+			Title:          group.Title,
+			Summary:        group.Summary,
+			Importance:     group.Importance,
+			Order:          group.Order,
+			FileCategories: append([]model.FileCategory(nil), group.FileCategories...),
+		}
+		for _, fragment := range group.Fragments {
+			draft.Fragments = append(draft.Fragments, fragment)
+			copied.Members = append(copied.Members, fragment.ID)
+		}
+		draft.Groups = append(draft.Groups, copied)
+	}
+	return draft
+}
+
 func Load(path string) (Draft, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

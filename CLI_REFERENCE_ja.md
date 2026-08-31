@@ -44,14 +44,14 @@ semdiff classify main..HEAD
 Grouping は draft を段階的に更新する workflow です。
 
 ```sh
-semdiff grouping init [main..HEAD]
+semdiff grouping init [main..HEAD] [--from path/to/groups.json]
 semdiff grouping inspect --suggestions
 semdiff grouping apply decisions.json
 semdiff grouping status
 semdiff grouping finalize
 ```
 
-- `grouping init` は base／head commit、Git 由来の候補、path の category 提案を `.semdiff/grouping-draft.json` に保存します。既存 draft を置き換えるには `--force`、別の場所を使うには `--draft <path>` を指定します。
+- `grouping init` は base／head commit、Git 由来の候補、path の category 提案を `.semdiff/grouping-draft.json` に保存します。`--from <groups-file>` は、同一 base かつtargetのfirst-parent history上にheadがある検証済みreviewから、semanticな決定を新しいdraftへ引き継ぎます。targetのchange mapと候補は常に再計算されます。既存 draft を置き換えるには `--force`、別の場所を使うには `--draft <path>` を指定します。
 - `grouping inspect` は draft の一部を絞って表示します。`--suggestions`、`--unassigned`、`--group <id>`、`--fragment <id>` のいずれか1つを必ず指定します。
 - `grouping apply` は JSON file にある operation を atomic に適用します。標準入力から読む場合は file 名の代わりに `-` を渡します。
 - `grouping status` は assignment と description の進捗、未設定の review metadata、finalize の準備状況を表示します。
@@ -88,6 +88,13 @@ semdiff view --addr 127.0.0.1:8080
 ```
 
 groups file と `--draft` の両方を省略した `view` は、`grouping init` と同じロジックで現在の pull request range を計算します。完全一致する確定済み review を優先し、なければ現在の head の first-parent history 上にある同一 base の最も近い review を開きます。その場合、semantic grouping に未反映の commit と path を明示します。完全一致を必須にするには `semdiff view --exact` を使います。
+
+scriptやskillからViewerと同じ選択結果を使うには `reviews resolve` を使います。`found`、`groups_path`、現在と選択されたSHA、完全一致かどうか、first-parent上のcommit距離を返します。
+
+```sh
+semdiff reviews resolve --json
+semdiff reviews resolve --exact --json
+```
 
 server を起動する代わりに自己完結型の読み取り専用 file を作るには `--html` を使います。質問への回答は、明示的に含めない限り出力されません。
 

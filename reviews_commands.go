@@ -67,8 +67,14 @@ func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error
 }
 
 func runReviews(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "view" {
-		return errors.New("reviews requires the subcommand view")
+	if len(args) == 0 {
+		return errors.New("reviews requires the subcommand resolve or view")
+	}
+	if args[0] == "resolve" {
+		return runReviewsResolve(ctx, gitdiff.Runner{Dir: "."}, args[1:])
+	}
+	if args[0] != "view" {
+		return fmt.Errorf("unknown reviews subcommand %q", args[0])
 	}
 	fs := flag.NewFlagSet("reviews view", flag.ContinueOnError)
 	addr := fs.String("addr", "127.0.0.1:7363", "listen address")
@@ -98,6 +104,85 @@ func runReviews(ctx context.Context, args []string) error {
 	srv := &http.Server{Addr: *addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("Semantic Diff Reviews: http://%s", *addr)
 	return srv.ListenAndServe()
+}
+
+type reviewResolveOutput struct {
+	Found          bool   `json:"found"`
+	GroupsPath     string `json:"groups_path,omitempty"`
+	CurrentBaseSHA string `json:"current_base_sha"`
+	CurrentHeadSHA string `json:"current_head_sha"`
+	ReviewBaseSHA  string `json:"review_base_sha,omitempty"`
+	ReviewHeadSHA  string `json:"review_head_sha,omitempty"`
+	Exact          bool   `json:"exact"`
+	CommitsBehind  int    `json:"commits_behind"`
+}
+
+func runReviewsResolve(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	fs := flag.NewFlagSet("reviews resolve", flag.ContinueOnError)
+	jsonOut := fs.Bool("json", false, "JSON output")
+	exactOnly := fs.Bool("exact", false, "only resolve a review for the exact current range")
+	positional, err := parseInterspersed(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(positional) > 1 {
+		return errors.New("reviews resolve accepts at most one <base>..<head>")
+	}
+	rangeSpec := ""
+	if len(positional) == 1 {
+		rangeSpec = positional[0]
+	} else {
+		rangeSpec, err = runner.DefaultRange(ctx)
+		if err != nil {
+			return fmt.Errorf("infer current review range: %w", err)
+		}
+	}
+	result, err := resolveReview(ctx, runner, rangeSpec, *exactOnly)
+	if err != nil {
+		return err
+	}
+	return printReviewResolution(*jsonOut, result)
+}
+
+func resolveReview(ctx context.Context, runner gitdiff.Runner, rangeSpec string, exactOnly bool) (reviewResolveOutput, error) {
+	selection, err := resolveViewForRange(ctx, runner, rangeSpec, exactOnly)
+	if err != nil {
+		var missing noReviewError
+		if !errors.As(err, &missing) {
+			return reviewResolveOutput{}, err
+		}
+		return reviewResolveOutput{CurrentBaseSHA: missing.CurrentBaseSHA, CurrentHeadSHA: missing.CurrentHeadSHA}, nil
+	}
+	firstParent, err := runner.FirstParentCommits(ctx, selection.ReviewHeadSHA+".."+selection.CurrentHeadSHA)
+	if err != nil {
+		return reviewResolveOutput{}, fmt.Errorf("count commits since review: %w", err)
+	}
+	return reviewResolveOutput{
+		Found:          true,
+		GroupsPath:     selection.GroupsPath,
+		CurrentBaseSHA: selection.CurrentBaseSHA,
+		CurrentHeadSHA: selection.CurrentHeadSHA,
+		ReviewBaseSHA:  selection.CurrentBaseSHA,
+		ReviewHeadSHA:  selection.ReviewHeadSHA,
+		Exact:          selection.Exact,
+		CommitsBehind:  len(firstParent),
+	}, nil
+}
+
+func printReviewResolution(jsonOut bool, result reviewResolveOutput) error {
+	if jsonOut {
+		return printJSON(result)
+	}
+	if !result.Found {
+		fmt.Printf("no compatible finalized review for %s..%s\n", result.CurrentBaseSHA, result.CurrentHeadSHA)
+		return nil
+	}
+	state := "ancestor"
+	if result.Exact {
+		state = "exact"
+	}
+	fmt.Printf("%s review: %s (%s..%s; %d first-parent commits behind)\n", state, result.GroupsPath, result.ReviewBaseSHA, result.ReviewHeadSHA, result.CommitsBehind)
+	return nil
 }
 
 func reviewIndexHandler(ctx context.Context, runner gitdiff.Runner, store reviews.Store) http.Handler {

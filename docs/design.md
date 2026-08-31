@@ -124,6 +124,7 @@ commits <base>..<head>             inspect history
 fragments <base>..<head>           inspect Git-derived navigation suggestions
 classify <base>..<head>            inspect path-based category suggestions
 grouping init <base>..<head>       create a resumable draft
+grouping init --from <groups-file> seed a current-range draft from a compatible review
 grouping inspect --suggestions     inspect Git-derived navigation candidates
 grouping inspect/status            inspect authored draft work
 grouping apply <operations>        edit definitions and decisions atomically
@@ -132,6 +133,7 @@ show --draft <path> <fragment-id>  materialize an editable draft fragment
 show [groups-file] <fragment-id>   materialize a finalized fragment
 validate [groups-file]             recompute and validate coverage
 view [groups-file]                 render the exact current review or nearest same-base first-parent review
+reviews resolve [range]             report the exact or nearest compatible local review
 ```
 
 `show` always names its groups file or draft, so it does not depend on mutable “latest inventory” state.

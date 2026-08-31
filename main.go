@@ -41,7 +41,7 @@ func usage() {
 	semdiff show [<groups-file>] <fragment-id> [--json]
 	semdiff show --draft <path> <fragment-id> [--json]
 	semdiff validate [<groups-file>] [--draft <path>] [--json]
-	semdiff grouping init [<base>..<head>] [--draft <path>] [--json]
+	semdiff grouping init [<base>..<head>] [--from <groups-file>] [--draft <path>] [--json]
 	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
 	semdiff grouping status [--draft <path>] [--json]
 	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
@@ -52,6 +52,7 @@ func usage() {
 	semdiff view [<groups-file>] [--draft <path>] [--exact] [--addr 127.0.0.1:7363]
 	semdiff view [<groups-file>] [--draft <path>] [--exact] --html <path> [--include-answers]
 	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
+	semdiff reviews resolve [<base>..<head>] [--exact] [--json]
 	semdiff reviews view [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
 
@@ -433,10 +434,19 @@ func resolveCurrentView(ctx context.Context, r gitdiff.Runner, exactOnly bool) (
 }
 
 func resolveViewForRange(ctx context.Context, r gitdiff.Runner, rangeSpec string, exactOnly bool) (viewSelection, error) {
-	baseSHA, headSHA, err := gitdiff.ParseRange(rangeSpec)
+	base, head, err := gitdiff.ParseRange(rangeSpec)
 	if err != nil {
 		return viewSelection{}, err
 	}
+	baseSHA, err := r.Resolve(ctx, base)
+	if err != nil {
+		return viewSelection{}, err
+	}
+	headSHA, err := r.Resolve(ctx, head)
+	if err != nil {
+		return viewSelection{}, err
+	}
+	rangeSpec = baseSHA + ".." + headSHA
 	exactPath := localReviewPath(r.Dir, baseSHA, headSHA)
 	if found, err := reviewFileExists(exactPath); err != nil {
 		return viewSelection{}, err
@@ -444,7 +454,7 @@ func resolveViewForRange(ctx context.Context, r gitdiff.Runner, rangeSpec string
 		return viewSelection{GroupsPath: exactPath, CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA, ReviewHeadSHA: headSHA, Exact: true}, nil
 	}
 	if exactOnly {
-		return viewSelection{}, fmt.Errorf("no finalized review for current range %s (expected %s)", rangeSpec, exactPath)
+		return viewSelection{}, noReviewError{CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA, ExactOnly: true, ExpectedPath: exactPath}
 	}
 
 	history, err := r.FirstParentCommits(ctx, rangeSpec)
@@ -464,7 +474,21 @@ func resolveViewForRange(ctx context.Context, r gitdiff.Runner, rangeSpec string
 			return viewSelection{GroupsPath: candidatePath, CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA, ReviewHeadSHA: candidateHead}, nil
 		}
 	}
-	return viewSelection{}, fmt.Errorf("no finalized review for current range %s or an earlier first-parent state with the same base", rangeSpec)
+	return viewSelection{}, noReviewError{CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA}
+}
+
+type noReviewError struct {
+	CurrentBaseSHA string
+	CurrentHeadSHA string
+	ExpectedPath   string
+	ExactOnly      bool
+}
+
+func (e noReviewError) Error() string {
+	if e.ExactOnly {
+		return fmt.Sprintf("no finalized review for current range %s..%s (expected %s)", e.CurrentBaseSHA, e.CurrentHeadSHA, e.ExpectedPath)
+	}
+	return fmt.Sprintf("no finalized review for current range %s..%s or an earlier first-parent state with the same base", e.CurrentBaseSHA, e.CurrentHeadSHA)
 }
 
 func localReviewPath(dir, baseSHA, headSHA string) string {

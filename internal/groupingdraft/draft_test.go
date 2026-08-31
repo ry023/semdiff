@@ -33,6 +33,22 @@ func TestNewKeepsSuggestionsSeparateFromAuthoredFragments(t *testing.T) {
 	}
 }
 
+func TestNewFromGroupsCarriesSemanticDecisionsIntoFreshInventory(t *testing.T) {
+	source := model.GroupsFile{Version: 2, BaseSHA: "base", HeadSHA: "old-head", Groups: []model.SemanticGroup{{
+		ID: "logic", Title: "Logic", Summary: "Explains the existing behavior.", Importance: model.ImportanceCore,
+		FileCategories: []model.FileCategory{{Path: "src/a.ts", Category: "logic"}},
+		Fragments:      []model.Fragment{{ID: "behavior", Path: "src/a.ts", Ranges: []model.FragmentRange{{New: &model.Range{Start: 3, Lines: 2}}}, Description: "Implements the existing behavior.", ReviewLevel: model.ReviewLevelCareful}},
+	}}}
+	inv := model.ChangeMap{BaseSHA: "base", HeadSHA: "new-head", Changes: []model.DiffChange{{ID: "new", Path: "new.ts", NewStart: 1, NewLines: 1}}}
+	draft := NewFromGroups(inv, []categories.Suggestion{{Path: "new.ts", Category: "implementation"}}, source)
+	if draft.BaseSHA != "base" || draft.HeadSHA != "new-head" || len(draft.Suggestions) != 1 || len(draft.Fragments) != 1 || len(draft.Groups) != 1 {
+		t.Fatalf("unexpected refreshed draft: %+v", draft)
+	}
+	if draft.Groups[0].Members[0] != "behavior" || draft.Fragments[0].Description != "Implements the existing behavior." {
+		t.Fatalf("semantic decisions were not carried forward: %+v", draft)
+	}
+}
+
 func TestMergeSuggestionsCreatesMultiRangeFragment(t *testing.T) {
 	draft := New(model.ChangeMap{BaseSHA: "base", HeadSHA: "head", Changes: []model.DiffChange{
 		{ID: "S1", Path: "src/a.ts", OldStart: 10, OldLines: 2, NewStart: 10, NewLines: 3},

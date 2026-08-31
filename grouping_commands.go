@@ -21,6 +21,12 @@ import (
 
 const defaultGroupingDraftPath = ".semdiff/grouping-draft.json"
 
+type groupingSource struct {
+	GroupsPath string `json:"groups_path"`
+	BaseSHA    string `json:"base_sha"`
+	HeadSHA    string `json:"head_sha"`
+}
+
 func defaultGroupsPath(draftPath string) (string, error) {
 	draft, err := groupingdraft.Load(draftPath)
 	if err != nil {
@@ -70,6 +76,7 @@ func runGrouping(ctx context.Context, runner gitdiff.Runner, args []string) erro
 func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) error {
 	fs := flag.NewFlagSet("grouping init", flag.ContinueOnError)
 	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
+	fromPath := fs.String("from", "", "finalized groups file whose decisions seed this draft")
 	jsonOut := fs.Bool("json", false, "JSON output")
 	force := fs.Bool("force", false, "replace an existing draft")
 	positional, err := parseInterspersed(fs, args)
@@ -101,7 +108,24 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 	for _, fragment := range inv.Changes {
 		paths = append(paths, fragment.Path)
 	}
+	var source *model.GroupsFile
+	if *fromPath != "" {
+		groupsFile, _, report, err := loadAndValidate(ctx, runner, *fromPath)
+		if err != nil {
+			return fmt.Errorf("load source groups file: %w", err)
+		}
+		if len(report.Errors) > 0 {
+			return fmt.Errorf("source groups file is invalid: %s", strings.Join(report.Errors, "; "))
+		}
+		if err := validateGroupingSource(ctx, runner, groupsFile, inv.BaseSHA, inv.HeadSHA); err != nil {
+			return err
+		}
+		source = &groupsFile
+	}
 	draft := groupingdraft.New(inv, categories.ClassifyPaths(paths))
+	if source != nil {
+		draft = groupingdraft.NewFromGroups(inv, categories.ClassifyPaths(paths), *source)
+	}
 	if err := groupingdraft.SaveAtomic(*draftPath, draft); err != nil {
 		return err
 	}
@@ -110,11 +134,42 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 			DraftPath string               `json:"draft_path"`
 			BaseSHA   string               `json:"base_sha"`
 			HeadSHA   string               `json:"head_sha"`
+			Source    *groupingSource      `json:"source,omitempty"`
 			Status    groupingdraft.Status `json:"status"`
-		}{*draftPath, draft.BaseSHA, draft.HeadSHA, draft.Status()})
+		}{DraftPath: *draftPath, BaseSHA: draft.BaseSHA, HeadSHA: draft.HeadSHA, Source: groupingSourceSummary(*fromPath, source), Status: draft.Status()})
 	}
-	fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions))
+	if source != nil {
+		fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions; seeded from %s)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions), *fromPath)
+	} else {
+		fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions))
+	}
 	return nil
+}
+
+func groupingSourceSummary(path string, source *model.GroupsFile) *groupingSource {
+	if source == nil {
+		return nil
+	}
+	return &groupingSource{GroupsPath: path, BaseSHA: source.BaseSHA, HeadSHA: source.HeadSHA}
+}
+
+func validateGroupingSource(ctx context.Context, runner gitdiff.Runner, source model.GroupsFile, targetBaseSHA, targetHeadSHA string) error {
+	if source.BaseSHA != targetBaseSHA {
+		return fmt.Errorf("source groups file base_sha %s does not match target base_sha %s", source.BaseSHA, targetBaseSHA)
+	}
+	if source.HeadSHA == targetHeadSHA {
+		return nil
+	}
+	history, err := runner.FirstParentCommits(ctx, targetBaseSHA+".."+targetHeadSHA)
+	if err != nil {
+		return fmt.Errorf("walk target first-parent history: %w", err)
+	}
+	for _, candidateHead := range history {
+		if candidateHead == source.HeadSHA {
+			return nil
+		}
+	}
+	return fmt.Errorf("source groups file head_sha %s is not a first-parent ancestor of target head_sha %s", source.HeadSHA, targetHeadSHA)
 }
 
 func runGroupingApply(args []string) error {
