@@ -15,6 +15,10 @@ func Load(path string) (model.GroupsFile, error) {
 	if err != nil {
 		return model.GroupsFile{}, err
 	}
+	return Parse(b)
+}
+
+func Parse(b []byte) (model.GroupsFile, error) {
 	var result model.GroupsFile
 	decoder := json.NewDecoder(strings.NewReader(string(b)))
 	decoder.DisallowUnknownFields()

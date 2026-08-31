@@ -26,7 +26,33 @@ semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show groups.json F-0123456789ab --json
 semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
+semdiff publish groups.json
+semdiff reviews view --addr 127.0.0.1:8080
 ```
+
+## Sharing reviews
+
+`publish` stores only the review artifact, `groups.json`, on a Git artifact branch. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first publish creates that branch as an orphan branch.
+
+Artifacts are stored at `<base-sha>...<head-sha>/groups.json` using full SHAs. `semdiff reviews view` lists the branch and its Refresh button fetches updates.
+
+An optional repository-shared `semdiff.yaml` can specify the store:
+
+```yaml
+review_store:
+  remote: origin
+  branch: semdiff/reviews
+```
+
+For a separate artifact repository, place its URL in the Git-ignored local `.semdiff/config.local.yaml`:
+
+```yaml
+review_store:
+  repository: git@github.com:org/semdiff-reviews.git
+  branch: semdiff/reviews
+```
+
+CLI flags override local configuration, which overrides `semdiff.yaml`, which overrides the defaults. `remote` and `repository` are mutually exclusive.
 
 The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then let an AI agent run `semdiff questions wait groups.json --json`. The wait command claims one pending turn and exits, returning that thread's prior conversation in `history`; after investigating the anchored change, the agent submits its response with `semdiff questions answer groups.json <question-id> --stdin`. The viewer remains open and polls for the answer. Thread state is stored separately from `groups.json` under `.semdiff/questions/`.
 

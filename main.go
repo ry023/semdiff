@@ -45,7 +45,9 @@ func usage() {
 	semdiff grouping finalize <groups-file> [--draft <path>] [--json]
 	semdiff questions wait <groups-file> [--json]
 	semdiff questions answer <groups-file> <question-id> --stdin [--json]
-	semdiff view <groups-file> [--addr 127.0.0.1:8080]`)
+	semdiff view <groups-file> [--addr 127.0.0.1:8080]
+	semdiff publish <groups-file> [--remote origin|--repository <url>] [--branch semdiff/reviews]
+	semdiff reviews view [--addr 127.0.0.1:8080] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
 
 func run(ctx context.Context, args []string) error {
@@ -59,6 +61,10 @@ func run(ctx context.Context, args []string) error {
 		return runGrouping(ctx, r, args[1:])
 	case "questions":
 		return runQuestions(ctx, args[1:])
+	case "publish":
+		return runPublish(ctx, r, args[1:])
+	case "reviews":
+		return runReviews(ctx, args[1:])
 	case "commits":
 		fs := flag.NewFlagSet("commits", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")

@@ -28,7 +28,33 @@ semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show groups.json F-0123456789ab --json
 semdiff validate groups.json
 semdiff view groups.json --addr 127.0.0.1:8080
+semdiff publish groups.json
+semdiff reviews view --addr 127.0.0.1:8080
 ```
+
+## チームとの共有
+
+`publish` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。質問スレッドはローカルのままで、共有・アップロードされません。設定なしでは現在のリポジトリの `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の publish 時に orphan branch として作成されます。
+
+保存先は full SHA による `<base-sha>...<head-sha>/groups.json` です。`semdiff reviews view` は branch の一覧を表示し、Refresh で fetch します。
+
+任意の `semdiff.yaml` でチームの保存先を指定できます。
+
+```yaml
+review_store:
+  remote: origin
+  branch: semdiff/reviews
+```
+
+別リポジトリを使う場合は、個人用で Git 管理されない `.semdiff/config.local.yaml` に `repository` を設定できます。
+
+```yaml
+review_store:
+  repository: git@github.com:org/semdiff-reviews.git
+  branch: semdiff/reviews
+```
+
+CLI flag、ローカル設定、`semdiff.yaml`、既定値の順に優先されます。`remote` と `repository` は同時に指定できません。
 
 Viewer では意味的な Group または Fragment に質問スレッドを紐づけられます。同じスレッドへのfollow-upは過去の回答済みturnを文脈として継続し、新しいAskは独立した文脈を開始します。`semdiff view` を起動したまま、AI Agent に `semdiff questions wait groups.json --json` を実行させてください。`wait` は pending のturnを1件claimし、そのスレッドだけの過去の会話を `history` に含めて終了します。Agentは対象の変更を調査し、`semdiff questions answer groups.json <question-id> --stdin` で回答を登録します。Viewerは閉じず、pollingによって回答を表示します。スレッド状態は `groups.json` と分離して `.semdiff/questions/` に保存されます。
 

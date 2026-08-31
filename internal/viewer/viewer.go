@@ -773,22 +773,31 @@ func rangeStart(field string) int {
 }
 
 func Handler(page Page) (http.Handler, error) {
-	return handler(page, nil)
+	return handlerAt(page, nil, "/")
 }
 
 func HandlerWithQuestions(page Page, store questions.Store) (http.Handler, error) {
-	return handler(page, &store)
+	return handlerAt(page, &store, "/")
 }
 
-func handler(page Page, questionStore *questions.Store) (http.Handler, error) {
+// HandlerWithQuestionsAt serves a viewer below basePath, including its assets
+// and question API. This allows a review index to host independent artifacts.
+func HandlerWithQuestionsAt(page Page, store questions.Store, basePath string) (http.Handler, error) {
+	return handlerAt(page, &store, basePath)
+}
+
+func handlerAt(page Page, questionStore *questions.Store, basePath string) (http.Handler, error) {
+	if !strings.HasPrefix(basePath, "/") || !strings.HasSuffix(basePath, "/") {
+		return nil, fmt.Errorf("viewer base path must start and end with /")
+	}
 	index, err := assets.ReadFile("index.html")
 	if err != nil {
 		return nil, err
 	}
-	source := strings.Replace(string(index), "</head>", `<link rel="stylesheet" href="/importance.css"></head>`, 1)
-	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="/questions.css"></head>`, 1)
-	source = strings.Replace(source, "</body>", `<script src="/importance.js"></script></body>`, 1)
-	source = strings.Replace(source, "</body>", `<script src="/questions.js"></script></body>`, 1)
+	source := strings.Replace(string(index), "</head>", `<link rel="stylesheet" href="`+basePath+`importance.css"></head>`, 1)
+	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`questions.css"></head>`, 1)
+	source = strings.Replace(source, "</body>", `<script src="`+basePath+`importance.js"></script></body>`, 1)
+	source = strings.Replace(source, "</body>", `<script src="`+basePath+`questions.js"></script></body>`, 1)
 	t, err := template.New("index.html").Parse(source)
 	if err != nil {
 		return nil, err
@@ -818,7 +827,7 @@ func handler(page Page, questionStore *questions.Store) (http.Handler, error) {
 	mux.HandleFunc("/importance.js", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		content, _ := assets.ReadFile("importance.js")
-		_, _ = w.Write(content)
+		_, _ = w.Write([]byte(strings.ReplaceAll(string(content), "'/importance.json'", "'"+basePath+"importance.json'")))
 	})
 	mux.HandleFunc("/questions.css", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
@@ -828,7 +837,7 @@ func handler(page Page, questionStore *questions.Store) (http.Handler, error) {
 	mux.HandleFunc("/questions.js", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		content, _ := assets.ReadFile("questions.js")
-		_, _ = w.Write(content)
+		_, _ = w.Write([]byte(strings.ReplaceAll(string(content), "'/api/questions'", "'"+basePath+"api/questions'")))
 	})
 	mux.HandleFunc("/importance.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
