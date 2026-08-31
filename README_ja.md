@@ -29,6 +29,8 @@ semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show F-0123456789ab --json
 semdiff validate
 semdiff view --addr 127.0.0.1:7363
+semdiff view --html review.html
+semdiff view --html review.html --include-answers
 semdiff publish
 semdiff reviews view --addr 127.0.0.1:7363
 ```
@@ -60,6 +62,8 @@ review_store:
 CLI flag、ローカル設定、`semdiff.yaml`、既定値の順に優先されます。`remote` と `repository` は同時に指定できません。
 
 Viewer では意味的な Group または Fragment に質問スレッドを紐づけられます。同じスレッドへのfollow-upは過去の回答済みturnを文脈として継続し、新しいAskは独立した文脈を開始します。`semdiff view` を起動したまま、AI Agent に `answer-semdiff` スキルを開始させてください。スキルは回答セッションを開始し、pendingのturnを1件ずつclaimします。Agentは回答を登録したあと次の質問を再び待ち、Viewerの「End answer mode」でセッションを終了するとスキルも完了します。回答モード外ではAskボタンを隠し、開始方法の案内をViewer上部に表示します。スレッド状態は`.semdiff/questions/`、現在の回答セッションは`.semdiff/sessions/`に保存され、どちらも`groups.json`から分離されています。
+
+`semdiff view --html review.html` は、Viewerを自己完結型の読み取り専用HTMLとして出力します。`--include-answers` を追加すると、回答済みturnのスナップショットも含めます。静的HTMLではAsk、follow-up、回答セッションの操作は利用できません。
 
 `fragments` は、Git から取得したコンテキストなしの変更範囲を初期候補として出力します。この範囲は fragment の確定境界ではありません。`grouping init` は `.semdiff/grouping-draft.json` 内で候補と authored fragment を分離して保存するため、Git の各変更範囲がそのまま割り当て義務にはなりません。`grouping inspect --suggestions` で候補を確認し、finalize の前に `merge_fragments`、`add_fragment`、`update_fragment`、`delete_fragments` を使って意味的な fragment を構成します。
 

@@ -27,6 +27,8 @@ semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show F-0123456789ab --json
 semdiff validate
 semdiff view --addr 127.0.0.1:7363
+semdiff view --html review.html
+semdiff view --html review.html --include-answers
 semdiff publish
 semdiff reviews view --addr 127.0.0.1:7363
 ```
@@ -58,6 +60,8 @@ review_store:
 CLI flags override local configuration, which overrides `semdiff.yaml`, which overrides the defaults. `remote` and `repository` are mutually exclusive.
 
 The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then ask an AI agent to start the `answer-semdiff` skill. The skill starts an answer session, claims pending turns one at a time, answers them, and waits again. Ending answer mode in the viewer stops the session and lets the skill finish. Outside answer mode, Ask buttons are hidden and the viewer shows instructions for starting the skill. Thread state lives under `.semdiff/questions/`; the current answer session lives separately under `.semdiff/sessions/`.
+
+Use `semdiff view --html review.html` to export a self-contained, read-only viewer. Add `--include-answers` to include a snapshot of answered question turns. Static exports do not provide Ask, follow-up, or answer-session controls.
 
 `fragments` emits Git-derived zero-context ranges as initial suggestions. They are not canonical fragment boundaries. `grouping init` stores suggestions separately from authored fragments in `.semdiff/grouping-draft.json`, so each Git span does not become an assignment obligation. Inspect them with `grouping inspect --suggestions`, then use `merge_fragments`, `add_fragment`, `update_fragment`, and `delete_fragments` to compose semantic fragments before finalizing.
 

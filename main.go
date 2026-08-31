@@ -47,6 +47,7 @@ func usage() {
 	semdiff questions session start [<groups-file>] [--draft <path>] [--json]
 	semdiff questions answer [<groups-file>] <question-id> --stdin [--draft <path>] [--json]
 	semdiff view [<groups-file>] [--draft <path>] [--addr 127.0.0.1:7363]
+	semdiff view [<groups-file>] [--draft <path>] --html <path> [--include-answers]
 	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
 	semdiff reviews view [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
@@ -231,6 +232,8 @@ func run(ctx context.Context, args []string) error {
 	case "view":
 		fs := flag.NewFlagSet("view", flag.ContinueOnError)
 		addr := fs.String("addr", "127.0.0.1:7363", "listen address")
+		htmlPath := fs.String("html", "", "write a self-contained HTML file instead of serving the viewer")
+		includeAnswers := fs.Bool("include-answers", false, "include answered question threads in an HTML export")
 		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
 		positional, err := parseInterspersed(fs, args[1:])
 		if err != nil {
@@ -238,6 +241,18 @@ func run(ctx context.Context, args []string) error {
 		}
 		if len(positional) > 1 {
 			return errors.New("view accepts at most one <groups-file>")
+		}
+		if *includeAnswers && *htmlPath == "" {
+			return errors.New("view --include-answers requires --html")
+		}
+		addrSet := false
+		fs.Visit(func(item *flag.Flag) {
+			if item.Name == "addr" {
+				addrSet = true
+			}
+		})
+		if *htmlPath != "" && addrSet {
+			return errors.New("view --html and --addr cannot be used together")
 		}
 		groupsPath := ""
 		if len(positional) == 1 {
@@ -264,7 +279,26 @@ func run(ctx context.Context, args []string) error {
 		}
 		fileContents := r.FileContents(ctx, inv.BaseSHA, inv.HeadSHA, paths)
 		questionStore := questions.Store{Path: questions.DefaultPath(groupsPath, g.BaseSHA, g.HeadSHA), SessionPath: questions.DefaultSessionPath(groupsPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
-		h, err := viewer.HandlerWithQuestions(viewer.Build(g, inv, fileContents), questionStore)
+		page := viewer.Build(g, inv, fileContents)
+		if *htmlPath != "" {
+			var threads []questions.Thread
+			if *includeAnswers {
+				threads, err = questionStore.List()
+				if err != nil {
+					return fmt.Errorf("load answers: %w", err)
+				}
+			}
+			content, err := viewer.ExportHTML(page, threads)
+			if err != nil {
+				return fmt.Errorf("render HTML export: %w", err)
+			}
+			if err := os.WriteFile(*htmlPath, content, 0644); err != nil {
+				return fmt.Errorf("write HTML export: %w", err)
+			}
+			fmt.Printf("wrote %s\n", *htmlPath)
+			return nil
+		}
+		h, err := viewer.HandlerWithQuestions(page, questionStore)
 		if err != nil {
 			return err
 		}

@@ -95,6 +95,41 @@ func TestQuestionUIUsesCollapsibleThreadsAndSharedGroupActions(t *testing.T) {
 	}
 }
 
+func TestExportHTMLIsSelfContainedAndOptionallyIncludesAnsweredTurns(t *testing.T) {
+	page := Page{Groups: []GroupView{{ID: "group", Importance: model.ImportanceCore, Files: []FileView{{Fragments: []FragmentView{{MaterializedFragment: model.MaterializedFragment{ID: "fragment"}, ReviewLevel: model.ReviewLevelCareful}}}}}}}
+	threads := []questions.Thread{{
+		ID: "thread", Anchor: questions.Anchor{Type: "fragment", GroupID: "group", FragmentID: "fragment"},
+		Turns: []questions.Turn{
+			{ID: "answered", Question: "Why?", Status: questions.StatusAnswered, Answer: "Because."},
+			{ID: "pending", Question: "Anything else?", Status: questions.StatusPending},
+		},
+	}}
+
+	withoutAnswers, err := ExportHTML(page, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := string(withoutAnswers)
+	if strings.Contains(plain, "<script src=") || strings.Contains(plain, "<link rel=\"stylesheet\"") || strings.Contains(plain, "fetch('/importance.json')") {
+		t.Fatalf("export contains an external asset or data request")
+	}
+	if strings.Contains(plain, "Why?") {
+		t.Fatal("answers were included without requesting them")
+	}
+
+	withAnswers, err := ExportHTML(page, threads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	answered := string(withAnswers)
+	if !strings.Contains(answered, `"question":"Why?"`) || !strings.Contains(answered, `"answer":"Because."`) {
+		t.Fatal("answered turn is missing from export")
+	}
+	if strings.Contains(answered, "Anything else?") || strings.Contains(answered, "Ask follow-up") || strings.Contains(answered, "End answer mode") {
+		t.Fatal("export contains pending or interactive answer-mode content")
+	}
+}
+
 func TestBuildAndHandler(t *testing.T) {
 	one, two := 1, 2
 	g := model.GroupsFile{BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{ID: "later", Title: "Later", Order: &two, Fragments: []model.Fragment{{ID: "F2", Path: "b.go"}}}, {ID: "first", Title: "First", Summary: "Start here\nMore context.", Order: &one, FileCategories: []model.FileCategory{{Path: "a.go", Category: "logic"}}, Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "Explains the <safe> change."}}}}}

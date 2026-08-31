@@ -21,7 +21,7 @@ import (
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-//go:embed index.html importance.css importance.js questions.css questions.js
+//go:embed index.html importance.css importance.js questions.css questions.js answers.js
 var assets embed.FS
 
 const defaultContextLines = 5
@@ -787,6 +787,93 @@ func HandlerWithQuestionsAt(page Page, store questions.Store, basePath string) (
 	return handlerAt(page, &store, basePath)
 }
 
+// ExportHTML renders a self-contained, read-only viewer. When threads are
+// provided, only answered turns are included in the exported snapshot.
+func ExportHTML(page Page, threads []questions.Thread) ([]byte, error) {
+	index, err := assets.ReadFile("index.html")
+	if err != nil {
+		return nil, err
+	}
+	importanceCSS, err := assets.ReadFile("importance.css")
+	if err != nil {
+		return nil, err
+	}
+	importanceJS, err := assets.ReadFile("importance.js")
+	if err != nil {
+		return nil, err
+	}
+	importanceJS = []byte(strings.Replace(string(importanceJS), "var importanceData=window.semdiffImportance?Promise.resolve(window.semdiffImportance):fetch('/importance.json').then(function(response){return response.json()});", "var importanceData=Promise.resolve(window.semdiffImportance);", 1))
+	importanceJSON, err := json.Marshal(buildImportanceData(page))
+	if err != nil {
+		return nil, err
+	}
+	source := strings.Replace(string(index), "</head>", "<style>"+string(importanceCSS)+"</style></head>", 1)
+	scripts := "<script>window.semdiffImportance=" + string(importanceJSON) + ";</script><script>" + string(importanceJS) + "</script>"
+	answered := answeredThreads(threads)
+	if len(answered) > 0 {
+		questionsCSS, readErr := assets.ReadFile("questions.css")
+		if readErr != nil {
+			return nil, readErr
+		}
+		answersJS, readErr := assets.ReadFile("answers.js")
+		if readErr != nil {
+			return nil, readErr
+		}
+		answersJSON, marshalErr := json.Marshal(answered)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		source = strings.Replace(source, "</head>", "<style>"+string(questionsCSS)+"</style></head>", 1)
+		scripts += "<script>window.semdiffAnswers=" + string(answersJSON) + ";</script><script>" + string(answersJS) + "</script>"
+	}
+	source = strings.Replace(source, "</body>", scripts+"</body>", 1)
+	t, err := template.New("index.html").Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	var output bytes.Buffer
+	if err := t.Execute(&output, page); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func answeredThreads(threads []questions.Thread) []questions.Thread {
+	var result []questions.Thread
+	for _, thread := range threads {
+		copy := thread
+		copy.Turns = nil
+		for _, turn := range thread.Turns {
+			if turn.Status == questions.StatusAnswered {
+				copy.Turns = append(copy.Turns, turn)
+			}
+		}
+		if len(copy.Turns) > 0 {
+			result = append(result, copy)
+		}
+	}
+	return result
+}
+
+func buildImportanceData(page Page) struct {
+	Groups    map[string]model.Importance  `json:"groups"`
+	Fragments map[string]model.ReviewLevel `json:"fragments"`
+} {
+	data := struct {
+		Groups    map[string]model.Importance  `json:"groups"`
+		Fragments map[string]model.ReviewLevel `json:"fragments"`
+	}{Groups: map[string]model.Importance{}, Fragments: map[string]model.ReviewLevel{}}
+	for _, group := range page.Groups {
+		data.Groups[group.ID] = group.Importance
+		for _, file := range group.Files {
+			for _, fragment := range file.Fragments {
+				data.Fragments[fragment.ID] = fragment.ReviewLevel
+			}
+		}
+	}
+	return data
+}
+
 func handlerAt(page Page, questionStore *questions.Store, basePath string) (http.Handler, error) {
 	if !strings.HasPrefix(basePath, "/") || !strings.HasSuffix(basePath, "/") {
 		return nil, fmt.Errorf("viewer base path must start and end with /")
@@ -803,18 +890,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 	if err != nil {
 		return nil, err
 	}
-	importanceData := struct {
-		Groups    map[string]model.Importance  `json:"groups"`
-		Fragments map[string]model.ReviewLevel `json:"fragments"`
-	}{Groups: map[string]model.Importance{}, Fragments: map[string]model.ReviewLevel{}}
-	for _, group := range page.Groups {
-		importanceData.Groups[group.ID] = group.Importance
-		for _, file := range group.Files {
-			for _, fragment := range file.Fragments {
-				importanceData.Fragments[fragment.ID] = fragment.ReviewLevel
-			}
-		}
-	}
+	importanceData := buildImportanceData(page)
 	importanceJSON, err := json.Marshal(importanceData)
 	if err != nil {
 		return nil, err
