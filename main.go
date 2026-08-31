@@ -46,9 +46,9 @@ func usage() {
 	semdiff questions wait [<groups-file>] [--session <session-id>] [--draft <path>] [--json]
 	semdiff questions session start [<groups-file>] [--draft <path>] [--json]
 	semdiff questions answer [<groups-file>] <question-id> --stdin [--draft <path>] [--json]
-	semdiff view [<groups-file>] [--draft <path>] [--addr 127.0.0.1:8080]
+	semdiff view [<groups-file>] [--draft <path>] [--addr 127.0.0.1:7363]
 	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
-	semdiff reviews view [--addr 127.0.0.1:8080] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
+	semdiff reviews view [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
 
 func run(ctx context.Context, args []string) error {
@@ -230,7 +230,7 @@ func run(ctx context.Context, args []string) error {
 		return nil
 	case "view":
 		fs := flag.NewFlagSet("view", flag.ContinueOnError)
-		addr := fs.String("addr", "127.0.0.1:8080", "listen address")
+		addr := fs.String("addr", "127.0.0.1:7363", "listen address")
 		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
 		positional, err := parseInterspersed(fs, args[1:])
 		if err != nil {

@@ -71,7 +71,7 @@ func runReviews(ctx context.Context, args []string) error {
 		return errors.New("reviews requires the subcommand view")
 	}
 	fs := flag.NewFlagSet("reviews view", flag.ContinueOnError)
-	addr := fs.String("addr", "127.0.0.1:8080", "listen address")
+	addr := fs.String("addr", "127.0.0.1:7363", "listen address")
 	remote := fs.String("remote", "", "Git remote name")
 	repository := fs.String("repository", "", "artifact repository URL or path")
 	branch := fs.String("branch", "", "artifact branch")

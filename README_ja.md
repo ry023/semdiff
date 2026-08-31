@@ -28,9 +28,9 @@ semdiff questions answer Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
 semdiff show F-0123456789ab --json
 semdiff validate
-semdiff view --addr 127.0.0.1:8080
+semdiff view --addr 127.0.0.1:7363
 semdiff publish
-semdiff reviews view --addr 127.0.0.1:8080
+semdiff reviews view --addr 127.0.0.1:7363
 ```
 
 ## チームとの共有
