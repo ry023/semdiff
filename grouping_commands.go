@@ -76,15 +76,24 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 	if err != nil {
 		return err
 	}
-	if len(positional) != 1 {
-		return errors.New("grouping init requires <base>..<head>")
+	if len(positional) > 1 {
+		return errors.New("grouping init accepts at most one <base>..<head>")
 	}
 	if _, err := os.Stat(*draftPath); err == nil && !*force {
 		return fmt.Errorf("grouping draft already exists at %s (use --force to replace it)", *draftPath)
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("check grouping draft: %w", err)
 	}
-	inv, err := runner.Changes(ctx, positional[0])
+	rangeSpec := ""
+	if len(positional) == 1 {
+		rangeSpec = positional[0]
+	} else {
+		rangeSpec, err = runner.DefaultRange(ctx)
+		if err != nil {
+			return fmt.Errorf("infer grouping range: %w", err)
+		}
+	}
+	inv, err := runner.Changes(ctx, rangeSpec)
 	if err != nil {
 		return err
 	}
@@ -99,10 +108,12 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 	if *jsonOut {
 		return printJSON(struct {
 			DraftPath string               `json:"draft_path"`
+			BaseSHA   string               `json:"base_sha"`
+			HeadSHA   string               `json:"head_sha"`
 			Status    groupingdraft.Status `json:"status"`
-		}{*draftPath, draft.Status()})
+		}{*draftPath, draft.BaseSHA, draft.HeadSHA, draft.Status()})
 	}
-	fmt.Printf("initialized grouping draft: %s (%d suggestions)\n", *draftPath, len(draft.Suggestions))
+	fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions))
 	return nil
 }
 

@@ -16,7 +16,7 @@ go install .
 semdiff commits main..HEAD --json
 semdiff fragments main..HEAD --json
 semdiff classify main..HEAD --json
-semdiff grouping init main..HEAD --json
+semdiff grouping init --json
 semdiff grouping inspect --suggestions --json
 semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
@@ -35,7 +35,7 @@ semdiff reviews view --addr 127.0.0.1:8080
 
 ## チームとの共有
 
-`grouping finalize` は出力引数を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も引き続き利用できます。確定済み groups file を使う `show`、`validate`、`questions`、`view`、`publish` は、省略時に現在の grouping draft からこのファイルを特定します。
+`grouping init` は range を省略すると、`gh` で現在の PR を特定できる場合はそのベースブランチを、できない場合は Git remote のデフォルトブランチを使います。ベースブランチと `HEAD` の merge-base から比較し、`<base>..<head>` を渡せば明示的に上書きできます。`grouping finalize` は出力引数を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も引き続き利用できます。確定済み groups file を使う `show`、`validate`、`questions`、`view`、`publish` は、省略時に現在の grouping draft からこのファイルを特定します。
 
 `publish` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。質問スレッドはローカルのままで、共有・アップロードされません。設定なしでは現在のリポジトリの `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の publish 時に orphan branch として作成されます。
 

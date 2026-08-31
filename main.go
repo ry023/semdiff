@@ -38,7 +38,7 @@ func usage() {
 	semdiff show [<groups-file>] <fragment-id> [--json]
 	semdiff show --draft <path> <fragment-id> [--json]
 	semdiff validate [<groups-file>] [--draft <path>] [--json]
-	semdiff grouping init <base>..<head> [--draft <path>] [--json]
+	semdiff grouping init [<base>..<head>] [--draft <path>] [--json]
 	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
 	semdiff grouping status [--draft <path>] [--json]
 	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]

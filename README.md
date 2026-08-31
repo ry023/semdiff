@@ -14,7 +14,7 @@ go install .
 semdiff commits main..HEAD --json
 semdiff fragments main..HEAD --json
 semdiff classify main..HEAD --json
-semdiff grouping init main..HEAD --json
+semdiff grouping init --json
 semdiff grouping inspect --suggestions --json
 semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
@@ -33,7 +33,7 @@ semdiff reviews view --addr 127.0.0.1:8080
 
 ## Sharing reviews
 
-With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit groups file remains supported. Commands that consume a finalized groups file—`show`, `validate`, `questions`, `view`, and `publish`—locate this file from the current grouping draft when it is omitted.
+With no range, `grouping init` uses the current pull request's base branch when `gh` can identify one, otherwise the Git remote's default branch. It compares the merge base with `HEAD`; pass `<base>..<head>` to override this. With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit groups file remains supported. Commands that consume a finalized groups file—`show`, `validate`, `questions`, `view`, and `publish`—locate this file from the current grouping draft when it is omitted.
 
 `publish` stores only the review artifact, `groups.json`, on a Git artifact branch. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first publish creates that branch as an orphan branch.
 

@@ -2,6 +2,7 @@ package gitdiff
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,83 @@ import (
 
 	"github.com/ry023/semdiff/internal/model"
 )
+
+func TestDefaultRangeUsesDefaultBranchMergeBase(t *testing.T) {
+	repo, commits := defaultRangeRepository(t)
+	installFakeGH(t, "exit 1\n")
+
+	got, err := (Runner{Dir: repo}).DefaultRange(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := commits["root"] + ".." + commits["feature"]
+	if got != want {
+		t.Fatalf("DefaultRange() = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultRangeUsesPullRequestBase(t *testing.T) {
+	repo, commits := defaultRangeRepository(t)
+	installFakeGH(t, fmt.Sprintf("printf '%%s\\n' '{\"baseRefName\":\"release\",\"baseRefOid\":\"%s\"}'\n", commits["release"]))
+
+	got, err := (Runner{Dir: repo}).DefaultRange(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := commits["release"] + ".." + commits["feature"]
+	if got != want {
+		t.Fatalf("DefaultRange() = %q, want %q", got, want)
+	}
+}
+
+func defaultRangeRepository(t *testing.T) (string, map[string]string) {
+	t.Helper()
+	repo := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		command := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	commit := func(name string) string {
+		t.Helper()
+		path := filepath.Join(repo, name+".txt")
+		if err := os.WriteFile(path, []byte(name+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		run("add", ".")
+		run("commit", "-qm", name)
+		return run("rev-parse", "HEAD")
+	}
+	run("init", "-q", "-b", "main")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	commits := map[string]string{"root": commit("root")}
+	run("switch", "-qc", "release")
+	commits["release"] = commit("release")
+	run("switch", "-qc", "feature")
+	commits["feature"] = commit("feature")
+	run("switch", "-q", "main")
+	commit("main")
+	run("update-ref", "refs/remotes/origin/main", "main")
+	run("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	run("switch", "-q", "feature")
+	run("config", "branch.feature.remote", "origin")
+	return repo, commits
+}
+
+func installFakeGH(t *testing.T, body string) {
+	t.Helper()
+	bin := t.TempDir()
+	path := filepath.Join(bin, "gh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
 
 func TestParseUnified(t *testing.T) {
 	diff := `diff --git a/a.go b/a.go

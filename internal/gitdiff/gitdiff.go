@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -17,6 +18,11 @@ import (
 )
 
 type Runner struct{ Dir string }
+
+type pullRequestRefs struct {
+	BaseRefName string `json:"baseRefName"`
+	BaseRefOID  string `json:"baseRefOid"`
+}
 
 func ParseRange(s string) (string, string, error) {
 	parts := strings.Split(s, "..")
@@ -38,6 +44,88 @@ func (r Runner) git(ctx context.Context, args ...string) ([]byte, error) {
 func (r Runner) Resolve(ctx context.Context, rev string) (string, error) {
 	b, err := r.git(ctx, "rev-parse", "--verify", rev+"^{commit}")
 	return strings.TrimSpace(string(b)), err
+}
+
+// DefaultRange returns the current pull request's changes when GitHub CLI can
+// identify one, otherwise it uses the repository's default branch. The base
+// endpoint is always the merge base so changes added only to the base branch
+// do not appear as reverse changes in the result.
+func (r Runner) DefaultRange(ctx context.Context) (string, error) {
+	headSHA, err := r.Resolve(ctx, "HEAD")
+	if err != nil {
+		return "", err
+	}
+	base, err := r.pullRequestBase(ctx)
+	if err != nil {
+		return "", err
+	}
+	if base == "" {
+		base, err = r.defaultBranch(ctx)
+		if err != nil {
+			return "", err
+		}
+	}
+	baseSHA, err := r.Resolve(ctx, base)
+	if err != nil {
+		return "", fmt.Errorf("resolve inferred base %q: %w", base, err)
+	}
+	b, err := r.git(ctx, "merge-base", baseSHA, headSHA)
+	if err != nil {
+		return "", fmt.Errorf("find merge base for %s and HEAD: %w", base, err)
+	}
+	mergeBase := strings.TrimSpace(string(b))
+	if mergeBase == "" {
+		return "", fmt.Errorf("find merge base for %s and HEAD: no common ancestor", base)
+	}
+	return mergeBase + ".." + headSHA, nil
+}
+
+func (r Runner) pullRequestBase(ctx context.Context) (string, error) {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return "", nil
+	}
+	command := exec.CommandContext(ctx, "gh", "pr", "view", "--json", "baseRefName,baseRefOid")
+	command.Dir = r.Dir
+	b, err := command.CombinedOutput()
+	if err != nil {
+		return "", nil
+	}
+	var refs pullRequestRefs
+	if err := json.Unmarshal(b, &refs); err != nil {
+		return "", fmt.Errorf("parse GitHub pull request base: %w", err)
+	}
+	if refs.BaseRefOID == "" {
+		return "", nil
+	}
+	if _, err := r.Resolve(ctx, refs.BaseRefOID); err != nil {
+		return "", fmt.Errorf("pull request base %s (%s) is not available locally; fetch the base branch or specify <base>..<head>", refs.BaseRefName, refs.BaseRefOID)
+	}
+	return refs.BaseRefOID, nil
+}
+
+func (r Runner) defaultBranch(ctx context.Context) (string, error) {
+	remote := "origin"
+	if b, err := r.git(ctx, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil {
+		branch := strings.TrimSpace(string(b))
+		if branch != "" {
+			if configured, err := r.git(ctx, "config", "--get", "branch."+branch+".remote"); err == nil {
+				candidate := strings.TrimSpace(string(configured))
+				if candidate != "" && candidate != "." {
+					remote = candidate
+				}
+			}
+		}
+	}
+	ref := "refs/remotes/" + remote + "/HEAD"
+	b, err := r.git(ctx, "symbolic-ref", "--quiet", ref)
+	if err != nil {
+		return "", fmt.Errorf("cannot determine the default branch from %s; set the remote HEAD or specify <base>..<head>", ref)
+	}
+	defaultRef := strings.TrimSpace(string(b))
+	if defaultRef == "" {
+		return "", fmt.Errorf("cannot determine the default branch from %s", ref)
+	}
+	return defaultRef, nil
 }
 
 func (r Runner) Commits(ctx context.Context, rangeSpec string) ([]model.Commit, error) {
