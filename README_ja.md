@@ -139,7 +139,9 @@ CLI はスキルが利用する決定的な layer です。完全なコマンド
 
 ## レビューを共有する
 
-range を省略した `grouping init` は、`gh` で現在の PR を特定できる場合はその base branch を、できない場合は Git remote の default branch を使います。merge-base と `HEAD` を比較し、`<base>..<head>` を渡せば明示的に上書きできます。`grouping finalize` は出力先を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も利用できます。確定済み groups file を使う `show`、`validate`、`questions`、`view`、`publish` は、省略時に現在の grouping draft からこのファイルを特定します。
+range を省略した `grouping init` は、`gh` で現在の PR を特定できる場合はその base branch を、できない場合は Git remote の default branch を使います。merge-base と `HEAD` を比較し、`<base>..<head>` を渡せば明示的に上書きできます。`grouping finalize` は出力先を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も利用できます。`show`、`validate`、`questions`、`publish` は、groups file の省略時に現在の grouping draft から確定済みファイルを特定します。
+
+groups file と `--draft` の両方を省略した `semdiff view` は、`grouping init` と同じロジックで現在の range を独立に計算します。完全一致する確定済み review があればそれを開き、なければ現在の head の first-parent history をたどって、同じ merge-base を持つ最も近い review を開きます。古い snapshot を表示する場合は HEAD より遅れていることを明示し、未レビューの commit と変更 path を別枠に表示します。古い Fragment range を現在の diff に適用することはありません。fallback を許可しない場合は `--exact`、特定の snapshot を選ぶ場合は groups file または `--draft <path>` を指定します。
 
 `publish` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。質問 thread はローカルのままで、共有・upload されません。設定なしでは現在の repository の `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の publish 時に orphan branch として作成されます。
 

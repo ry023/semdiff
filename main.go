@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -20,6 +22,7 @@ import (
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
 	"github.com/ry023/semdiff/internal/questions"
+	"github.com/ry023/semdiff/internal/reviews"
 	"github.com/ry023/semdiff/internal/viewer"
 )
 
@@ -46,8 +49,8 @@ func usage() {
 	semdiff questions wait [<groups-file>] [--session <session-id>] [--draft <path>] [--json]
 	semdiff questions session start [<groups-file>] [--draft <path>] [--json]
 	semdiff questions answer [<groups-file>] <question-id> --stdin [--draft <path>] [--json]
-	semdiff view [<groups-file>] [--draft <path>] [--addr 127.0.0.1:7363]
-	semdiff view [<groups-file>] [--draft <path>] --html <path> [--include-answers]
+	semdiff view [<groups-file>] [--draft <path>] [--exact] [--addr 127.0.0.1:7363]
+	semdiff view [<groups-file>] [--draft <path>] [--exact] --html <path> [--include-answers]
 	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
 	semdiff reviews view [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
@@ -234,7 +237,8 @@ func run(ctx context.Context, args []string) error {
 		addr := fs.String("addr", "127.0.0.1:7363", "listen address")
 		htmlPath := fs.String("html", "", "write a self-contained HTML file instead of serving the viewer")
 		includeAnswers := fs.Bool("include-answers", false, "include answered question threads in an HTML export")
-		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
+		draftPath := fs.String("draft", "", "use a grouping draft to locate the groups file instead of the current range")
+		exact := fs.Bool("exact", false, "require a finalized review for the current range")
 		positional, err := parseInterspersed(fs, args[1:])
 		if err != nil {
 			return err
@@ -246,26 +250,45 @@ func run(ctx context.Context, args []string) error {
 			return errors.New("view --include-answers requires --html")
 		}
 		addrSet := false
+		draftSet := false
 		fs.Visit(func(item *flag.Flag) {
 			if item.Name == "addr" {
 				addrSet = true
+			}
+			if item.Name == "draft" {
+				draftSet = true
 			}
 		})
 		if *htmlPath != "" && addrSet {
 			return errors.New("view --html and --addr cannot be used together")
 		}
+		if *exact && (len(positional) == 1 || draftSet) {
+			return errors.New("view --exact cannot be used with an explicit groups file or --draft")
+		}
 		groupsPath := ""
+		var selection *viewSelection
 		if len(positional) == 1 {
 			groupsPath = positional[0]
-		} else {
+		} else if draftSet {
 			groupsPath, err = defaultGroupsPath(*draftPath)
 			if err != nil {
-				return fmt.Errorf("locate default groups file from draft: %w", err)
+				return fmt.Errorf("locate groups file from draft: %w", err)
 			}
+		} else {
+			resolved, resolveErr := resolveCurrentView(ctx, r, *exact)
+			err = resolveErr
+			if err != nil {
+				return err
+			}
+			selection = &resolved
+			groupsPath = resolved.GroupsPath
 		}
 		g, inv, report, err := loadAndValidate(ctx, r, groupsPath)
 		if err != nil {
 			return err
+		}
+		if selection != nil && (g.BaseSHA != selection.CurrentBaseSHA || g.HeadSHA != selection.ReviewHeadSHA) {
+			return fmt.Errorf("review artifact path does not match its range: expected %s..%s, got %s..%s", selection.CurrentBaseSHA, selection.ReviewHeadSHA, g.BaseSHA, g.HeadSHA)
 		}
 		if len(report.Errors) > 0 {
 			return fmt.Errorf("groups file is invalid: %s", strings.Join(report.Errors, "; "))
@@ -280,6 +303,13 @@ func run(ctx context.Context, args []string) error {
 		fileContents := r.FileContents(ctx, inv.BaseSHA, inv.HeadSHA, paths)
 		questionStore := questions.Store{Path: questions.DefaultPath(groupsPath, g.BaseSHA, g.HeadSHA), SessionPath: questions.DefaultSessionPath(groupsPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 		page := viewer.Build(g, inv, fileContents)
+		if selection != nil && !selection.Exact {
+			drift, err := reviewDrift(ctx, r, selection.ReviewHeadSHA, selection.CurrentBaseSHA, selection.CurrentHeadSHA)
+			if err != nil {
+				return fmt.Errorf("inspect changes since review: %w", err)
+			}
+			page.Drift = &drift
+		}
 		if *htmlPath != "" {
 			var threads []questions.Thread
 			if *includeAnswers {
@@ -384,4 +414,95 @@ func loadAndValidate(ctx context.Context, r gitdiff.Runner, path string) (model.
 	}
 	report := groups.ValidateReport(g, changes)
 	return g, gitdiff.Materialize(changes, groups.Fragments(g)), report, nil
+}
+
+type viewSelection struct {
+	GroupsPath     string
+	CurrentBaseSHA string
+	CurrentHeadSHA string
+	ReviewHeadSHA  string
+	Exact          bool
+}
+
+func resolveCurrentView(ctx context.Context, r gitdiff.Runner, exactOnly bool) (viewSelection, error) {
+	rangeSpec, err := r.DefaultRange(ctx)
+	if err != nil {
+		return viewSelection{}, fmt.Errorf("infer current review range: %w", err)
+	}
+	return resolveViewForRange(ctx, r, rangeSpec, exactOnly)
+}
+
+func resolveViewForRange(ctx context.Context, r gitdiff.Runner, rangeSpec string, exactOnly bool) (viewSelection, error) {
+	baseSHA, headSHA, err := gitdiff.ParseRange(rangeSpec)
+	if err != nil {
+		return viewSelection{}, err
+	}
+	exactPath := localReviewPath(r.Dir, baseSHA, headSHA)
+	if found, err := reviewFileExists(exactPath); err != nil {
+		return viewSelection{}, err
+	} else if found {
+		return viewSelection{GroupsPath: exactPath, CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA, ReviewHeadSHA: headSHA, Exact: true}, nil
+	}
+	if exactOnly {
+		return viewSelection{}, fmt.Errorf("no finalized review for current range %s (expected %s)", rangeSpec, exactPath)
+	}
+
+	history, err := r.FirstParentCommits(ctx, rangeSpec)
+	if err != nil {
+		return viewSelection{}, fmt.Errorf("walk current branch history: %w", err)
+	}
+	for _, candidateHead := range history {
+		if candidateHead == headSHA {
+			continue
+		}
+		candidatePath := localReviewPath(r.Dir, baseSHA, candidateHead)
+		found, statErr := reviewFileExists(candidatePath)
+		if statErr != nil {
+			return viewSelection{}, statErr
+		}
+		if found {
+			return viewSelection{GroupsPath: candidatePath, CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA, ReviewHeadSHA: candidateHead}, nil
+		}
+	}
+	return viewSelection{}, fmt.Errorf("no finalized review for current range %s or an earlier first-parent state with the same base", rangeSpec)
+}
+
+func localReviewPath(dir, baseSHA, headSHA string) string {
+	path := reviews.LocalPath(baseSHA, headSHA)
+	if dir == "" || dir == "." {
+		return path
+	}
+	return filepath.Join(dir, path)
+}
+
+func reviewFileExists(path string) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else {
+		return false, fmt.Errorf("check review artifact %s: %w", path, err)
+	}
+}
+
+func reviewDrift(ctx context.Context, r gitdiff.Runner, reviewHead, currentBase, currentHead string) (viewer.ReviewDrift, error) {
+	rangeSpec := reviewHead + ".." + currentHead
+	commits, err := r.Commits(ctx, rangeSpec)
+	if err != nil {
+		return viewer.ReviewDrift{}, err
+	}
+	changes, err := r.Changes(ctx, rangeSpec)
+	if err != nil {
+		return viewer.ReviewDrift{}, err
+	}
+	pathSet := map[string]bool{}
+	for _, change := range changes.Changes {
+		pathSet[change.Path] = true
+	}
+	paths := make([]string, 0, len(pathSet))
+	for path := range pathSet {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return viewer.ReviewDrift{CurrentBaseSHA: currentBase, CurrentHeadSHA: currentHead, Commits: commits, Paths: paths}, nil
 }

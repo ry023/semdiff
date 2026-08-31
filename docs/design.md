@@ -131,7 +131,7 @@ grouping finalize [groups-file]    validate coverage and write groups.json under
 show --draft <path> <fragment-id>  materialize an editable draft fragment
 show [groups-file] <fragment-id>   materialize a finalized fragment
 validate [groups-file]             recompute and validate coverage
-view [groups-file]                 render semantic groups from the current draft's output by default
+view [groups-file]                 render the exact current review or nearest same-base first-parent review
 ```
 
 `show` always names its groups file or draft, so it does not depend on mutable “latest inventory” state.

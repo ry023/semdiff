@@ -87,6 +87,8 @@ semdiff view
 semdiff view --addr 127.0.0.1:8080
 ```
 
+groups file と `--draft` の両方を省略した `view` は、`grouping init` と同じロジックで現在の pull request range を計算します。完全一致する確定済み review を優先し、なければ現在の head の first-parent history 上にある同一 base の最も近い review を開きます。その場合、semantic grouping に未反映の commit と path を明示します。完全一致を必須にするには `semdiff view --exact` を使います。
+
 server を起動する代わりに自己完結型の読み取り専用 file を作るには `--html` を使います。質問への回答は、明示的に含めない限り出力されません。
 
 ```sh
@@ -94,7 +96,7 @@ semdiff view --html review.html
 semdiff view --html review.html --include-answers
 ```
 
-いずれの形式でも、明示的な `groups.json` path を指定できます。
+いずれの形式でも、明示的な `groups.json` path を指定できます。`--draft <path>` を指定すると、draft による artifact 選択を明示的に利用できます。
 
 ## レビュー質問に回答する
 

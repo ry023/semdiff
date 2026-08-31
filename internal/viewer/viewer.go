@@ -21,10 +21,17 @@ import (
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-//go:embed index.html importance.css importance.js questions.css questions.js answers.js
+//go:embed index.html importance.css importance.js questions.css questions.js answers.js review-drift.css
 var assets embed.FS
 
 const defaultContextLines = 5
+
+const reviewDriftMarkup = `{{with .Drift}}<section class="review-drift" role="status"><strong>This semantic review is {{len .Commits}} unreviewed {{if eq (len .Commits) 1}}commit{{else}}commits{{end}} behind HEAD.</strong><p>Groups cover <code>{{$.BaseSHA}}...{{$.HeadSHA}}</code>. The current range is <code>{{.CurrentBaseSHA}}...{{.CurrentHeadSHA}}</code>.</p><details><summary>Changes since this review</summary><div class="review-drift-columns"><div><h3>Commits</h3><ul>{{range .Commits}}<li><code>{{printf "%.12s" .SHA}}</code> {{.Subject}} <small>({{.FilesChanged}} files)</small></li>{{end}}</ul></div><div><h3>Files</h3><ul>{{range .Paths}}<li><code>{{.}}</code></li>{{end}}</ul></div></div></details></section>{{end}}`
+
+func addReviewDriftMarkup(source string) string {
+	const marker = `<div class="stats">{{len .Groups}} groups · {{.FileCount}} files · {{.FragmentCount}} fragments</div>`
+	return strings.Replace(source, marker, marker+reviewDriftMarkup, 1)
+}
 
 type FragmentView struct {
 	model.MaterializedFragment
@@ -70,8 +77,17 @@ type CategoryView struct {
 	Updated   int
 	Deleted   int
 }
+
+type ReviewDrift struct {
+	CurrentBaseSHA string
+	CurrentHeadSHA string
+	Commits        []model.Commit
+	Paths          []string
+}
+
 type Page struct {
 	BaseSHA, HeadSHA         string
+	Drift                    *ReviewDrift
 	Groups                   []GroupView
 	SidebarDirectories       []SidebarDirectory
 	SidebarFiles             []SidebarFile
@@ -798,6 +814,10 @@ func ExportHTML(page Page, threads []questions.Thread) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	reviewDriftCSS, err := assets.ReadFile("review-drift.css")
+	if err != nil {
+		return nil, err
+	}
 	importanceJS, err := assets.ReadFile("importance.js")
 	if err != nil {
 		return nil, err
@@ -807,7 +827,8 @@ func ExportHTML(page Page, threads []questions.Thread) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	source := strings.Replace(string(index), "</head>", "<style>"+string(importanceCSS)+"</style></head>", 1)
+	source := addReviewDriftMarkup(string(index))
+	source = strings.Replace(source, "</head>", "<style>"+string(importanceCSS)+string(reviewDriftCSS)+"</style></head>", 1)
 	scripts := "<script>window.semdiffImportance=" + string(importanceJSON) + ";</script><script>" + string(importanceJS) + "</script>"
 	answered := answeredThreads(threads)
 	if len(answered) > 0 {
@@ -882,7 +903,9 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 	if err != nil {
 		return nil, err
 	}
-	source := strings.Replace(string(index), "</head>", `<link rel="stylesheet" href="`+basePath+`importance.css"></head>`, 1)
+	source := addReviewDriftMarkup(string(index))
+	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`importance.css"></head>`, 1)
+	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`review-drift.css"></head>`, 1)
 	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`questions.css"></head>`, 1)
 	source = strings.Replace(source, "</body>", `<script src="`+basePath+`importance.js"></script></body>`, 1)
 	source = strings.Replace(source, "</body>", `<script src="`+basePath+`questions.js"></script></body>`, 1)
@@ -899,6 +922,11 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 	mux.HandleFunc("/importance.css", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		content, _ := assets.ReadFile("importance.css")
+		_, _ = w.Write(content)
+	})
+	mux.HandleFunc("/review-drift.css", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		content, _ := assets.ReadFile("review-drift.css")
 		_, _ = w.Write(content)
 	})
 	mux.HandleFunc("/importance.js", func(w http.ResponseWriter, _ *http.Request) {

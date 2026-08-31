@@ -80,6 +80,33 @@ func (r Runner) DefaultRange(ctx context.Context) (string, error) {
 	return mergeBase + ".." + headSHA, nil
 }
 
+// FirstParentCommits returns the commits in range from newest to oldest while
+// following only the head's first-parent history. This represents earlier
+// states of the current branch without considering commits from merged side
+// branches as candidate branch tips.
+func (r Runner) FirstParentCommits(ctx context.Context, rangeSpec string) ([]string, error) {
+	base, head, err := ParseRange(rangeSpec)
+	if err != nil {
+		return nil, err
+	}
+	baseSHA, err := r.Resolve(ctx, base)
+	if err != nil {
+		return nil, err
+	}
+	headSHA, err := r.Resolve(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.git(ctx, "rev-list", "--first-parent", baseSHA+".."+headSHA)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(string(b)) == "" {
+		return []string{}, nil
+	}
+	return strings.Fields(string(b)), nil
+}
+
 func (r Runner) pullRequestBase(ctx context.Context) (string, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
 		return "", nil

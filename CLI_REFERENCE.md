@@ -87,6 +87,8 @@ semdiff view
 semdiff view --addr 127.0.0.1:8080
 ```
 
+Without a groups file or `--draft`, `view` infers the current pull-request range with the same logic as `grouping init`. It prefers an exact finalized review. If none exists, it opens the nearest same-base review on the current head's first-parent history and clearly lists the commits and paths that have not been semantically grouped. Use `semdiff view --exact` to require an exact review.
+
 To create a self-contained, read-only file instead of starting a server, use `--html`. Question answers are omitted unless explicitly included:
 
 ```sh
@@ -94,7 +96,7 @@ semdiff view --html review.html
 semdiff view --html review.html --include-answers
 ```
 
-An explicit `groups.json` path may be supplied to any of these forms.
+An explicit `groups.json` path may be supplied to any of these forms. `--draft <path>` explicitly restores draft-based artifact selection.
 
 ## Answer reviewer questions
 

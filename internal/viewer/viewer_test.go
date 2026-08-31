@@ -249,6 +249,39 @@ func TestBuildAndHandler(t *testing.T) {
 	}
 }
 
+func TestHandlerShowsReviewDriftSeparatelyFromSemanticGroups(t *testing.T) {
+	page := Page{
+		BaseSHA: "review-base",
+		HeadSHA: "review-head",
+		Drift: &ReviewDrift{
+			CurrentBaseSHA: "review-base",
+			CurrentHeadSHA: "current-head",
+			Commits:        []model.Commit{{SHA: "1234567890abcdef", Subject: "follow-up", FilesChanged: 2}},
+			Paths:          []string{"a.go", "docs/readme.md"},
+		},
+	}
+	h, err := Handler(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	body := w.Body.String()
+	for _, want := range []string{
+		"This semantic review is 1 unreviewed commit behind HEAD.",
+		"review-base...review-head",
+		"review-base...current-head",
+		"1234567890ab",
+		"follow-up",
+		"docs/readme.md",
+		`href="/review-drift.css"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("viewer is missing drift content %q", want)
+		}
+	}
+}
+
 func TestFormatRangesPreservesDiscontiguousDefinition(t *testing.T) {
 	fragment := model.Fragment{FileMetadata: true, Ranges: []model.FragmentRange{
 		{Old: &model.Range{Start: 10, Lines: 2}, New: &model.Range{Start: 10, Lines: 4}},

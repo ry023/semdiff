@@ -40,6 +40,49 @@ func TestDefaultRangeUsesPullRequestBase(t *testing.T) {
 	}
 }
 
+func TestFirstParentCommitsExcludesMergedSideBranch(t *testing.T) {
+	repo := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		command := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	commit := func(name string) string {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repo, name+".txt"), []byte(name+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		git("add", ".")
+		git("commit", "-qm", name)
+		return git("rev-parse", "HEAD")
+	}
+
+	git("init", "-q", "-b", "main")
+	git("config", "user.email", "test@example.com")
+	git("config", "user.name", "Test")
+	base := commit("base")
+	first := commit("first")
+	git("switch", "-qc", "side")
+	side := commit("side")
+	git("switch", "-q", "main")
+	second := commit("second")
+	git("merge", "-qm", "merge side", "side")
+	head := git("rev-parse", "HEAD")
+
+	got, err := (Runner{Dir: repo}).FirstParentCommits(context.Background(), base+".."+head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{head, second, first}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("FirstParentCommits() = %v, want %v (side commit %s must be excluded)", got, want, side)
+	}
+}
+
 func defaultRangeRepository(t *testing.T) (string, map[string]string) {
 	t.Helper()
 	repo := t.TempDir()

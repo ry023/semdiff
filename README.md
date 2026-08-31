@@ -137,7 +137,9 @@ The CLI is the deterministic layer used by the skills. The complete command refe
 
 ## Sharing reviews
 
-With no range, `grouping init` uses the current pull request's base branch when `gh` can identify one, otherwise the Git remote's default branch. It compares the merge base with `HEAD`; pass `<base>..<head>` to override this. With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit groups file remains supported. Commands that consume a finalized groups file—`show`, `validate`, `questions`, `view`, and `publish`—locate this file from the current grouping draft when it is omitted.
+With no range, `grouping init` uses the current pull request's base branch when `gh` can identify one, otherwise the Git remote's default branch. It compares the merge base with `HEAD`; pass `<base>..<head>` to override this. With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit groups file remains supported. `show`, `validate`, `questions`, and `publish` locate the finalized file from the current grouping draft when it is omitted.
+
+With no groups file or `--draft`, `semdiff view` independently infers the current range using the same logic as `grouping init`. It opens an exact finalized review when one exists. Otherwise it walks the current head's first-parent history and opens the nearest review with the same merge-base. The viewer marks that snapshot as behind HEAD and lists the unreviewed commits and changed paths separately; it never applies old Fragment ranges to the current diff. Use `--exact` to reject this fallback, or pass a groups file or `--draft <path>` to select a specific snapshot.
 
 `publish` stores only the review artifact, `groups.json`, on a Git artifact branch. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first publish creates that branch as an orphan branch.
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"os"
 	"os/exec"
@@ -139,6 +140,151 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	}
 	if err := run(context.Background(), []string{"show", result.Groups[0].Fragments[0].ID, "--json"}); err != nil {
 		t.Fatalf("show default groups file: %v", err)
+	}
+}
+
+func TestResolveViewForRangePrefersExactThenNearestFirstParentReview(t *testing.T) {
+	repo := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		command := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	commit := func(name string) string {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repo, "file.txt"), []byte(name+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		git("add", ".")
+		git("commit", "-qm", name)
+		return git("rev-parse", "HEAD")
+	}
+	writeReview := func(base, head string) string {
+		t.Helper()
+		path := filepath.Join(repo, reviews.LocalPath(base, head))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(`{"version":2,"base_sha":"`+base+`","head_sha":"`+head+`","groups":[]}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	git("init", "-q")
+	git("config", "user.email", "test@example.com")
+	git("config", "user.name", "Test")
+	base := commit("base")
+	olderHead := commit("older")
+	reviewedHead := commit("reviewed")
+	currentHead := commit("current")
+	writeReview(base, olderHead)
+	reviewedPath := writeReview(base, reviewedHead)
+	runner := gitdiff.Runner{Dir: repo}
+
+	selection, err := resolveViewForRange(context.Background(), runner, base+".."+currentHead, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selection.Exact || selection.GroupsPath != reviewedPath || selection.CurrentBaseSHA != base || selection.CurrentHeadSHA != currentHead || selection.ReviewHeadSHA != reviewedHead {
+		t.Fatalf("unexpected ancestor selection: %+v", selection)
+	}
+	if _, err := resolveViewForRange(context.Background(), runner, base+".."+currentHead, true); err == nil || !strings.Contains(err.Error(), "no finalized review for current range") {
+		t.Fatalf("exact lookup should reject an ancestor review, got %v", err)
+	}
+
+	exactPath := writeReview(base, currentHead)
+	selection, err = resolveViewForRange(context.Background(), runner, base+".."+currentHead, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !selection.Exact || selection.GroupsPath != exactPath {
+		t.Fatalf("unexpected exact selection: %+v", selection)
+	}
+}
+
+func TestViewWithoutDraftFallsBackToAncestorReviewAndShowsDrift(t *testing.T) {
+	repo := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		command := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	commit := func(path, content, subject string) string {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repo, path), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		git("add", ".")
+		git("commit", "-qm", subject)
+		return git("rev-parse", "HEAD")
+	}
+
+	git("init", "-q", "-b", "main")
+	git("config", "user.email", "test@example.com")
+	git("config", "user.name", "Test")
+	base := commit("app.txt", "base\n", "base")
+	git("switch", "-qc", "feature")
+	reviewedHead := commit("app.txt", "reviewed\n", "reviewed")
+	runner := gitdiff.Runner{Dir: repo}
+	changes, err := runner.Changes(context.Background(), base+".."+reviewedHead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fragments := gitdiff.SuggestedFragments(changes)
+	for index := range fragments {
+		fragments[index].Description = "Explains the reviewed change."
+		fragments[index].ReviewLevel = model.ReviewLevelNormal
+	}
+	groupsFile := model.GroupsFile{Version: 2, BaseSHA: base, HeadSHA: reviewedHead, Groups: []model.SemanticGroup{{
+		ID: "reviewed", Title: "Reviewed", Summary: "The reviewed snapshot.", Importance: model.ImportanceCore,
+		FileCategories: []model.FileCategory{{Path: "app.txt", Category: "logic"}}, Fragments: fragments,
+	}}}
+	groupsPath := filepath.Join(repo, reviews.LocalPath(base, reviewedHead))
+	if err := saveJSONAtomic(groupsPath, groupsFile); err != nil {
+		t.Fatal(err)
+	}
+	currentHead := commit("follow-up.txt", "later\n", "follow-up")
+	git("update-ref", "refs/remotes/origin/main", base)
+	git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	git("config", "branch.feature.remote", "origin")
+
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte("#!/bin/sh\nexit 1\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	oldWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldWorkingDirectory)
+	htmlPath := filepath.Join(t.TempDir(), "review.html")
+	if err := run(context.Background(), []string{"view", "--html", htmlPath}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(htmlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"This semantic review is 1 unreviewed commit behind HEAD.", reviewedHead, currentHead, "follow-up", "follow-up.txt"} {
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("exported ancestor review is missing %q", want)
+		}
+	}
+	if _, err := os.Stat(defaultGroupingDraftPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("view should not require or create a grouping draft, stat error = %v", err)
 	}
 }
 
