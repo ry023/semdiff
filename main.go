@@ -35,17 +35,17 @@ func usage() {
 	semdiff commits <base>..<head> [--json]
 	semdiff fragments <base>..<head> [--json]
 	semdiff classify <base>..<head> [--json]
-	semdiff show <groups-file> <fragment-id> [--json]
+	semdiff show [<groups-file>] <fragment-id> [--json]
 	semdiff show --draft <path> <fragment-id> [--json]
-	semdiff validate <groups-file> [--json]
+	semdiff validate [<groups-file>] [--draft <path>] [--json]
 	semdiff grouping init <base>..<head> [--draft <path>] [--json]
 	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
 	semdiff grouping status [--draft <path>] [--json]
 	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
 	semdiff grouping finalize [<groups-file>] [--draft <path>] [--json]
-	semdiff questions wait <groups-file> [--json]
-	semdiff questions answer <groups-file> <question-id> --stdin [--json]
-	semdiff view <groups-file> [--addr 127.0.0.1:8080]
+	semdiff questions wait [<groups-file>] [--draft <path>] [--json]
+	semdiff questions answer [<groups-file>] <question-id> --stdin [--draft <path>] [--json]
+	semdiff view [<groups-file>] [--draft <path>] [--addr 127.0.0.1:8080]
 	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
 	semdiff reviews view [--addr 127.0.0.1:8080] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
@@ -156,28 +156,48 @@ func run(ctx context.Context, args []string) error {
 			inspectable := draft.InspectableFragments()
 			return printMaterializedFragment(gitdiff.Materialize(changes, inspectable), inspectable, positional[0], *jsonOut)
 		}
-		if len(positional) != 2 {
-			return errors.New("show requires <groups-file> <fragment-id>")
+		if len(positional) < 1 || len(positional) > 2 {
+			return errors.New("show requires [<groups-file>] <fragment-id>")
 		}
-		g, inv, report, err := loadAndValidate(ctx, r, positional[0])
+		groupsPath, fragmentID := "", ""
+		if len(positional) == 2 {
+			groupsPath, fragmentID = positional[0], positional[1]
+		} else {
+			groupsPath, err = defaultGroupsPath(defaultGroupingDraftPath)
+			if err != nil {
+				return fmt.Errorf("locate default groups file from draft: %w", err)
+			}
+			fragmentID = positional[0]
+		}
+		g, inv, report, err := loadAndValidate(ctx, r, groupsPath)
 		if err != nil {
 			return err
 		}
 		if len(report.Errors) > 0 {
 			return fmt.Errorf("groups file is invalid: %s", strings.Join(report.Errors, "; "))
 		}
-		return printMaterializedFragment(inv, groups.Fragments(g), positional[1], *jsonOut)
+		return printMaterializedFragment(inv, groups.Fragments(g), fragmentID, *jsonOut)
 	case "validate":
 		fs := flag.NewFlagSet("validate", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
+		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
 		positional, err := parseInterspersed(fs, args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) != 1 {
-			return errors.New("validate requires <groups-file>")
+		if len(positional) > 1 {
+			return errors.New("validate accepts at most one <groups-file>")
 		}
-		g, inv, report, err := loadAndValidate(ctx, r, positional[0])
+		groupsPath := ""
+		if len(positional) == 1 {
+			groupsPath = positional[0]
+		} else {
+			groupsPath, err = defaultGroupsPath(*draftPath)
+			if err != nil {
+				return fmt.Errorf("locate default groups file from draft: %w", err)
+			}
+		}
+		g, inv, report, err := loadAndValidate(ctx, r, groupsPath)
 		if err != nil {
 			return err
 		}
@@ -210,14 +230,24 @@ func run(ctx context.Context, args []string) error {
 	case "view":
 		fs := flag.NewFlagSet("view", flag.ContinueOnError)
 		addr := fs.String("addr", "127.0.0.1:8080", "listen address")
+		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
 		positional, err := parseInterspersed(fs, args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) != 1 {
-			return errors.New("view requires <groups-file>")
+		if len(positional) > 1 {
+			return errors.New("view accepts at most one <groups-file>")
 		}
-		g, inv, report, err := loadAndValidate(ctx, r, positional[0])
+		groupsPath := ""
+		if len(positional) == 1 {
+			groupsPath = positional[0]
+		} else {
+			groupsPath, err = defaultGroupsPath(*draftPath)
+			if err != nil {
+				return fmt.Errorf("locate default groups file from draft: %w", err)
+			}
+		}
+		g, inv, report, err := loadAndValidate(ctx, r, groupsPath)
 		if err != nil {
 			return err
 		}
@@ -232,7 +262,7 @@ func run(ctx context.Context, args []string) error {
 			paths = append(paths, fragment.Path)
 		}
 		fileContents := r.FileContents(ctx, inv.BaseSHA, inv.HeadSHA, paths)
-		questionStore := questions.Store{Path: questions.DefaultPath(positional[0], g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
+		questionStore := questions.Store{Path: questions.DefaultPath(groupsPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 		h, err := viewer.HandlerWithQuestions(viewer.Build(g, inv, fileContents), questionStore)
 		if err != nil {
 			return err

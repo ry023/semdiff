@@ -20,19 +20,19 @@ semdiff grouping status --json
 semdiff grouping inspect --unassigned --json
 semdiff grouping apply decisions.json --json
 semdiff grouping finalize --json
-semdiff questions wait groups.json --json
-semdiff questions answer groups.json Q-... --stdin
+semdiff questions wait --json
+semdiff questions answer Q-... --stdin
 semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
-semdiff show groups.json F-0123456789ab --json
-semdiff validate groups.json
-semdiff view groups.json --addr 127.0.0.1:8080
+semdiff show F-0123456789ab --json
+semdiff validate
+semdiff view --addr 127.0.0.1:8080
 semdiff publish
 semdiff reviews view --addr 127.0.0.1:8080
 ```
 
 ## Sharing reviews
 
-With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit output path remains supported for workflows that need one. Running `publish` without an argument locates this file from the current grouping draft.
+With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit groups file remains supported. Commands that consume a finalized groups file—`show`, `validate`, `questions`, `view`, and `publish`—locate this file from the current grouping draft when it is omitted.
 
 `publish` stores only the review artifact, `groups.json`, on a Git artifact branch. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first publish creates that branch as an orphan branch.
 
@@ -56,7 +56,7 @@ review_store:
 
 CLI flags override local configuration, which overrides `semdiff.yaml`, which overrides the defaults. `remote` and `repository` are mutually exclusive.
 
-The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then let an AI agent run `semdiff questions wait groups.json --json`. The wait command claims one pending turn and exits, returning that thread's prior conversation in `history`; after investigating the anchored change, the agent submits its response with `semdiff questions answer groups.json <question-id> --stdin`. The viewer remains open and polls for the answer. Thread state is stored separately from `groups.json` under `.semdiff/questions/`.
+The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then let an AI agent run `semdiff questions wait --json`. The wait command claims one pending turn and exits, returning that thread's prior conversation in `history`; after investigating the anchored change, the agent submits its response with `semdiff questions answer <question-id> --stdin`. The viewer remains open and polls for the answer. Thread state is stored separately from `groups.json` under `.semdiff/questions/`.
 
 `fragments` emits Git-derived zero-context ranges as initial suggestions. They are not canonical fragment boundaries. `grouping init` stores suggestions separately from authored fragments in `.semdiff/grouping-draft.json`, so each Git span does not become an assignment obligation. Inspect them with `grouping inspect --suggestions`, then use `merge_fragments`, `add_fragment`, `update_fragment`, and `delete_fragments` to compose semantic fragments before finalizing.
 

@@ -129,9 +129,9 @@ grouping inspect/status            inspect authored draft work
 grouping apply <operations>        edit definitions and decisions atomically
 grouping finalize [groups-file]    validate coverage and write groups.json under .semdiff/reviews by default
 show --draft <path> <fragment-id>  materialize an editable draft fragment
-show <groups-file> <fragment-id>   materialize a finalized fragment
-validate <groups-file>             recompute and validate coverage
-view <groups-file>                 render semantic groups
+show [groups-file] <fragment-id>   materialize a finalized fragment
+validate [groups-file]             recompute and validate coverage
+view [groups-file]                 render semantic groups from the current draft's output by default
 ```
 
 `show` always names its groups file or draft, so it does not depend on mutable “latest inventory” state.

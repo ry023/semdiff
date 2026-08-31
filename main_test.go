@@ -67,6 +67,13 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	if err := groupingdraft.SaveAtomic(draftPath, draft); err != nil {
 		t.Fatal(err)
 	}
+	resolvedGroupsPath, err := defaultGroupsPath(draftPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolvedGroupsPath != groupsPath {
+		t.Fatalf("default groups path = %q, want %q", resolvedGroupsPath, groupsPath)
+	}
 	operationsPath := filepath.Join(t.TempDir(), "operations.json")
 	core := model.ImportanceCore
 	request := groupingdraft.ApplyRequest{Operations: []groupingdraft.Operation{
@@ -110,6 +117,13 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Chdir(oldWorkingDirectory)
+	currentDraft, err := groupingdraft.Load(draftPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := groupingdraft.SaveAtomic(defaultGroupingDraftPath, currentDraft); err != nil {
+		t.Fatal(err)
+	}
 	if err := runGroupingFinalize(context.Background(), draftRunner, []string{"--draft", draftPath}); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +133,12 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	}
 	if len(result.Groups) != 1 || len(result.Groups[0].Fragments) != len(inv.Changes) || result.Groups[0].Fragments[0].Description == "" {
 		t.Fatalf("unexpected finalized groups: %+v", result)
+	}
+	if err := run(context.Background(), []string{"validate", "--json"}); err != nil {
+		t.Fatalf("validate default groups file: %v", err)
+	}
+	if err := run(context.Background(), []string{"show", result.Groups[0].Fragments[0].ID, "--json"}); err != nil {
+		t.Fatalf("show default groups file: %v", err)
 	}
 }
 

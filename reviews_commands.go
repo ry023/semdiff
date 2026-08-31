@@ -14,7 +14,6 @@ import (
 
 	"github.com/ry023/semdiff/internal/config"
 	"github.com/ry023/semdiff/internal/gitdiff"
-	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/questions"
 	"github.com/ry023/semdiff/internal/reviews"
@@ -47,11 +46,10 @@ func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error
 	if len(positional) == 1 {
 		groupsPath = positional[0]
 	} else {
-		draft, err := groupingdraft.Load(*draftPath)
+		groupsPath, err = defaultGroupsPath(*draftPath)
 		if err != nil {
 			return fmt.Errorf("locate default groups file from draft: %w", err)
 		}
-		groupsPath = reviews.LocalPath(draft.BaseSHA, draft.HeadSHA)
 	}
 	g, _, report, err := loadAndValidate(ctx, runner, groupsPath)
 	if err != nil {

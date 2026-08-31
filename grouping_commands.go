@@ -21,6 +21,14 @@ import (
 
 const defaultGroupingDraftPath = ".semdiff/grouping-draft.json"
 
+func defaultGroupsPath(draftPath string) (string, error) {
+	draft, err := groupingdraft.Load(draftPath)
+	if err != nil {
+		return "", err
+	}
+	return reviews.LocalPath(draft.BaseSHA, draft.HeadSHA), nil
+}
+
 func formatFragmentRanges(fragment model.Fragment) string {
 	if fragment.FileMetadata && len(fragment.Ranges) == 0 {
 		return "metadata"
