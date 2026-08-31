@@ -1,37 +1,139 @@
 # semdiff
 
-`semdiff` reorganizes a Git range into semantic review groups without changing Git history. A fragment is defined by file line ranges, not by Git hunk boundaries.
+> **Draft notice:** This repository is still a draft. The documentation was generated with lightweight AI assistance and may be difficult to read or contain inaccuracies.
 
-## Install
+`semdiff` turns a pull request diff into a review organized around what changed and why.
+
+## Why this?
+
+The code is finished. The pull request is open. Then the review starts:
+
+- One feature is spread across a handler, a shared helper, tests, and configuration.
+- A single diff hunk contains a behavior change, a refactor, and some formatting.
+- The commit history explains how the work happened, but not necessarily the order in which it should be reviewed.
+- Before asking whether the change is correct, the reviewer has to figure out what belongs together.
+
+`semdiff` asks an AI agent to turn that diff into a review story: group related edits, explain the purpose of each group, and present the result in a useful order. It checks that the story still accounts for every changed line and file-metadata change. Git history and the implementation remain unchanged.
+
+## Quick Start
+
+Quick Start is intentionally centered on the human workflow. Install the CLI and skills, then let the skills drive the lower-level commands described later in this README.
+
+### 1. Install the CLI and skills
+
+Clone the repository, install the CLI, and copy the two bundled skills into your agent's skills directory. For Codex:
 
 ```sh
+git clone https://github.com/ry023/semdiff.git
+cd semdiff
 go install .
+
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/semantic-grouping skills/answer-semdiff \
+  "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
-## Usage
+Restart the agent after installing the skills so it can discover them. The `semdiff` executable must also be on the agent's `PATH`.
+
+### 2. Ask an agent to organize the change
+
+Open your AI agent in the Git repository you want to review and ask:
+
+```text
+/semantic-grouping
+```
+
+The agent determines the review range, inspects the commits and changed code, creates semantic Groups and Fragments, and validates the result. The finalized review is stored locally under `.semdiff/reviews/`; it does not rewrite commits or modify Git history.
+
+To review a specific range, include it with the skill invocation:
+
+```text
+/semantic-grouping main..HEAD
+```
+
+### 3. Open the review
+
+When the agent finishes, start the interactive viewer from the same repository:
 
 ```sh
-semdiff commits main..HEAD --json
-semdiff fragments main..HEAD --json
-semdiff classify main..HEAD --json
-semdiff grouping init --json
-semdiff grouping inspect --suggestions --json
-semdiff grouping status --json
-semdiff grouping inspect --unassigned --json
-semdiff grouping apply decisions.json --json
-semdiff grouping finalize --json
-semdiff questions session start --json
-semdiff questions wait --session S-... --json
-semdiff questions answer Q-... --stdin
-semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
-semdiff show F-0123456789ab --json
-semdiff validate
-semdiff view --addr 127.0.0.1:7363
-semdiff view --html review.html
-semdiff view --html review.html --include-answers
-semdiff publish
-semdiff reviews view --addr 127.0.0.1:7363
+semdiff view
 ```
+
+Open `http://127.0.0.1:7363` to read the change in semantic order instead of commit or file order.
+
+### 4. Ask questions about the review
+
+Keep the viewer running. In another agent session, ask:
+
+```text
+/answer-semdiff
+```
+
+The agent enters answer mode and waits. You can then ask questions on a Group or Fragment in the viewer, ask follow-up questions in the same thread, and inspect the answers alongside the change. Select **End answer mode** in the viewer when you are done.
+
+## Concepts
+
+### What semdiff does
+
+`semdiff` adds a semantic review layer on top of a fixed Git `base..head` range. Git provides the facts—the commits, changed lines, and file metadata—while the review layer reorganizes those facts around the concerns a reviewer needs to understand:
+
+```text
+Git range → change map → semantic Fragments → ordered Groups → review viewer
+```
+
+The tool expects an AI agent to use evidence from the commit history and code to:
+
+- identify the smallest independently reviewable changes;
+- combine related changes, including changes in different files, into semantic Groups;
+- describe what each change does and why when the evidence supports it;
+- set review order, file categories, Group importance, and Fragment review level; and
+- produce a coverage-complete review in which every changed line and file-metadata change is selected exactly once.
+
+The agent supplies semantic judgment. The CLI supplies deterministic facts, persists resumable draft state, and validates coverage. `semdiff` does not rewrite commits, edit the implementation, or treat Git hunk boundaries as the final review structure. The result is a derived `groups.json` review artifact; Git history remains unchanged and is still the source for change facts.
+
+### Fragment
+
+A Fragment is the smallest change that a reviewer can understand and describe independently. It is defined by one file path and one or more old/new line ranges (or ownership of file metadata such as a rename or binary change).
+
+Fragments are semantic units, not Git hunks:
+
+- One Git hunk may contain several Fragments when it mixes independently reviewable responsibilities.
+- Several separated ranges may form one Fragment when they implement one responsibility.
+- A new file may contain multiple Fragments; a file boundary does not imply a Fragment boundary.
+- Imports, delimiters, punctuation, and other structural lines belong to the Fragment that needs them. They should not become standalone Fragments when they have no independent review meaning.
+
+Unchanged lines inside a range provide context, but only added lines, deleted lines, and file metadata changes count toward coverage. Every authored Fragment belongs to exactly one Group in the finalized review.
+
+### Group
+
+A Group collects Fragments that together explain one review concern, even when they span multiple files. A Group has a title, a narrative summary, an order in which it should be reviewed, and an `importance` relative to the pull request:
+
+- `core` is why the pull request exists;
+- `supporting` completes, adapts, explains, or verifies the core change; and
+- `side` is a separately meaningful change bundled into the same pull request.
+
+## Using semdiff with an AI agent
+
+The two bundled skills serve different stages of a review:
+
+- `semantic-grouping` creates or updates a coverage-complete semantic review. Use it after implementing a change, or whenever the current branch needs to be reorganized for review.
+- `answer-semdiff` answers questions attached to Groups and Fragments in the interactive viewer. It keeps waiting until you end answer mode; it does not edit the code or review artifact.
+
+You can give the agent additional review intent in ordinary language. For example:
+
+> Group `main..HEAD` with special attention to the public API and migration path.
+
+> Revisit the semantic grouping after my latest changes and update the review.
+
+> Answer the pending semdiff questions using the implementation and commit history as evidence.
+
+The agent should invoke the skills rather than requiring you to choose fragment ranges, write operation JSON, or coordinate question sessions yourself. Those CLI interfaces remain available for automation, debugging, and integrations.
+
+## CLI Reference
+
+The CLI is the deterministic layer used by the skills. The complete command reference is maintained separately:
+
+[Read the CLI Reference →](CLI_REFERENCE.md)
 
 ## Sharing reviews
 
@@ -114,37 +216,3 @@ Line numbers are one-based and `lines` must be positive. Omit `old` for a pure a
 Every Group has an `importance` of `core`, `supporting`, or `side`, describing its place in the PR as a whole. `core` is why the PR exists, `supporting` completes the core change, and `side` is a separately meaningful change bundled into the same PR. Every authored Fragment has a `review_level` of `careful`, `normal`, or `skim`, telling the reviewer how closely to read that local change. Omitted Fragment review levels default to `normal` while drafting and are written explicitly to the final file.
 
 Validation compares the ranges with the current `base_sha..head_sha` diff. Every added line, deleted line, and file metadata change must be selected exactly once. Unchanged lines may fall inside a range and do not affect coverage.
-
-## Draft operations
-
-Draft operations are atomic and can be read from a file or standard input. Fragment IDs are local handles inside the draft and final file; ranges remain the fragment identity and source of truth.
-
-```json
-{
-  "operations": [
-    {
-      "op": "merge_fragments",
-      "members": ["F-candidate-1", "F-candidate-2"],
-      "fragment": {
-        "id": "domain-contract",
-        "description": "Defines the domain contract and connects its validation.",
-        "review_level": "careful"
-      }
-    },
-    {
-      "op": "upsert_group",
-      "group_id": "domain-change",
-      "title": "Introduce domain change",
-      "summary": "Introduces the shared domain boundary.",
-      "importance": "core",
-      "order": 1
-    },
-    {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
-    {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
-  ]
-}
-```
-
-`merge_fragments` derives one multi-range fragment from one or more same-path suggestions or authored fragments. Available explicit definition operations are `add_fragment`, `update_fragment`, and `delete_fragments`. Group membership operations are `assign_fragments`, `move_fragments`, and `unassign_fragments`.
-
-A fragment should be independently understandable, not merely contiguous. Do not create standalone fragments for closing delimiters, punctuation-only edits, dangling structural counterparts, or imports that only support a neighboring change. Attach those ranges to the fragment that owns the complete construct or behavior.

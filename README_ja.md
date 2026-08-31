@@ -2,48 +2,150 @@
 
 [English](README.md) | 日本語
 
-`semdiff` は、Git の履歴を変更せずに、指定した Git range をレビュー向けの意味的なグループへ再構成します。fragment は Git の hunk 境界ではなく、ファイルの行範囲によって定義されます。
+> **Draft notice:** このリポジトリはまだドラフト段階です。ドキュメントも AI に簡単に生成させたものなので、読みにくかったり正確でない可能性があります。
 
-## インストール
+`semdiff` は、pull request の diff を「何が、なぜ変わったのか」を中心にレビューできる形へ整理します。
+
+## Why this?
+
+コードは完成し、pull request も開きました。そこからレビューが始まります。
+
+- 1つの機能が handler、共通 helper、テスト、設定ファイルに分散している。
+- 1つの diff hunk に、振る舞いの変更、リファクタリング、フォーマット変更が混在している。
+- commit の履歴は作業の順番を示していても、レビューすべき順番を示しているとは限らない。
+- 変更が正しいか考える前に、どの変更が一緒に属するのかを読み手が整理しなければならない。
+
+`semdiff` は、AI Agent に diff をレビューのストーリーへ変換させます。関連する変更をまとめ、各グループの目的を説明し、レビューしやすい順番で表示します。すべての変更行とファイル metadata がレビューに含まれていることも検証します。Git の履歴と実装コードは変更しません。
+
+## Quick Start
+
+Quick Start は人間のレビュー workflow を中心にしています。CLI とスキルをインストールしたら、後述する低レベルのコマンドはスキルに実行させます。
+
+### 1. CLI とスキルをインストールする
+
+リポジトリを clone し、CLI をインストールして、同梱されている2つのスキルを Agent の skills directory にコピーします。Codex の場合は次の通りです。
 
 ```sh
+git clone https://github.com/ry023/semdiff.git
+cd semdiff
 go install .
+
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/semantic-grouping skills/answer-semdiff \
+  "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
-## 使い方
+インストール後に Agent を再起動すると、スキルが認識されます。`semdiff` 実行ファイルも Agent の `PATH` に含まれている必要があります。
+
+### 2. Agent に変更を整理させる
+
+レビュー対象の Git repository で AI Agent を開き、次を実行します。
+
+```text
+/semantic-grouping
+```
+
+Agent はレビュー範囲を決め、commit と変更コードを調べ、semantic Group と Fragment を作り、結果を検証します。確定したレビューは `.semdiff/reviews/` 以下にローカル保存されます。commit や Git の履歴は書き換えません。
+
+特定の range をレビューする場合は、スキル呼び出しに追加します。
+
+```text
+/semantic-grouping main..HEAD
+```
+
+### 3. レビューを開く
+
+Agent が完了したら、同じ repository で interactive viewer を起動します。
 
 ```sh
-semdiff commits main..HEAD --json
-semdiff fragments main..HEAD --json
-semdiff classify main..HEAD --json
-semdiff grouping init --json
-semdiff grouping inspect --suggestions --json
-semdiff grouping status --json
-semdiff grouping inspect --unassigned --json
-semdiff grouping apply decisions.json --json
-semdiff grouping finalize --json
-semdiff questions session start --json
-semdiff questions wait --session S-... --json
-semdiff questions answer Q-... --stdin
-semdiff show --draft .semdiff/grouping-draft.json F-0123456789ab --json
-semdiff show F-0123456789ab --json
-semdiff validate
-semdiff view --addr 127.0.0.1:7363
-semdiff view --html review.html
-semdiff view --html review.html --include-answers
-semdiff publish
-semdiff reviews view --addr 127.0.0.1:7363
+semdiff view
 ```
 
-## チームとの共有
+`http://127.0.0.1:7363` を開くと、commit 順やファイル順ではなく、semantic な順番で変更を読めます。
 
-`grouping init` は range を省略すると、`gh` で現在の PR を特定できる場合はそのベースブランチを、できない場合は Git remote のデフォルトブランチを使います。ベースブランチと `HEAD` の merge-base から比較し、`<base>..<head>` を渡せば明示的に上書きできます。`grouping finalize` は出力引数を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も引き続き利用できます。確定済み groups file を使う `show`、`validate`、`questions`、`view`、`publish` は、省略時に現在の grouping draft からこのファイルを特定します。
+### 4. レビューについて質問する
 
-`publish` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。質問スレッドはローカルのままで、共有・アップロードされません。設定なしでは現在のリポジトリの `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の publish 時に orphan branch として作成されます。
+Viewer を起動したまま、別の Agent session で次を実行します。
+
+```text
+/answer-semdiff
+```
+
+Agent が回答モードに入り、質問を待ちます。Viewer で Group や Fragment に質問したり、同じ thread で follow-up を続けたり、変更と回答を並べて確認できます。終わるときは Viewer の **End answer mode** を選択します。
+
+## Concepts
+
+### semdiff は何をするか
+
+`semdiff` は、選択した Git の変更範囲（`base..head`）に semantic なレビュー層を追加します。Git が提供するのは commit、変更行、ファイル metadata といった事実です。レビュー層は、その事実をレビューで理解しやすい関心ごとに並べ替えます。
+
+```text
+Git range → change map → semantic Fragment → ordered Group → review viewer
+```
+
+AI Agent には、commit 履歴とコードを根拠に、次のことを求めます。
+
+- 単独でレビューできる最小の変更を見つける。
+- 関連する変更を、ファイルをまたいで semantic Group にまとめる。
+- 各変更が何をし、なぜ必要なのかを、根拠がある範囲で説明する。
+- レビュー順、ファイル category、Group の importance、Fragment の review level を設定する。
+- 変更されたすべての行とファイル metadata が、ちょうど1つの Fragment で選択されたレビューを作る。
+
+意味の判断は Agent が行います。CLI は決定的な事実を取得し、再開可能な draft を保存し、coverage を検証します。`semdiff` は commit を書き換えず、実装を編集せず、Git の hunk 境界を最終的なレビュー構造として扱いません。結果の `groups.json` は派生したレビュー成果物であり、Git の履歴と変更事実はそのまま残ります。
+
+### Fragment
+
+Fragment は、レビュアーが単独で理解し説明できる最小の変更単位です。1つのファイルパスと、1つ以上の変更前／変更後の行範囲（または rename や binary change などの file metadata の所有権）で定義します。
+
+Fragment は Git hunk とは異なる semantic な単位です。
+
+- 1つの Git hunk に、独立してレビューできる複数の責務が混在していれば、複数の Fragment に分けます。
+- 離れた複数の範囲が1つの責務を実装しているなら、1つの Fragment にまとめます。
+- 新しいファイルでも複数の Fragment を持てます。ファイル境界は Fragment 境界ではありません。
+- import、delimiter、句読点などの構造要素は、それを必要とする Fragment に含めます。単独でレビューする意味がないものを独立した Fragment にしません。
+
+範囲内の未変更行は context として表示されますが、coverage の対象になるのは追加行、削除行、ファイル metadata の変更だけです。確定したレビューでは、すべての authored Fragment がちょうど1つの Group に属します。
+
+### Group
+
+Group は、複数ファイルにまたがっていても、1つのレビュー上の関心ごとを説明する Fragment をまとめたものです。Group には title、背景と変更を説明する summary、レビュー順、pull request 全体における `importance` があります。
+
+- `core` は pull request が存在する理由そのものです。
+- `supporting` は core の変更を完成させ、適応させ、説明し、または検証します。
+- `side` は同じ pull request に含まれる、独立した意味を持つ別の変更です。
+
+## semdiff を AI Agent と使う
+
+同梱されている2つのスキルは、レビューの異なる段階を担当します。
+
+- `semantic-grouping` は、coverage を満たす semantic review を作成または更新します。実装が終わった後や、現在の branch をレビュー向けに整理し直したいときに使います。
+- `answer-semdiff` は、interactive viewer の Group や Fragment に付けられた質問に回答します。Viewer で回答モードを終了するまで待ち続け、コードやレビュー成果物は編集しません。
+
+Agent には、通常の言葉でレビューの観点を追加できます。
+
+> `main..HEAD` を、公開 API と migration path を特に重視して Group 化してください。
+
+> 最新の変更を反映して semantic grouping を見直し、レビューを更新してください。
+
+> 実装と commit 履歴を根拠に、保留中の semdiff の質問へ回答してください。
+
+Agent が Fragment の範囲を選び、operation JSON を書き、質問 session を調整する必要はありません。そうした CLI interface は、自動化、デバッグ、integration のためにも引き続き利用できます。
+
+## CLI Reference
+
+CLI はスキルが利用する決定的な layer です。完全なコマンドリファレンスは別ファイルにあります。
+
+[CLI リファレンスを読む →](CLI_REFERENCE_ja.md)
+
+## レビューを共有する
+
+range を省略した `grouping init` は、`gh` で現在の PR を特定できる場合はその base branch を、できない場合は Git remote の default branch を使います。merge-base と `HEAD` を比較し、`<base>..<head>` を渡せば明示的に上書きできます。`grouping finalize` は出力先を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も利用できます。確定済み groups file を使う `show`、`validate`、`questions`、`view`、`publish` は、省略時に現在の grouping draft からこのファイルを特定します。
+
+`publish` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。質問 thread はローカルのままで、共有・upload されません。設定なしでは現在の repository の `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の publish 時に orphan branch として作成されます。
 
 保存先は full SHA による `<base-sha>...<head-sha>/groups.json` です。`semdiff reviews view` は branch の一覧を表示し、Refresh で fetch します。
 
-任意の `semdiff.yaml` でチームの保存先を指定できます。
+任意の repository 共通 `semdiff.yaml` で保存先を指定できます。
 
 ```yaml
 review_store:
@@ -51,7 +153,7 @@ review_store:
   branch: semdiff/reviews
 ```
 
-別リポジトリを使う場合は、個人用で Git 管理されない `.semdiff/config.local.yaml` に `repository` を設定できます。
+別 repository を使う場合は、Git 管理外の個人用 `.semdiff/config.local.yaml` に `repository` を設定できます。
 
 ```yaml
 review_store:
@@ -61,17 +163,17 @@ review_store:
 
 CLI flag、ローカル設定、`semdiff.yaml`、既定値の順に優先されます。`remote` と `repository` は同時に指定できません。
 
-Viewer では意味的な Group または Fragment に質問スレッドを紐づけられます。同じスレッドへのfollow-upは過去の回答済みturnを文脈として継続し、新しいAskは独立した文脈を開始します。`semdiff view` を起動したまま、AI Agent に `answer-semdiff` スキルを開始させてください。スキルは回答セッションを開始し、pendingのturnを1件ずつclaimします。Agentは回答を登録したあと次の質問を再び待ち、Viewerの「End answer mode」でセッションを終了するとスキルも完了します。回答モード外ではAskボタンを隠し、開始方法の案内をViewer上部に表示します。スレッド状態は`.semdiff/questions/`、現在の回答セッションは`.semdiff/sessions/`に保存され、どちらも`groups.json`から分離されています。
+Viewer では semantic Group または Fragment に質問 thread を紐づけられます。同じ thread への follow-up は回答済み turn を文脈として継続し、新しい Ask は独立した context を開始します。`semdiff view` を起動したまま、AI Agent に `answer-semdiff` skill を開始させてください。skill は回答 session を開始し、pending の turn を1件ずつ claim します。Agent は回答を登録したあと次の質問を待ち、Viewer の「End answer mode」で session を終了すると skill も完了します。回答モード外では Ask button を隠し、開始方法の案内を Viewer 上部に表示します。thread の状態は `.semdiff/questions/`、現在の回答 session は `.semdiff/sessions/` に保存され、どちらも `groups.json` から分離されています。
 
-`semdiff view --html review.html` は、Viewerを自己完結型の読み取り専用HTMLとして出力します。`--include-answers` を追加すると、回答済みturnのスナップショットも含めます。静的HTMLではAsk、follow-up、回答セッションの操作は利用できません。
+`semdiff view --html review.html` は Viewer を自己完結型の読み取り専用 HTML として出力します。`--include-answers` を追加すると、回答済み turn の snapshot も含めます。静的 HTML では Ask、follow-up、回答 session の操作は利用できません。
 
-`fragments` は、Git から取得したコンテキストなしの変更範囲を初期候補として出力します。この範囲は fragment の確定境界ではありません。`grouping init` は `.semdiff/grouping-draft.json` 内で候補と authored fragment を分離して保存するため、Git の各変更範囲がそのまま割り当て義務にはなりません。`grouping inspect --suggestions` で候補を確認し、finalize の前に `merge_fragments`、`add_fragment`、`update_fragment`、`delete_fragments` を使って意味的な fragment を構成します。
+`fragments` は Git から取得した context なしの変更範囲を初期候補として出力します。この範囲は Fragment の確定境界ではありません。`grouping init` は `.semdiff/grouping-draft.json` 内で候補と authored Fragment を分けて保存するため、Git の各変更範囲がそのまま割り当て義務にはなりません。`grouping inspect --suggestions` で候補を確認し、finalize の前に `merge_fragments`、`add_fragment`、`update_fragment`、`delete_fragments` を使って semantic Fragment を構成します。
 
-`classify` はパスから標準カテゴリ `logic`、`component`、`config`、`implementation`、`test`、`docs`、`unknown` を提案します。Markdown や reStructuredText などのドキュメント拡張子、`README` や `CHANGELOG` などの定番ファイル名、`docs/` や `guides/` などのドキュメント用ディレクトリ配下を `docs` に分類します。
+`classify` はパスから標準 category `logic`、`component`、`config`、`implementation`、`test`、`docs`、`unknown` を提案します。Markdown や reStructuredText などのドキュメント拡張子、`README` や `CHANGELOG` などの定番ファイル名、`docs/` や `guides/` などのドキュメント用 directory 配下を `docs` に分類します。
 
 この workflow では draft schema version 3、最終的な `groups.json` schema version 2 を使用します。古い draft は `grouping init --force` で作り直してください。
 
-`groups.json` が source of truth です。各 fragment はファイルパス、1つ以上の変更前・変更後の行範囲、意味的な説明を保持します。
+`groups.json` が source of truth です。各 Fragment はファイルパス、1つ以上の変更前・変更後の行範囲、semantic な説明を保持します。
 
 ```json
 {
@@ -111,44 +213,10 @@ Viewer では意味的な Group または Fragment に質問スレッドを紐�
 }
 ```
 
-行番号は1始まりで、`lines` には正の値を指定します。純粋な追加では `old` を、純粋な削除では `new` を省略します。複数の range を指定すると、離れた変更箇所を1つの意味的な fragment として選択できます。
+行番号は1始まりで、`lines` には正の値を指定します。純粋な追加では `old` を、純粋な削除では `new` を省略します。複数の range を指定すると、離れた変更箇所を1つの semantic Fragment として選択できます。rename、mode、binary、ファイル作成、ファイル削除など、行以外の変更を所有する Fragment には `file_metadata: true` を指定します。
 
-rename、mode、binary、ファイル作成、ファイル削除など、行以外の変更を所有する fragment には `file_metadata: true` を指定します。
+Group の `importance` は PR 全体における位置づけを `core`、`supporting`、`side` で表します。`core` は PR が存在する理由、`supporting` は core を完成させる変更、`side` は同じ PR に含まれた別の意味ある変更です。authored Fragment の `review_level` は、その変更をどの程度丁寧に読むべきかを `careful`、`normal`、`skim` で表します。draft で省略した場合は `normal` が設定され、最終ファイルには明示的に保存されます。
 
-Group の `importance` は PR 全体における位置づけを `core`、`supporting`、`side` で表します。`core` はPRが存在する理由、`supporting` はcoreを完成させる変更、`side` は同じPRに含まれた別の意味ある変更です。Fragment の `review_level` は、その変更をどの程度丁寧に読むべきかを `careful`、`normal`、`skim` で表します。draft で省略した場合は `normal` が設定され、最終ファイルには明示的に保存されます。
+validation は、指定された range と現在の `base_sha..head_sha` の diff を比較します。追加行、削除行、ファイル metadata の各変更は、必ずちょうど1つの Fragment に選択されなければなりません。range に未変更行が含まれていても構いません。未変更行は coverage に影響しません。
 
-validation は、指定された range と現在の `base_sha..head_sha` の diff を比較します。追加行、削除行、ファイル metadata の各変更は、必ずちょうど1つの fragment に選択されなければなりません。range に未変更行が含まれていても構いません。未変更行は coverage に影響しません。
-
-## Draft 操作
-
-Draft 操作は atomic に適用され、ファイルまたは標準入力から読み込めます。fragment ID は draft および最終ファイル内で使用するローカルな操作用ハンドルです。fragment の実体と source of truth は range です。
-
-```json
-{
-  "operations": [
-    {
-      "op": "merge_fragments",
-      "members": ["F-candidate-1", "F-candidate-2"],
-      "fragment": {
-        "id": "domain-contract",
-        "description": "Defines the domain contract and connects its validation.",
-        "review_level": "careful"
-      }
-    },
-    {
-      "op": "upsert_group",
-      "group_id": "domain-change",
-      "title": "Introduce domain change",
-      "summary": "Introduces the shared domain boundary.",
-      "importance": "core",
-      "order": 1
-    },
-    {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
-    {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
-  ]
-}
-```
-
-`merge_fragments` は、同じファイルに属する1つ以上の候補または authored fragment から、複数 range を持つ1つの fragment を生成します。明示的な定義操作には `add_fragment`、`update_fragment`、`delete_fragments` を使用できます。Group への所属操作には `assign_fragments`、`move_fragments`、`unassign_fragments` を使用できます。
-
-fragment の境界は「連続しているか」ではなく「単独で理解できるか」で決めます。閉じ括弧、句読点だけの変更、対応先なしでは意味を持たない構文要素、隣接する変更のためだけの import を単独 fragment にしないでください。完全な構文要素または振る舞いを所有する fragment に、その range を含めます。
+Draft の operation 形式と各 CLI command の詳細は [CLI リファレンス](CLI_REFERENCE_ja.md) を参照してください。
