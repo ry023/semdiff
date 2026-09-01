@@ -99,6 +99,7 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	request.Operations = append(request.Operations,
 		groupingdraft.Operation{Op: "assign_fragments", GroupID: "logic", Members: fragmentIDs},
 		groupingdraft.Operation{Op: "set_file_categories", GroupID: "logic", Categories: fileCategories},
+		groupingdraft.Operation{Op: "set_review_steps", GroupID: "logic", ReviewSteps: []model.ReviewStep{{ID: "logic", Title: "Review the logic", Summary: "Read the complete logic change before verifying its files.", FragmentIDs: fragmentIDs}}},
 	)
 	b, err := json.Marshal(request)
 	if err != nil {
@@ -258,9 +259,13 @@ func TestViewWithoutDraftFallsBackToAncestorReviewAndShowsDrift(t *testing.T) {
 		fragments[index].Description = "Explains the reviewed change."
 		fragments[index].ReviewLevel = model.ReviewLevelNormal
 	}
-	groupsFile := model.GroupsFile{Version: 2, BaseSHA: base, HeadSHA: reviewedHead, Groups: []model.SemanticGroup{{
+	fragmentIDs := make([]string, 0, len(fragments))
+	for _, fragment := range fragments {
+		fragmentIDs = append(fragmentIDs, fragment.ID)
+	}
+	groupsFile := model.GroupsFile{Version: 3, BaseSHA: base, HeadSHA: reviewedHead, Groups: []model.SemanticGroup{{
 		ID: "reviewed", Title: "Reviewed", Summary: "The reviewed snapshot.", Importance: model.ImportanceCore,
-		FileCategories: []model.FileCategory{{Path: "app.txt", Category: "logic"}}, Fragments: fragments,
+		FileCategories: []model.FileCategory{{Path: "app.txt", Category: "logic"}}, ReviewSteps: []model.ReviewStep{{ID: "reviewed", Title: "Review the snapshot", Summary: "Read the reviewed change before later follow-ups.", FragmentIDs: fragmentIDs}}, Fragments: fragments,
 	}}}
 	groupsPath := filepath.Join(repo, reviews.LocalPath(base, reviewedHead))
 	if err := saveJSONAtomic(groupsPath, groupsFile); err != nil {

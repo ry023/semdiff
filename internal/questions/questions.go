@@ -23,6 +23,7 @@ type Anchor struct {
 	Type       string `json:"type"`
 	GroupID    string `json:"group_id"`
 	FragmentID string `json:"fragment_id,omitempty"`
+	StepID     string `json:"step_id,omitempty"`
 }
 type Turn struct {
 	ID         string     `json:"id"`
@@ -244,10 +245,10 @@ func validateQuestion(anchor Anchor, body string) error {
 	if strings.TrimSpace(body) == "" {
 		return errors.New("question is required")
 	}
-	if anchor.Type != "group" && anchor.Type != "fragment" {
-		return errors.New("anchor type must be group or fragment")
+	if anchor.Type != "group" && anchor.Type != "fragment" && anchor.Type != "step" {
+		return errors.New("anchor type must be group, step, or fragment")
 	}
-	if anchor.GroupID == "" || (anchor.Type == "fragment" && anchor.FragmentID == "") {
+	if anchor.GroupID == "" || (anchor.Type == "fragment" && anchor.FragmentID == "") || (anchor.Type == "step" && anchor.StepID == "") {
 		return errors.New("anchor is incomplete")
 	}
 	return nil

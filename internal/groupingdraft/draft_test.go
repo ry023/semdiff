@@ -34,9 +34,10 @@ func TestNewKeepsSuggestionsSeparateFromAuthoredFragments(t *testing.T) {
 }
 
 func TestNewFromGroupsCarriesSemanticDecisionsIntoFreshInventory(t *testing.T) {
-	source := model.GroupsFile{Version: 2, BaseSHA: "base", HeadSHA: "old-head", Groups: []model.SemanticGroup{{
+	source := model.GroupsFile{Version: 3, BaseSHA: "base", HeadSHA: "old-head", Groups: []model.SemanticGroup{{
 		ID: "logic", Title: "Logic", Summary: "Explains the existing behavior.", Importance: model.ImportanceCore,
 		FileCategories: []model.FileCategory{{Path: "src/a.ts", Category: "logic"}},
+		ReviewSteps:    []model.ReviewStep{{ID: "behavior", Title: "Behavior", Summary: "Read the behavior.", FragmentIDs: []string{"behavior"}}},
 		Fragments:      []model.Fragment{{ID: "behavior", Path: "src/a.ts", Ranges: []model.FragmentRange{{New: &model.Range{Start: 3, Lines: 2}}}, Description: "Implements the existing behavior.", ReviewLevel: model.ReviewLevelCareful}},
 	}}}
 	inv := model.ChangeMap{BaseSHA: "base", HeadSHA: "new-head", Changes: []model.DiffChange{{ID: "new", Path: "new.ts", NewStart: 1, NewLines: 1}}}
@@ -113,6 +114,21 @@ func TestApplyEditsAndAssignsFragments(t *testing.T) {
 	}
 }
 
+func TestSetReviewStepsRejectsFragmentsOutsideItsGroup(t *testing.T) {
+	draft := fixtureDraft()
+	fragment := draft.Suggestions[0]
+	fragment.Description = "Introduces the shared logic."
+	var err error
+	draft, err = Apply(draft, ApplyRequest{Operations: []Operation{{Op: "upsert_group", GroupID: "logic", Title: stringPtr("Logic")}, {Op: "add_fragment", Fragment: &fragment}, {Op: "assign_fragments", GroupID: "logic", Members: []string{fragment.ID}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Apply(draft, ApplyRequest{Operations: []Operation{{Op: "set_review_steps", GroupID: "logic", ReviewSteps: []model.ReviewStep{{ID: "logic", Title: "Logic", Summary: "Read the logic first.", FragmentIDs: []string{"outside"}}}}}})
+	if err == nil || !strings.Contains(err.Error(), "fragment outside is not assigned to group logic") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestSplitSuggestedNewFileFragment(t *testing.T) {
 	draft := fixtureDraft()
 	first := model.Fragment{ID: "test-first", Path: "b.test.ts", Ranges: []model.FragmentRange{{New: &model.Range{Start: 1, Lines: 2}}}, Description: "Adds first tests."}
@@ -150,6 +166,7 @@ func TestFinalizeEmbedsDefinitions(t *testing.T) {
 		{Op: "upsert_group", GroupID: "all", Title: stringPtr("All"), Summary: stringPtr("Explains all changes."), Importance: &core},
 		{Op: "assign_fragments", GroupID: "all", Members: []string{"F1", "F2"}},
 		{Op: "set_file_categories", GroupID: "all", Categories: map[string]string{"src/a.ts": "logic", "b.test.ts": "test"}},
+		{Op: "set_review_steps", GroupID: "all", ReviewSteps: []model.ReviewStep{{ID: "all", Title: "Review all changes", Summary: "Read the cohesive change before checking its files.", FragmentIDs: []string{"F1", "F2"}}}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +203,7 @@ func TestLoadRejectsVersionOneDraft(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"draft_version":1,"base_sha":"base","head_sha":"head","changes":[],"fragments":[],"groups":[]}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "draft_version must be 3") {
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "draft_version must be 4") {
 		t.Fatalf("version 1 draft was accepted: %v", err)
 	}
 }

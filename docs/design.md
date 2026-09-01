@@ -10,17 +10,17 @@ Git hunks and semantic fragments are different concepts:
 
 - Git supplies a mechanical change map: added lines, deleted lines, and file metadata changes.
 - A fragment supplies semantic ownership: a path and one or more ranges selecting records from that change map.
-- A semantic group connects fragments across files into one review concern.
+- A semantic group connects fragments across files into one review concern, and its ordered review steps give the reader a dependency-aware path through them.
 
 Git zero-context hunks are stored as draft suggestions, but they never populate the authored fragment collection or determine final boundaries. A new file can be split into several fragments, and discontiguous edits in one file can be represented by one fragment.
 
 ## Data model
 
-The only supported `groups.json` schema is version 2:
+The only supported `groups.json` schema is version 3:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "base_sha": "<full SHA>",
   "head_sha": "<full SHA>",
   "groups": [
@@ -32,6 +32,9 @@ The only supported `groups.json` schema is version 2:
       "order": 1,
       "file_categories": [
         {"path": "src/commands.ts", "category": "logic"}
+      ],
+      "review_steps": [
+        {"id": "contract", "title": "Establish the contract", "summary": "Read the contract before its consumers.", "fragment_ids": ["command-contract"]}
       ],
       "fragments": [
         {
@@ -55,6 +58,8 @@ The only supported `groups.json` schema is version 2:
   ]
 }
 ```
+
+Each group has one or more ordered review steps. Every fragment in the group appears exactly once in a step's `fragment_ids`; the order is the Guided view's reading order. A step's summary explains why it comes next without encoding a separate dependency graph.
 
 ### Range semantics
 

@@ -587,6 +587,21 @@ func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
 	}
 }
 
+func TestBuildPreservesReviewStepFragmentOrderAcrossFiles(t *testing.T) {
+	group := model.GroupsFile{Groups: []model.SemanticGroup{{
+		ID: "g", Title: "Guided", ReviewSteps: []model.ReviewStep{{ID: "first", Title: "Start", Summary: "Establish the prerequisite.", FragmentIDs: []string{"F2", "F1"}}},
+		Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "First file."}, {ID: "F2", Path: "b.go", Description: "Second file."}},
+	}}}
+	page := Build(group, model.FragmentSet{Fragments: []model.MaterializedFragment{{ID: "F1", Path: "a.go", Patch: "patch"}, {ID: "F2", Path: "b.go", Patch: "patch"}}})
+	step := page.Groups[0].Steps[0]
+	if len(step.Fragments) != 2 || step.Fragments[0].ID != "F2" || step.Fragments[1].ID != "F1" {
+		t.Fatalf("guided order = %+v", step.Fragments)
+	}
+	if page.Groups[0].Files[0].Path != "a.go" || page.Groups[0].Files[1].Path != "b.go" {
+		t.Fatalf("files are no longer file ordered: %+v", page.Groups[0].Files)
+	}
+}
+
 func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
 	fragment := model.MaterializedFragment{
 		ID: "F1", Path: "a.go", NewStart: 10, NewLines: 21,

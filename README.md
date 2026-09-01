@@ -112,6 +112,8 @@ A Group collects Fragments that together explain one review concern, even when t
 - `supporting` completes, adapts, explains, or verifies the core change; and
 - `side` is a separately meaningful change bundled into the same pull request.
 
+Each Group also has ordered review steps. A step gives a reader the next question or prerequisite to understand, a short connection to the next stage, and the Fragments to inspect. The guided viewer follows these steps; the Files view keeps file and source order for verification.
+
 ## Using semdiff with an AI agent
 
 The two bundled skills serve different stages of a review:
@@ -173,13 +175,13 @@ Use `semdiff view --html review.html` to export a self-contained, read-only view
 
 `classify` suggests the standard categories `logic`, `component`, `config`, `implementation`, `test`, `docs`, and `unknown` from paths. Documentation extensions such as Markdown and reStructuredText, conventional documentation filenames such as `README` and `CHANGELOG`, and files under documentation directories such as `docs/` and `guides/` are classified as `docs`.
 
-This workflow uses draft schema version 3 and final `groups.json` schema version 2. Re-run `grouping init --force` to replace an older draft.
+This workflow uses draft schema version 4 and final `groups.json` schema version 3. Re-run `grouping init --force` to replace an older draft.
 
 `groups.json` is the source of truth. Every fragment contains its path, one or more old/new ranges, and its semantic description:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "base_sha": "<full base SHA>",
   "head_sha": "<full head SHA>",
   "groups": [
@@ -191,6 +193,9 @@ This workflow uses draft schema version 3 and final `groups.json` schema version
       "order": 1,
       "file_categories": [
         {"path": "src/domain.ts", "category": "logic"}
+      ],
+      "review_steps": [
+        {"id": "contract", "title": "Establish the contract", "summary": "Read the contract before its dependent behavior.", "fragment_ids": ["domain-contract"]}
       ],
       "fragments": [
         {

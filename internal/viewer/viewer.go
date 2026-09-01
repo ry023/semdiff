@@ -33,6 +33,20 @@ func addReviewDriftMarkup(source string) string {
 	return strings.Replace(source, marker, marker+reviewDriftMarkup, 1)
 }
 
+const guidedReviewMarkup = `<div class="review-mode-toolbar" role="group" aria-label="Review layout"><button class="review-mode-toggle" type="button" data-review-mode="guided" aria-pressed="true">Guided</button><button class="review-mode-toggle" type="button" data-review-mode="files" aria-pressed="false">Files</button></div><section class="guided-view">{{range .Groups}}{{$group := .}}<details id="guided-{{.AnchorID}}" class="group main-group guided-group" data-group-id="{{.ID}}" open><summary><h2>{{if .Order}}{{.Order}}. {{end}}{{.Title}}</h2><span class="count">{{len .Steps}} steps · {{.FragmentCount}} fragments</span><div class="summary">{{.SummaryHTML}}</div></summary>{{range .Steps}}<details id="{{.AnchorID}}" class="review-step" data-step-id="{{.ID}}" open><summary><h3>{{.Title}}</h3><div class="step-summary">{{.SummaryHTML}}</div></summary>{{range .Fragments}}<article class="guided-fragment"><header><code>{{.Path}}</code><span class="fragment-note"><span class="fragment-note-id">{{.ID}} · {{.RangeLabel}}</span>{{if .Description}}<span class="fragment-note-description">{{.Description}}</span>{{end}}</span></header><pre>{{.HeaderHTML}}{{.UpperContextHTML}}{{.HunkHTML}}{{.LowerContextHTML}}</pre></article>{{end}}</details>{{end}}</details>{{end}}</section><section class="files-view">`
+
+const guidedReviewStyle = `<style>.review-mode-toolbar{display:flex;justify-content:flex-end;margin:-16px 0 18px}.review-mode-toggle{padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}.review-mode-toggle:first-child{border-radius:6px 0 0 6px}.review-mode-toggle:last-child{border-radius:0 6px 6px 0}.review-mode-toggle[aria-pressed=true]{background:#1f4675;color:#fff;border-color:#3977b9}.files-view{display:none}.guided-view .group{margin-top:0}.review-step{border-top:1px solid var(--line);padding:14px 16px}.review-step>summary{cursor:pointer;list-style:none}.review-step>summary::-webkit-details-marker{display:none}.review-step>summary:before{content:'▶';display:inline-block;margin-right:8px;font-size:10px}.review-step[open]>summary:before{transform:rotate(90deg)}.review-step h3{display:inline;font-size:15px}.step-summary{margin:7px 0 0 19px;color:var(--muted);line-height:1.45}.step-summary p{margin:0}.guided-fragment{margin:14px 0 22px}.guided-fragment header{display:flex;flex-direction:column;gap:7px;margin-bottom:7px}.guided-fragment .fragment-note{border:1px solid var(--line);border-radius:6px;background:#151b23}.guided-fragment .fragment-note .ask-button{margin-left:8px}@media(max-width:850px){.review-mode-toolbar{margin-top:0}}</style><script>(function(){function setMode(mode){document.body.dataset.reviewMode=mode;document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.reviewMode===mode))});document.querySelector('.guided-view').style.display=mode==='guided'?'block':'none';document.querySelector('.files-view').style.display=mode==='files'?'block':'none'}document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.addEventListener('click',function(){setMode(button.dataset.reviewMode)})});setMode('guided')})();</script>`
+
+func addGuidedReviewMarkup(source string) string {
+	const groupStart = `</div>{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`
+	if !strings.Contains(source, groupStart) {
+		return source
+	}
+	source = strings.Replace(source, groupStart, `</div>`+guidedReviewMarkup+`{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`, 1)
+	source = strings.Replace(source, `</main>`, `</section></main>`, 1)
+	return strings.Replace(source, `</head>`, guidedReviewStyle+`</head>`, 1)
+}
+
 type FragmentView struct {
 	model.MaterializedFragment
 	Description      string
@@ -65,7 +79,15 @@ type GroupView struct {
 	Order              *int
 	Files              []FileView
 	Categories         []CategoryView
+	Steps              []ReviewStepView
 	FragmentCount      int
+}
+
+type ReviewStepView struct {
+	ID, Title, Summary string
+	SummaryHTML        template.HTML
+	AnchorID           string
+	Fragments          []FragmentView
 }
 type CategoryView struct {
 	Name      string
@@ -164,6 +186,18 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 				file.ReviewLevel = strongerReviewLevel(file.ReviewLevel, file.Fragments[i].ReviewLevel)
 			}
 			gv.Files = append(gv.Files, file)
+		}
+		for stepIndex, step := range group.ReviewSteps {
+			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, SummaryHTML: renderMarkdown(step.Summary), AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex)}
+			for _, id := range step.FragmentIDs {
+				fragment := byID[id]
+				view := buildFragmentView(fragment, fileContents[fragment.Path], byPath[fragment.Path])
+				view.Description = descriptions[id]
+				view.RangeLabel = rangeLabels[id]
+				view.ReviewLevel = reviewLevels[id]
+				sv.Fragments = append(sv.Fragments, view)
+			}
+			gv.Steps = append(gv.Steps, sv)
 		}
 		gv.Categories = buildCategoryViews(gv.Files, group.FileCategories)
 		p.Groups = append(p.Groups, gv)
@@ -827,7 +861,7 @@ func ExportHTML(page Page, threads []questions.Thread) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	source := addReviewDriftMarkup(string(index))
+	source := addGuidedReviewMarkup(addReviewDriftMarkup(string(index)))
 	source = strings.Replace(source, "</head>", "<style>"+string(importanceCSS)+string(reviewDriftCSS)+"</style></head>", 1)
 	scripts := "<script>window.semdiffImportance=" + string(importanceJSON) + ";</script><script>" + string(importanceJS) + "</script>"
 	answered := answeredThreads(threads)
@@ -903,7 +937,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 	if err != nil {
 		return nil, err
 	}
-	source := addReviewDriftMarkup(string(index))
+	source := addGuidedReviewMarkup(addReviewDriftMarkup(string(index)))
 	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`importance.css"></head>`, 1)
 	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`review-drift.css"></head>`, 1)
 	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`questions.css"></head>`, 1)
@@ -952,8 +986,12 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 		sessionStore := questionStore.Sessions()
 		validGroups := map[string]bool{}
 		validFragments := map[string]string{}
+		validSteps := map[string]bool{}
 		for _, group := range page.Groups {
 			validGroups[group.ID] = true
+			for _, step := range group.Steps {
+				validSteps[group.ID+"\x00"+step.ID] = true
+			}
 			for _, file := range group.Files {
 				for _, fragment := range file.Fragments {
 					validFragments[fragment.ID] = group.ID
@@ -997,6 +1035,9 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 					valid := request.Anchor.Type == "group" && validGroups[request.Anchor.GroupID]
 					if request.Anchor.Type == "fragment" {
 						valid = validFragments[request.Anchor.FragmentID] == request.Anchor.GroupID
+					}
+					if request.Anchor.Type == "step" {
+						valid = validSteps[request.Anchor.GroupID+"\x00"+request.Anchor.StepID]
 					}
 					if !valid {
 						http.Error(w, "unknown question anchor", http.StatusBadRequest)

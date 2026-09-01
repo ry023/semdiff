@@ -15,7 +15,7 @@ import (
 	"github.com/ry023/semdiff/internal/model"
 )
 
-const Version = 3
+const Version = 4
 
 type Draft struct {
 	Version             int                     `json:"draft_version"`
@@ -37,6 +37,7 @@ type DraftGroup struct {
 	Order          *int                 `json:"order,omitempty"`
 	Members        []string             `json:"members,omitempty"`
 	FileCategories []model.FileCategory `json:"file_categories,omitempty"`
+	ReviewSteps    []model.ReviewStep   `json:"review_steps,omitempty"`
 }
 
 type ApplyRequest struct {
@@ -45,16 +46,17 @@ type ApplyRequest struct {
 }
 
 type Operation struct {
-	Op         string            `json:"op"`
-	GroupID    string            `json:"group_id,omitempty"`
-	Title      *string           `json:"title,omitempty"`
-	Summary    *string           `json:"summary,omitempty"`
-	Importance *model.Importance `json:"importance,omitempty"`
-	Order      *int              `json:"order,omitempty"`
-	Fragment   *model.Fragment   `json:"fragment,omitempty"`
-	Members    []string          `json:"members,omitempty"`
-	Categories map[string]string `json:"categories,omitempty"`
-	Paths      []string          `json:"paths,omitempty"`
+	Op          string             `json:"op"`
+	GroupID     string             `json:"group_id,omitempty"`
+	Title       *string            `json:"title,omitempty"`
+	Summary     *string            `json:"summary,omitempty"`
+	Importance  *model.Importance  `json:"importance,omitempty"`
+	Order       *int               `json:"order,omitempty"`
+	Fragment    *model.Fragment    `json:"fragment,omitempty"`
+	Members     []string           `json:"members,omitempty"`
+	Categories  map[string]string  `json:"categories,omitempty"`
+	Paths       []string           `json:"paths,omitempty"`
+	ReviewSteps []model.ReviewStep `json:"review_steps,omitempty"`
 }
 
 type Status struct {
@@ -77,6 +79,8 @@ type GroupStatus struct {
 	MissingDescriptionIDs    []string `json:"missing_description_ids,omitempty"`
 	MissingReviewLevelIDs    []string `json:"missing_review_level_ids,omitempty"`
 	MissingFileCategoryPaths []string `json:"missing_file_category_paths,omitempty"`
+	MissingReviewSteps       bool     `json:"missing_review_steps,omitempty"`
+	MissingStepFragmentIDs   []string `json:"missing_step_fragment_ids,omitempty"`
 }
 
 type FragmentInspection struct {
@@ -108,6 +112,7 @@ func NewFromGroups(inv model.ChangeMap, suggestions []categories.Suggestion, sou
 			Importance:     group.Importance,
 			Order:          group.Order,
 			FileCategories: append([]model.FileCategory(nil), group.FileCategories...),
+			ReviewSteps:    append([]model.ReviewStep(nil), group.ReviewSteps...),
 		}
 		for _, fragment := range group.Fragments {
 			draft.Fragments = append(draft.Fragments, fragment)
@@ -179,9 +184,9 @@ func (d Draft) ToGroupsFile() model.GroupsFile {
 	for _, fragment := range d.Fragments {
 		byID[fragment.ID] = fragment
 	}
-	result := model.GroupsFile{Version: 2, BaseSHA: d.BaseSHA, HeadSHA: d.HeadSHA}
+	result := model.GroupsFile{Version: 3, BaseSHA: d.BaseSHA, HeadSHA: d.HeadSHA}
 	for _, group := range d.Groups {
-		semantic := model.SemanticGroup{ID: group.ID, Title: group.Title, Summary: group.Summary, Importance: group.Importance, Order: group.Order, FileCategories: append([]model.FileCategory(nil), group.FileCategories...)}
+		semantic := model.SemanticGroup{ID: group.ID, Title: group.Title, Summary: group.Summary, Importance: group.Importance, Order: group.Order, FileCategories: append([]model.FileCategory(nil), group.FileCategories...), ReviewSteps: append([]model.ReviewStep(nil), group.ReviewSteps...)}
 		for _, id := range group.Members {
 			semantic.Fragments = append(semantic.Fragments, byID[id])
 		}
@@ -213,9 +218,10 @@ func (d Draft) Status() Status {
 		}
 	}
 	for _, group := range d.Groups {
-		item := GroupStatus{ID: group.ID, FragmentCount: len(group.Members), MissingSummary: strings.TrimSpace(group.Summary) == "", MissingImportance: !group.Importance.Valid()}
+		item := GroupStatus{ID: group.ID, FragmentCount: len(group.Members), MissingSummary: strings.TrimSpace(group.Summary) == "", MissingImportance: !group.Importance.Valid(), MissingReviewSteps: len(group.ReviewSteps) == 0}
 		paths := map[string]bool{}
 		categorized := map[string]bool{}
+		stepped := map[string]bool{}
 		for _, id := range group.Members {
 			fragment := byID[id]
 			paths[fragment.Path] = true
@@ -229,6 +235,17 @@ func (d Draft) Status() Status {
 		for _, category := range group.FileCategories {
 			categorized[category.Path] = true
 		}
+		for _, step := range group.ReviewSteps {
+			for _, id := range step.FragmentIDs {
+				stepped[id] = true
+			}
+		}
+		for _, id := range group.Members {
+			if !stepped[id] {
+				item.MissingStepFragmentIDs = append(item.MissingStepFragmentIDs, id)
+			}
+		}
+		sort.Strings(item.MissingStepFragmentIDs)
 		for path := range paths {
 			if !categorized[path] {
 				item.MissingFileCategoryPaths = append(item.MissingFileCategoryPaths, path)
@@ -460,6 +477,35 @@ func (d *Draft) applyOperation(operation Operation) error {
 				group.FileCategories = append(group.FileCategories, model.FileCategory{Path: path, Category: category})
 			}
 		}
+	case "set_review_steps":
+		group, err := d.group(operation.GroupID)
+		if err != nil {
+			return err
+		}
+		members := map[string]bool{}
+		for _, id := range group.Members {
+			members[id] = true
+		}
+		seenSteps, seenFragments := map[string]bool{}, map[string]bool{}
+		for _, step := range operation.ReviewSteps {
+			if strings.TrimSpace(step.ID) == "" || strings.TrimSpace(step.Title) == "" || strings.TrimSpace(step.Summary) == "" {
+				return errors.New("review steps require non-empty id, title, and summary")
+			}
+			if seenSteps[step.ID] {
+				return fmt.Errorf("review step %s is repeated", step.ID)
+			}
+			seenSteps[step.ID] = true
+			for _, id := range step.FragmentIDs {
+				if !members[id] {
+					return fmt.Errorf("fragment %s is not assigned to group %s", id, group.ID)
+				}
+				if seenFragments[id] {
+					return fmt.Errorf("fragment %s occurs in multiple review steps", id)
+				}
+				seenFragments[id] = true
+			}
+		}
+		group.ReviewSteps = append([]model.ReviewStep(nil), operation.ReviewSteps...)
 	case "remove_file_categories":
 		group, err := d.group(operation.GroupID)
 		if err != nil {
@@ -678,6 +724,16 @@ func (d *Draft) removeFragment(id string) {
 			}
 		}
 		d.Groups[index].Members = filtered
+		for stepIndex := range d.Groups[index].ReviewSteps {
+			step := &d.Groups[index].ReviewSteps[stepIndex]
+			ids := step.FragmentIDs[:0]
+			for _, current := range step.FragmentIDs {
+				if current != id {
+					ids = append(ids, current)
+				}
+			}
+			step.FragmentIDs = ids
+		}
 	}
 }
 func clone(d Draft) Draft {

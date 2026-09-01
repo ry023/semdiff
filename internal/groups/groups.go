@@ -59,8 +59,8 @@ type lineKey struct {
 func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationReport {
 	var report ValidationReport
 	add := func(format string, args ...any) { report.Errors = append(report.Errors, fmt.Sprintf(format, args...)) }
-	if g.Version != 2 {
-		add("version must be 2 (got %d)", g.Version)
+	if g.Version != 3 {
+		add("version must be 3 (got %d)", g.Version)
 	}
 	if g.BaseSHA != changes.BaseSHA {
 		add("base_sha mismatch: groups=%s changes=%s", g.BaseSHA, changes.BaseSHA)
@@ -104,12 +104,15 @@ func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationRepor
 			add("group %s has invalid importance %q (must be core, supporting, or side)", group.ID, group.Importance)
 		}
 		groupPaths := map[string]bool{}
+		fragmentIDsInGroup := map[string]bool{}
 		for _, fragment := range group.Fragments {
 			validateFragment(fragment, group.ID, changedLines, metadataPaths, claims, metadataClaims, fragmentIDs, &report.Errors)
+			fragmentIDsInGroup[fragment.ID] = true
 			if fragment.Path != "" {
 				groupPaths[fragment.Path] = true
 			}
 		}
+		validateReviewSteps(group, fragmentIDsInGroup, &report.Errors)
 		validateFileCategories(group, groupPaths, &report.Errors)
 	}
 	report.Errors = append(report.Errors, coverageErrors(changedLines, claims)...)
@@ -122,6 +125,46 @@ func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationRepor
 	}
 	sort.Strings(report.Errors)
 	return report
+}
+
+func validateReviewSteps(group model.SemanticGroup, fragments map[string]bool, errors *[]string) {
+	if len(group.ReviewSteps) == 0 {
+		*errors = append(*errors, fmt.Sprintf("group %s has no review steps", group.ID))
+		return
+	}
+	stepIDs, claimed := map[string]bool{}, map[string]string{}
+	for _, step := range group.ReviewSteps {
+		if strings.TrimSpace(step.ID) == "" {
+			*errors = append(*errors, fmt.Sprintf("group %s has a review step with an empty ID", group.ID))
+		} else if stepIDs[step.ID] {
+			*errors = append(*errors, fmt.Sprintf("duplicate review step ID %s in group %s", step.ID, group.ID))
+		}
+		stepIDs[step.ID] = true
+		if strings.TrimSpace(step.Title) == "" {
+			*errors = append(*errors, fmt.Sprintf("review step %s in group %s has an empty title", step.ID, group.ID))
+		}
+		if strings.TrimSpace(step.Summary) == "" {
+			*errors = append(*errors, fmt.Sprintf("review step %s in group %s has an empty summary", step.ID, group.ID))
+		}
+		if len(step.FragmentIDs) == 0 {
+			*errors = append(*errors, fmt.Sprintf("review step %s in group %s has no fragments", step.ID, group.ID))
+		}
+		for _, id := range step.FragmentIDs {
+			if !fragments[id] {
+				*errors = append(*errors, fmt.Sprintf("review step %s in group %s references unknown fragment %s", step.ID, group.ID, id))
+				continue
+			}
+			if prior, ok := claimed[id]; ok {
+				*errors = append(*errors, fmt.Sprintf("fragment %s occurs in review steps %s and %s in group %s", id, prior, step.ID, group.ID))
+			}
+			claimed[id] = step.ID
+		}
+	}
+	for id := range fragments {
+		if claimed[id] == "" {
+			*errors = append(*errors, fmt.Sprintf("fragment %s in group %s is not assigned to a review step", id, group.ID))
+		}
+	}
 }
 
 func validateFragment(fragment model.Fragment, groupID string, changed map[lineKey]bool, metadata map[string]bool, claims map[lineKey][]string, metadataClaims map[string][]string, ids map[string]bool, errors *[]string) {

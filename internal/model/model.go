@@ -76,7 +76,17 @@ type SemanticGroup struct {
 	Importance     Importance     `json:"importance"`
 	Order          *int           `json:"order,omitempty"`
 	FileCategories []FileCategory `json:"file_categories,omitempty"`
+	ReviewSteps    []ReviewStep   `json:"review_steps"`
 	Fragments      []Fragment     `json:"fragments"`
+}
+
+// ReviewStep is one reader-oriented stage within a semantic group. Its
+// fragment IDs are ordered, and each group fragment belongs to one step.
+type ReviewStep struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Summary     string   `json:"summary"`
+	FragmentIDs []string `json:"fragment_ids"`
 }
 
 type FileCategory struct {

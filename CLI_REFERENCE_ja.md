@@ -163,6 +163,7 @@ Draft 操作は atomic に適用され、file または標準入力から読み�
       "order": 1
     },
     {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
+    {"op":"set_review_steps","group_id":"domain-change","review_steps":[{"id":"contract","title":"Establish the contract","summary":"Read the contract before the dependent behavior.","fragment_ids":["domain-contract"]}]},
     {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
   ]
 }

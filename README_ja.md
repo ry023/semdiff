@@ -114,6 +114,8 @@ Group は、複数ファイルにまたがっていても、1つのレビュー�
 - `supporting` は core の変更を完成させ、適応させ、説明し、または検証します。
 - `side` は同じ pull request に含まれる、独立した意味を持つ別の変更です。
 
+各 Group には順序付きの review step もあります。step は次に理解すべき問いまたは前提、次の段階への短い接続説明、読む Fragment を持ちます。Guided view はこの順番で表示し、Files view は検証のためファイル・ソース順を保ちます。
+
 ## semdiff を AI Agent と使う
 
 同梱されている2つのスキルは、レビューの異なる段階を担当します。
@@ -175,13 +177,13 @@ Viewer では semantic Group または Fragment に質問 thread を紐づけら
 
 `classify` はパスから標準 category `logic`、`component`、`config`、`implementation`、`test`、`docs`、`unknown` を提案します。Markdown や reStructuredText などのドキュメント拡張子、`README` や `CHANGELOG` などの定番ファイル名、`docs/` や `guides/` などのドキュメント用 directory 配下を `docs` に分類します。
 
-この workflow では draft schema version 3、最終的な `groups.json` schema version 2 を使用します。古い draft は `grouping init --force` で作り直してください。
+この workflow では draft schema version 4、最終的な `groups.json` schema version 3 を使用します。古い draft は `grouping init --force` で作り直してください。
 
 `groups.json` が source of truth です。各 Fragment はファイルパス、1つ以上の変更前・変更後の行範囲、semantic な説明を保持します。
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "base_sha": "<full base SHA>",
   "head_sha": "<full head SHA>",
   "groups": [
@@ -193,6 +195,9 @@ Viewer では semantic Group または Fragment に質問 thread を紐づけら
       "order": 1,
       "file_categories": [
         {"path": "src/domain.ts", "category": "logic"}
+      ],
+      "review_steps": [
+        {"id": "contract", "title": "Establish the contract", "summary": "Read the contract before its dependent behavior.", "fragment_ids": ["domain-contract"]}
       ],
       "fragments": [
         {
