@@ -24,7 +24,7 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 The required shape is:
 
 ```json
-{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"domain-change","title":"Introduce domain change","summary":"The previous implementation lacked a single place for this responsibility, which made related behavior harder to keep consistent. The change introduces the shared boundary and adds the checks needed to preserve its contract.","importance":"core","order":1,"file_categories":[{"path":"src/domain.ts","category":"logic"}],"review_steps":[{"id":"contract","title":"Establish the contract","summary":"The shared contract defines the invariant used by the connected validation.","fragment_ids":["domain-contract"]}],"fragments":[{"id":"domain-contract","path":"src/domain.ts","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds the domain type and connects its validation at the call site.","review_level":"careful"}]}]}
+{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"Add Repository lookup","summary":"The Handler needs an existing record before it can apply the request. The change adds `FindByID` to the Repository interface and implements that lookup.","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"Add the Repository method","summary":"`FindByID` provides the existing record required before the request can be processed.","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}]}]}
 ```
 
 Every Group must have `importance` set to `core`, `supporting`, or `side`. Every Fragment must have `review_level` set to `careful`, `normal`, or `skim`; omitted draft values default to `normal`. Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every Group must have one or more `review_steps`, and every Group Fragment must occur exactly once in their ordered `fragment_ids`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
@@ -48,11 +48,11 @@ An apply request contains a batch of operations. For example:
 ```json
 {
   "operations": [
-    {"op":"upsert_group","group_id":"domain-change","title":"Introduce domain change","summary":"Explains the motivation and approach.","importance":"core","order":1},
-    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"domain-contract","description":"Defines the shared domain contract and connects its validation.","review_level":"careful"}},
-    {"op":"assign_fragments","group_id":"domain-change","members":["domain-contract"]},
-    {"op":"set_review_steps","group_id":"domain-change","review_steps":[{"id":"contract","title":"Establish the contract","summary":"The shared contract supplies the invariant consumed by the dependent behavior.","fragment_ids":["domain-contract"]}]},
-    {"op":"set_file_categories","group_id":"domain-change","categories":{"src/domain.ts":"logic"}}
+    {"op":"upsert_group","group_id":"repository-lookup","title":"Add Repository lookup","summary":"Adds the lookup used by the Handler.","importance":"core","order":1},
+    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"repository-find-by-id","description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}},
+    {"op":"assign_fragments","group_id":"repository-lookup","members":["repository-find-by-id"]},
+    {"op":"set_review_steps","group_id":"repository-lookup","review_steps":[{"id":"repository-method","title":"Add the Repository method","summary":"`FindByID` gives the Handler the record it needs before it processes the request.","fragment_ids":["repository-find-by-id"]}]},
+    {"op":"set_file_categories","group_id":"repository-lookup","categories":{"src/repository.go":"logic"}}
   ]
 }
 ```
@@ -80,17 +80,33 @@ The `classify` command only uses file paths, names, extensions, and directory st
 
 The default category vocabulary is `implementation` for general source code, `test` for tests, `component` for UI components, `logic` for UI-independent logic, `config` for configuration and dependency metadata, `docs` for documentation, and `unknown` when the path does not establish a useful role. These are conventions rather than an enum; use a more precise free-form category when needed.
 
+## Technical explanation style
+
+### Explanation level
+
+Match the explanation to the abstraction level of the code being described. Do not generalize a concrete change into higher-level design language unless that additional design meaning is needed.
+
+Prefer vocabulary that maps directly to the code: interface, type, method, function, signature, parameter, return value, construction, call, registration, DI, implementation, and conversion. For example, when a change adds a method to an interface, first say `Adds FindByID to the Repository interface`, rather than only saying that it expands a contract or changes a boundary.
+
+When design meaning is useful, explain it after the concrete code change. Use abstract terms such as `contract`, `boundary`, `ownership`, `wiring`, and `responsibility` when those concepts are themselves under discussion, not as replacements for a direct description of the implementation. Prefer precise and direct wording over formal or abstract wording with the same meaning.
+
+### Japanese technical vocabulary
+
+When writing Japanese, use vocabulary and notation natural to Japanese software development. Do not mechanically translate English technical terms into unfamiliar Japanese expressions. In particular, do not automatically translate `contract`, `wiring`, `ownership`, or `boundary` as `契約`, `接続`, `所有`, or `境界`.
+
+Keep terms in English or katakana when that is natural in Japanese technical writing, including `interface`, `API`, `DI`, `Repository`, `Handler`, `Adapter`, `signature` / `シグネチャ`, and `middleware` / `ミドルウェア`. Prioritize wording that Japanese software engineers will find accurate and natural over fully translating every term.
+
 ## Fragment descriptions
 
-Describe the changed behavior, responsibility, contract, or test coverage—not the file operation. Do not repeat the file name or path, and do not lead with bookkeeping such as “updated,” “added,” “deleted,” “new file,” or “first half”; the data structure and viewer already show that context.
+Describe the concrete code change and its behavior or test coverage—not the file operation. Do not repeat the file name or path, and do not lead with bookkeeping such as “updated,” “added,” “deleted,” “new file,” or “first half”; the data structure and viewer already show that context.
 
-When the diff, surrounding code, commit narrative, or group intent provides evidence, include the reason or purpose of the change. Useful reasons include enabling a workflow, removing duplicated responsibility, preserving an invariant, adapting callers to a new contract, or preventing a regression. Do not invent rationale that the available evidence does not support; when the reason is unclear, state only the concrete semantic change.
+When the diff, surrounding code, commit narrative, or group intent provides evidence, include the reason or purpose after the concrete change. Useful reasons include enabling a workflow, removing duplicated code, preserving a validation rule, adapting callers to a new method, or preventing a regression. Do not invent rationale that the available evidence does not support; when the reason is unclear, state only the concrete semantic change.
 
 Prefer descriptions such as:
 
-- `Removes the duplicated rendering path so presentation is handled by the shared component.`
-- `Adds coverage for the supported operations to guard their expected behavior against regressions.`
-- `Routes creation through the centralized command interface so it follows the same execution path as related actions.`
+- `Removes the duplicate render call and invokes SharedButton.Render instead.`
+- `Adds table-driven tests for the supported operations and their error results.`
+- `Calls CreateCommand.Execute from the create Handler so creation uses the same validation as the CLI command.`
 
 Avoid descriptions such as:
 
@@ -112,7 +128,7 @@ A group `summary` is a review narrative, not a one-line restatement of its fragm
 
 1. The background or existing situation, when it can be established from the commit history or surrounding code.
 2. The problem, limitation, or risk that motivated the work.
-3. The main approach taken and the important responsibilities or invariants it introduces.
+3. The concrete implementation changes and, when needed, the rules they preserve.
 4. The resulting behavior, tests, or review implication when the evidence supports it.
 
 Use `semdiff commits` as the primary source for background: consider commit subjects, commit bodies, chronology, and which files each commit touched. Use fragment evidence to verify what was actually implemented and to connect the narrative to the grouped changes. Commit history is the current boundary of available context; do not invent product requirements, incidents, user reports, or design decisions that are not supported by commits or code. If the motivation is unclear, say what limitation the diff addresses only when that is directly observable, and keep uncertain interpretation out of the summary.
@@ -123,8 +139,8 @@ Prefer a summary shaped like:
 
 ```markdown
 The previous implementation spread state transitions across direct mutations, which made related updates difficult to keep consistent.
-The change introduces a centralized command boundary and retains inactive state needed when switching modes, so callers can apply the same transition rules.
-The associated tests exercise the shared contract and give reviewers one place to inspect the invariants that protect it.
+The change adds `ApplyTransition(command)` and passes the inactive state through `SwitchMode`, so both call sites use the same state update.
+The associated tests call `ApplyTransition` for each supported mode and preserve the expected inactive state.
 ```
 
 Avoid a summary shaped like:
