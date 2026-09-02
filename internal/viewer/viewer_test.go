@@ -321,7 +321,7 @@ func TestFileStatusAndLineCounts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fragment := model.MaterializedFragment{ID: "F1", Path: "a.go", Patch: tt.patch}
-			file := buildFileView("a.go", []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment})
+			file := buildFileView("a.go", []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment}, nil)
 			if file.Status != tt.status || !strings.Contains(string(file.StatusIcon), tt.iconFragment) || file.Additions != tt.additions || file.Deletions != tt.deletions {
 				t.Fatalf("unexpected file metadata: %+v", file)
 			}
@@ -334,7 +334,7 @@ func TestFileStatusAndLineCounts(t *testing.T) {
 
 func TestFileViewSplitsDirectoryAndName(t *testing.T) {
 	fragment := model.MaterializedFragment{ID: "F1", Path: "web/src/Button.tsx", Patch: "diff --git a/web/src/Button.tsx b/web/src/Button.tsx\n"}
-	file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment})
+	file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment}, nil)
 	if file.Directory != "web/src/" || file.Name != "Button.tsx" {
 		t.Fatalf("unexpected path split: directory=%q name=%q", file.Directory, file.Name)
 	}
@@ -392,6 +392,8 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 		`var mainFiles=Array.from(document.querySelectorAll('.main-file,.main-guided-fragment'))`,
 		`.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}`,
 		`.summary li>p,.step-summary li>p{margin:0!important}`,
+		`.diff-row.add,.diff-row.del{color:var(--text)}`,
+		`body[data-view=split] .diff-row.del .old-number,body[data-view=split] .diff-row.del .old-code,body[data-view=split] .diff-row.add .new-number,body[data-view=split] .diff-row.add .new-code{color:var(--text)}`,
 		`function buildGroupTrees()`,
 		`directory.className='nav-directory nav-group-directory'`,
 		`function compressGroupDirectories(root)`,
@@ -485,7 +487,7 @@ func TestSidebarKeepsDirectoryBranchesWhileCompressingSingleChains(t *testing.T)
 }
 
 func TestColorPatchDoesNotAddBlankRows(t *testing.T) {
-	html := string(colorPatch("+one\n+two\n"))
+	html := string(colorPatch("+one\n+two\n", nil))
 	if strings.Contains(html, "</span>\n") {
 		t.Fatalf("colorPatch added a newline after a block: %q", html)
 	}
@@ -547,7 +549,7 @@ func TestCategoryViewsCountFileStatuses(t *testing.T) {
 }
 
 func TestColorPatchLineNumbers(t *testing.T) {
-	html := string(colorPatch("@@ -7,2 +7,2 @@\n-old\n+new\n context\n"))
+	html := string(colorPatch("@@ -7,2 +7,2 @@\n-old\n+new\n context\n", nil))
 	if strings.Contains(html, "@@ -7,2 +7,2 @@") || strings.Contains(html, `class="diff-row hunk"`) {
 		t.Fatalf("hunk header should only drive line numbering, not be rendered: %q", html)
 	}
@@ -594,7 +596,7 @@ func TestContextExpansionShowsOtherFragments(t *testing.T) {
 	other := model.MaterializedFragment{ID: "F2", Path: "a.go", NewStart: 12, NewLines: 2, Patch: "@@ -12,2 +12,2 @@\n-old\n+other\n"}
 	last := model.MaterializedFragment{ID: "F3", Path: "a.go", NewStart: 20, NewLines: 1, Patch: "@@ -20,1 +20,1 @@\n-old\n+last\n"}
 	content := strings.Repeat("line\n", 30)
-	file := buildFileView("a.go", []model.MaterializedFragment{first, last}, content, []model.MaterializedFragment{first, other, last})
+	file := buildFileView("a.go", []model.MaterializedFragment{first, last}, content, []model.MaterializedFragment{first, other, last}, nil)
 	between := string(file.Fragments[0].LowerContextHTML)
 	if !strings.Contains(between, `diff-row ctx other-change`) {
 		t.Fatalf("context should mark other fragment lines: %q", between)
@@ -603,7 +605,7 @@ func TestContextExpansionShowsOtherFragments(t *testing.T) {
 		t.Fatalf("context should remain expandable across other fragment lines: %q", between)
 	}
 
-	guided := buildFragmentView(first, content, nil, []model.MaterializedFragment{first, other, last})
+	guided := buildFragmentView(first, content, nil, []model.MaterializedFragment{first, other, last}, nil)
 	if !strings.Contains(string(guided.LowerContextHTML), `diff-row ctx other-change`) {
 		t.Fatalf("guided context should extend through other fragments: %q", guided.LowerContextHTML)
 	}
@@ -641,6 +643,16 @@ func TestBuildPreservesReviewStepFragmentOrderAcrossFiles(t *testing.T) {
 	}
 }
 
+func TestHighlightedLineKeepsDiffMarkerAndEscapesCode(t *testing.T) {
+	highlighter := newSyntaxHighlighter("example.go", "func main() { // <note>\n")
+	html := string(highlighter.highlight(`+func main() { // <note>`, "add", "1"))
+	for _, want := range []string{`+<span class="syntax-keyword">func</span>`, `syntax-function`, `syntax-comment`, `&lt;note&gt;`} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("highlighted line is missing %q: %s", want, html)
+		}
+	}
+}
+
 func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
 	fragment := model.MaterializedFragment{
 		ID: "F1", Path: "a.go", NewStart: 10, NewLines: 21,
@@ -669,7 +681,7 @@ func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
 }
 
 func TestShortRangeGapIsInitiallyVisibleWithoutExpandControls(t *testing.T) {
-	html := string(expandableGap(strings.Split("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine", "\n"), 11, 11, nil))
+	html := string(expandableGap(strings.Split("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine", "\n"), 11, 11, nil, nil))
 	if strings.Contains(html, "expand-lines") || strings.Contains(html, "context-hidden") {
 		t.Fatalf("a gap covered by five lines of context on each side should be fully visible: %q", html)
 	}
@@ -680,7 +692,7 @@ func TestShortRangeGapIsInitiallyVisibleWithoutExpandControls(t *testing.T) {
 
 func TestRangeGapUsesIndependentOldAndNewLineNumbers(t *testing.T) {
 	patch := "@@ -128,0 +129,4 @@\n+one\n+two\n+three\n+four\n@@ -138,1 +142,1 @@\n-old\n+new\n"
-	html := string(colorPatchWithContext(patch, sourceLines(strings.Repeat("line\n", 160))))
+	html := string(colorPatchWithContext(patch, sourceLines(strings.Repeat("line\n", 160)), nil))
 	oldContext := `<span class="line-number split-cell old-number">137</span>`
 	newContext := `<span class="line-number split-cell new-number">141</span>`
 	oldChange := `<span class="line-number split-cell old-number">138</span>`

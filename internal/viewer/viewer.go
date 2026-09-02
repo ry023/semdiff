@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/lexers"
 	categorydraft "github.com/ry023/semdiff/internal/categories"
 	"github.com/ry023/semdiff/internal/model"
 	"github.com/ry023/semdiff/internal/questions"
@@ -37,7 +39,7 @@ const guidedReviewMarkup = `<div class="review-mode-toolbar" role="group" aria-l
 
 const guidedReviewStyle = `<style>.review-mode-toolbar{display:flex;justify-content:flex-end;margin:-16px 0 18px}.review-mode-toggle{padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}.review-mode-toggle:first-child{border-radius:6px 0 0 6px}.review-mode-toggle:last-child{border-radius:0 6px 6px 0}.review-mode-toggle[aria-pressed=true]{background:#1f4675;color:#fff;border-color:#3977b9}.files-view{display:none}.guided-view .group{margin-top:0}.guided-group>summary{padding:14px 18px!important;background:#202b38!important;border-bottom:1px solid #36516f!important;border-left:4px solid var(--accent)!important;color:#f0f6fc!important;box-shadow:0 3px 10px rgba(0,0,0,.28)!important}.guided-group>summary h2{color:#f0f6fc}.guided-group>summary .count{color:#b6c5d6}.guided-group-summary{margin:12px 18px 2px;padding:10px 12px;border:1px solid #284560;border-left:3px solid #3977b9;border-radius:6px;background:#172638;color:#d7e5f4;line-height:1.5}.guided-group-summary p{margin:0 0 8px}.guided-group-summary p:last-child{margin-bottom:0}.guided-group-summary code{color:#b7d8ff}.review-step{border-top:1px solid var(--line);padding:14px 16px;overflow-anchor:none}.review-step>summary,.guided-file>summary{cursor:pointer;list-style:none}.review-step>summary::-webkit-details-marker,.guided-file>summary::-webkit-details-marker{display:none}.review-step>summary:before,.guided-file>summary:before{content:'▶';display:inline-block;margin-right:8px;font-size:10px}.review-step[open]>summary:before,.guided-file[open]>summary:before{transform:rotate(90deg)}.guided-group .review-step[open]>summary{position:sticky;top:var(--group-header-height,0px);z-index:11;margin:-8px -8px 8px;padding:8px;background:#202733;border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,.3)}.guided-group .review-step[open] .guided-file[open]>summary{position:sticky;top:calc(var(--group-header-height,0px) + var(--step-header-height,0px));z-index:10;margin:-4px -4px 8px;padding:7px;background:#202733;border:1px solid var(--line);border-radius:6px;box-shadow:0 3px 8px rgba(0,0,0,.25)}.review-step h3{display:inline;font-size:15px}.step-summary{margin:7px 0 0 19px;color:var(--muted);line-height:1.45}.step-summary p{margin:0}.guided-file{margin:14px 0 22px;border:1px solid var(--line);border-radius:6px;padding:10px;background:#111821;overflow-anchor:none}.guided-file .file-heading{max-width:none}.guided-file .file-heading h3{font:400 14px ui-monospace,monospace;margin:0;color:var(--text)}.guided-fragment-description{margin:6px 0 0 19px}.guided-file .fragment-note{border:0;border-radius:0;background:transparent;padding:0}.guided-file .fragment-note .ask-button{margin-left:8px}@media(max-width:850px){.review-mode-toolbar{margin-top:0}}</style><script>(function(){function start(){function setMode(mode){document.body.dataset.reviewMode=mode;document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.reviewMode===mode))});document.querySelector('.guided-view').style.display=mode==='guided'?'block':'none';document.querySelector('.files-view').style.display=mode==='files'?'block':'none'}function updateStepHeaderHeight(step){var summary=step.querySelector(':scope > summary');if(summary)step.style.setProperty('--step-header-height',summary.offsetHeight+'px')}var observer=typeof ResizeObserver==='function'?new ResizeObserver(function(entries){entries.forEach(function(entry){var step=entry.target.closest('.review-step');if(step)updateStepHeaderHeight(step)})}):null;var closingTops=new WeakMap();document.addEventListener('click',function(event){var summary=event.target.closest('.guided-file>summary,.review-step>summary');if(!summary)return;var details=summary.parentElement;if(details.open)closingTops.set(details,summary.getBoundingClientRect().top)},true);document.addEventListener('toggle',function(event){var details=event.target;if(!(details instanceof HTMLDetailsElement)||details.open)return;var top=closingTops.get(details);if(top===undefined)return;closingTops.delete(details);requestAnimationFrame(function(){window.scrollBy(0,details.querySelector(':scope > summary').getBoundingClientRect().top-top)})},true);document.querySelectorAll('.review-step').forEach(function(step){var summary=step.querySelector(':scope > summary');updateStepHeaderHeight(step);if(observer&&summary)observer.observe(summary)});window.addEventListener('resize',function(){document.querySelectorAll('.review-step').forEach(updateStepHeaderHeight)});document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.addEventListener('click',function(){setMode(button.dataset.reviewMode)})});setMode('guided')}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start()})();</script>`
 
-const summaryListStyle = `<style>.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}.summary li,.step-summary li{margin:4px 0!important;white-space:normal}.summary li>p,.step-summary li>p{margin:0!important}.summary ul ul,.summary ul ol,.summary ol ul,.summary ol ol,.step-summary ul ul,.step-summary ul ol,.step-summary ol ul,.step-summary ol ol{margin:4px 0 0!important;padding-left:20px!important}.diff-row.other-change{background:#1b222b;color:#aeb8c4}.diff-row.other-change .line-number{border-right-color:#3a4654;color:#8d99a8}</style>`
+const summaryListStyle = `<style>.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}.summary li,.step-summary li{margin:4px 0!important;white-space:normal}.summary li>p,.step-summary li>p{margin:0!important}.summary ul ul,.summary ul ol,.summary ol ul,.summary ol ol,.step-summary ul ul,.step-summary ul ol,.step-summary ol ul,.step-summary ol ol{margin:4px 0 0!important;padding-left:20px!important}.diff-row.add,.diff-row.del{color:var(--text)}body[data-view=split] .diff-row.del .old-number,body[data-view=split] .diff-row.del .old-code,body[data-view=split] .diff-row.add .new-number,body[data-view=split] .diff-row.add .new-code{color:var(--text)}.diff-row.other-change{background:#1b222b;color:#aeb8c4}.diff-row.other-change .line-number{border-right-color:#3a4654;color:#8d99a8}.syntax-keyword{color:#ff7b72}.syntax-function{color:#d2a8ff}.syntax-type{color:#79c0ff}.syntax-string{color:#a5d6ff}.syntax-number{color:#79c0ff}.syntax-comment{color:#8b949e;font-style:italic}.syntax-operator{color:#ff7b72}</style>`
 
 func addGuidedReviewMarkup(source string) string {
 	const groupStart = `</div>{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`
@@ -60,6 +62,11 @@ type FragmentView struct {
 	HunkHTML         template.HTML
 	UpperContextHTML template.HTML
 	LowerContextHTML template.HTML
+}
+
+type syntaxHighlighter struct {
+	lexer chroma.Lexer
+	lines map[int]template.HTML
 }
 type FileView struct {
 	Path        string
@@ -158,6 +165,15 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			return fragmentStart(byPath[path][i]) < fragmentStart(byPath[path][j])
 		})
 	}
+	highlighters := map[string]*syntaxHighlighter{}
+	highlighterFor := func(path string) *syntaxHighlighter {
+		if highlighter, ok := highlighters[path]; ok {
+			return highlighter
+		}
+		highlighter := newSyntaxHighlighter(path, fileContents[path])
+		highlighters[path] = highlighter
+		return highlighter
+	}
 	p := Page{BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 	allFiles := map[string]bool{}
 	for groupIndex, group := range g.Groups {
@@ -182,7 +198,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 		}
 		sort.Strings(paths)
 		for fileIndex, path := range paths {
-			file := buildFileView(path, fileMap[path], fileContents[path], byPath[path])
+			file := buildFileView(path, fileMap[path], fileContents[path], byPath[path], highlighterFor(path))
 			file.AnchorID = fmt.Sprintf("file-%d-%d", groupIndex, fileIndex)
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
@@ -196,7 +212,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, SummaryHTML: renderMarkdown(step.Summary), AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex), Number: stepIndex + 1}
 			for _, id := range step.FragmentIDs {
 				fragment := byID[id]
-				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path])
+				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path], highlighterFor(fragment.Path))
 				view.Description = descriptions[id]
 				view.RangeLabel = rangeLabels[id]
 				view.ReviewLevel = reviewLevels[id]
@@ -473,10 +489,10 @@ func sourceLines(content string) []string {
 	return lines
 }
 
-func buildFragmentView(f model.MaterializedFragment, content string, boundaries, highlights []model.MaterializedFragment) FragmentView {
+func buildFragmentView(f model.MaterializedFragment, content string, boundaries, highlights []model.MaterializedFragment, highlighter *syntaxHighlighter) FragmentView {
 	header, hunk := splitPatch(f.Patch)
 	lines := sourceLines(content)
-	view := FragmentView{MaterializedFragment: f, HeaderHTML: colorPatch(header), HunkHTML: colorPatchWithContext(hunk, lines)}
+	view := FragmentView{MaterializedFragment: f, HeaderHTML: colorPatch(header, highlighter), HunkHTML: colorPatchWithContext(hunk, lines, highlighter)}
 	start := fragmentStart(f) - 1
 	if start < 0 || start > len(lines) {
 		return view
@@ -506,8 +522,8 @@ func buildFragmentView(f model.MaterializedFragment, content string, boundaries,
 		upperOldFirst = max(1, first.oldStart-(start-upperStart)+1)
 		lowerOldFirst = last.oldEnd + 1
 	}
-	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperOldFirst, upperStart+1, "up", highlights)
-	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], lowerOldFirst, end+1, "down", highlights)
+	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperOldFirst, upperStart+1, "up", highlights, highlighter)
+	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], lowerOldFirst, end+1, "down", highlights, highlighter)
 	return view
 }
 
@@ -515,10 +531,10 @@ func buildFragmentView(f model.MaterializedFragment, content string, boundaries,
 // expandable range. A multi-range fragment has one outer set of controls, but
 // without controls between its hunks the source lines in those gaps can never
 // be revealed.
-func colorPatchWithContext(patch string, lines []string) template.HTML {
+func colorPatchWithContext(patch string, lines []string, highlighter *syntaxHighlighter) template.HTML {
 	blocks := splitHunkBlocks(patch)
 	if len(blocks) < 2 || len(lines) == 0 {
-		return colorPatch(patch)
+		return colorPatch(patch, highlighter)
 	}
 	var out strings.Builder
 	for i, block := range blocks {
@@ -531,9 +547,9 @@ func colorPatchWithContext(patch string, lines []string) template.HTML {
 			currentStart = max(previousEnd, min(currentStart, len(lines)))
 			gapLines := lines[previousEnd:currentStart]
 			oldFirst := max(1, current.oldStart-len(gapLines)+1)
-			out.WriteString(string(expandableGap(gapLines, oldFirst, previousEnd+1, nil)))
+			out.WriteString(string(expandableGap(gapLines, oldFirst, previousEnd+1, nil, highlighter)))
 		}
-		out.WriteString(string(colorPatch(block)))
+		out.WriteString(string(colorPatch(block, highlighter)))
 	}
 	return template.HTML(out.String())
 }
@@ -589,7 +605,7 @@ func rangeBounds(field string) (int, int) {
 	return start, count
 }
 
-func buildFileView(path string, fragments []model.MaterializedFragment, content string, siblings []model.MaterializedFragment) FileView {
+func buildFileView(path string, fragments []model.MaterializedFragment, content string, siblings []model.MaterializedFragment, highlighter *syntaxHighlighter) FileView {
 	sort.SliceStable(fragments, func(i, j int) bool {
 		return fragmentStart(fragments[i]) < fragmentStart(fragments[j])
 	})
@@ -619,7 +635,7 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 	file.StatusIcon = fileStatusIcon(file.Status)
 	file.Diffstat = diffstatBlocks(file.Additions, file.Deletions)
 	for _, fragment := range fragments {
-		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, fragments, siblings))
+		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, fragments, siblings, highlighter))
 	}
 	if len(file.Fragments) == 0 {
 		return file
@@ -644,7 +660,7 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 			bounds := parseHunkBounds(currentBlocks[0])
 			oldFirst = max(1, bounds.oldStart-len(gapLines)+1)
 		}
-		previous.LowerContextHTML = expandableGap(gapLines, oldFirst, start+1, siblings)
+		previous.LowerContextHTML = expandableGap(gapLines, oldFirst, start+1, siblings, highlighter)
 		current.UpperContextHTML = ""
 	}
 	return file
@@ -685,7 +701,7 @@ func diffstatBlocks(additions, deletions int) []string {
 	return blocks
 }
 
-func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber string, hidden bool) {
+func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber string, hidden bool, highlighter *syntaxHighlighter) {
 	out.WriteString(`<span class="diff-row ` + class)
 	if hidden {
 		out.WriteString(` context-hidden" hidden>`)
@@ -696,14 +712,14 @@ func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber strin
 	if unifiedNumber == "" {
 		unifiedNumber = oldNumber
 	}
-	escaped := template.HTMLEscapeString(line)
+	escaped := highlighter.highlight(line, class, newNumber)
 	out.WriteString(`<span class="line-number unified-cell">` + unifiedNumber + `</span><span class="line-code unified-cell">`)
-	out.WriteString(escaped)
+	out.WriteString(string(escaped))
 	out.WriteString(`</span>`)
 	if oldNumber == "" && newNumber == "" {
-		out.WriteString(`<span class="split-wide">` + escaped + `</span>`)
+		out.WriteString(`<span class="split-wide">` + string(escaped) + `</span>`)
 	} else {
-		oldCode, newCode := "", ""
+		oldCode, newCode := template.HTML(""), template.HTML("")
 		switch class {
 		case "add":
 			newCode = escaped
@@ -712,13 +728,99 @@ func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber strin
 		default:
 			oldCode, newCode = escaped, escaped
 		}
-		out.WriteString(`<span class="line-number split-cell old-number">` + oldNumber + `</span><span class="line-code split-cell old-code">` + oldCode + `</span>`)
-		out.WriteString(`<span class="line-number split-cell new-number">` + newNumber + `</span><span class="line-code split-cell new-code">` + newCode + `</span>`)
+		out.WriteString(`<span class="line-number split-cell old-number">` + oldNumber + `</span><span class="line-code split-cell old-code">` + string(oldCode) + `</span>`)
+		out.WriteString(`<span class="line-number split-cell new-number">` + newNumber + `</span><span class="line-code split-cell new-code">` + string(newCode) + `</span>`)
 	}
 	out.WriteString(`</span>`)
 }
 
-func expandableContext(lines []string, firstOldLine, firstNewLine int, direction string, highlights []model.MaterializedFragment) template.HTML {
+func newSyntaxHighlighter(path, source string) *syntaxHighlighter {
+	highlighter := &syntaxHighlighter{lexer: lexers.Match(path), lines: map[int]template.HTML{}}
+	if highlighter.lexer == nil || source == "" {
+		return highlighter
+	}
+	iterator, err := highlighter.lexer.Tokenise(nil, source)
+	if err != nil {
+		return highlighter
+	}
+	line := 1
+	var out strings.Builder
+	for token := iterator(); token != chroma.EOF; token = iterator() {
+		for i, part := range strings.Split(token.Value, "\n") {
+			if i > 0 {
+				highlighter.lines[line] = template.HTML(out.String())
+				out.Reset()
+				line++
+			}
+			out.WriteString(highlightedToken(token.Type, part))
+		}
+	}
+	if out.Len() > 0 {
+		highlighter.lines[line] = template.HTML(out.String())
+	}
+	return highlighter
+}
+
+func (highlighter *syntaxHighlighter) highlight(line, class, newNumber string) template.HTML {
+	if highlighter == nil || class == "meta" {
+		return template.HTML(template.HTMLEscapeString(line))
+	}
+	prefix, source := "", line
+	if (class == "add" || class == "del" || strings.HasPrefix(class, "ctx")) && len(source) > 0 {
+		prefix, source = source[:1], source[1:]
+	}
+	if class != "del" {
+		if number, err := strconv.Atoi(newNumber); err == nil {
+			if highlighted, ok := highlighter.lines[number]; ok {
+				return template.HTML(template.HTMLEscapeString(prefix) + string(highlighted))
+			}
+		}
+	}
+	if highlighter.lexer == nil {
+		return template.HTML(template.HTMLEscapeString(line))
+	}
+	iterator, err := highlighter.lexer.Tokenise(nil, source)
+	if err != nil {
+		return template.HTML(template.HTMLEscapeString(line))
+	}
+	var out strings.Builder
+	out.WriteString(template.HTMLEscapeString(prefix))
+	for token := iterator(); token != chroma.EOF; token = iterator() {
+		out.WriteString(highlightedToken(token.Type, token.Value))
+	}
+	return template.HTML(out.String())
+}
+
+func highlightedToken(token chroma.TokenType, value string) string {
+	escaped := template.HTMLEscapeString(value)
+	if class := syntaxClass(token); class != "" {
+		return `<span class="` + class + `">` + escaped + `</span>`
+	}
+	return escaped
+}
+
+func syntaxClass(token chroma.TokenType) string {
+	switch {
+	case token >= chroma.Keyword && token < chroma.Name:
+		return "syntax-keyword"
+	case token == chroma.NameFunction || token == chroma.NameFunctionMagic:
+		return "syntax-function"
+	case token == chroma.NameClass || token == chroma.NameBuiltin || token == chroma.NameBuiltinPseudo:
+		return "syntax-type"
+	case token >= chroma.LiteralString && token < chroma.LiteralNumber:
+		return "syntax-string"
+	case token >= chroma.LiteralNumber && token < chroma.Operator:
+		return "syntax-number"
+	case token >= chroma.Comment && token < chroma.Generic:
+		return "syntax-comment"
+	case token >= chroma.Operator && token < chroma.Punctuation:
+		return "syntax-operator"
+	default:
+		return ""
+	}
+}
+
+func expandableContext(lines []string, firstOldLine, firstNewLine int, direction string, highlights []model.MaterializedFragment, highlighter *syntaxHighlighter) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
@@ -744,13 +846,13 @@ func expandableContext(lines []string, firstOldLine, firstNewLine int, direction
 		}
 		oldNumber := strconv.Itoa(firstOldLine + i)
 		newNumber := strconv.Itoa(firstNewLine + i)
-		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
+		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd, highlighter)
 	}
 	out.WriteString(`</span>`)
 	return template.HTML(out.String())
 }
 
-func expandableGap(lines []string, firstOldLine, firstNewLine int, highlights []model.MaterializedFragment) template.HTML {
+func expandableGap(lines []string, firstOldLine, firstNewLine int, highlights []model.MaterializedFragment, highlighter *syntaxHighlighter) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
@@ -768,7 +870,7 @@ func expandableGap(lines []string, firstOldLine, firstNewLine int, highlights []
 		}
 		oldNumber := strconv.Itoa(firstOldLine + i)
 		newNumber := strconv.Itoa(firstNewLine + i)
-		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
+		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd, highlighter)
 	}
 	out.WriteString(`</span>`)
 	return template.HTML(out.String())
@@ -784,7 +886,7 @@ func contextRowClass(line int, fragments []model.MaterializedFragment) string {
 	return "ctx"
 }
 
-func colorPatch(patch string) template.HTML {
+func colorPatch(patch string, highlighter *syntaxHighlighter) template.HTML {
 	patch = strings.TrimSuffix(patch, "\n")
 	if patch == "" {
 		return ""
@@ -811,7 +913,7 @@ func colorPatch(patch string) template.HTML {
 			oldLine++
 			newLine++
 		}
-		appendDiffRow(&out, line, class, oldNumber, newNumber, false)
+		appendDiffRow(&out, line, class, oldNumber, newNumber, false, highlighter)
 	}
 	return template.HTML(out.String())
 }
