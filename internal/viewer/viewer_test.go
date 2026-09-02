@@ -390,6 +390,8 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 		`if(sidebarPanes.files)sidebarPanes.files.remove()`,
 		`data-group-id="cleanup" data-file-path="docs/design/a.go"`,
 		`var mainFiles=Array.from(document.querySelectorAll('.main-file,.main-guided-fragment'))`,
+		`.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}`,
+		`.summary li>p,.step-summary li>p{margin:0!important}`,
 		`function buildGroupTrees()`,
 		`directory.className='nav-directory nav-group-directory'`,
 		`function compressGroupDirectories(root)`,
