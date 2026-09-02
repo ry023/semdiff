@@ -392,6 +392,8 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 		`var mainFiles=Array.from(document.querySelectorAll('.main-file,.main-guided-fragment'))`,
 		`.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}`,
 		`.summary li>p,.step-summary li>p{margin:0!important}`,
+		`.diff-row,pre{font-family:"SFMono-Regular","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-variant-ligatures:none;letter-spacing:.005em}`,
+		`.diff-row{font-size:12.5px;line-height:1.45}`,
 		`.diff-row.add,.diff-row.del{color:var(--text)}`,
 		`body[data-view=split] .diff-row.del .old-number,body[data-view=split] .diff-row.del .old-code,body[data-view=split] .diff-row.add .new-number,body[data-view=split] .diff-row.add .new-code{color:var(--text)}`,
 		`function buildGroupTrees()`,
