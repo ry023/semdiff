@@ -45,6 +45,8 @@ func addGuidedReviewMarkup(source string) string {
 		return source
 	}
 	source = strings.Replace(source, groupStart, `</div>`+guidedReviewMarkup+`{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`, 1)
+	source = strings.ReplaceAll(source, `{{if .Order}}{{.Order}}. {{end}}{{.Title}}`, `{{.Title}}`)
+	source = strings.Replace(source, `<summary><h3>{{.Title}}</h3>`, `<summary><h3>{{.Number}}. {{.Title}}</h3>`, 1)
 	source = strings.Replace(source, `</main>`, `</section></main>`, 1)
 	return strings.Replace(source, `</head>`, summaryListStyle+guidedReviewStyle+`</head>`, 1)
 }
@@ -89,6 +91,7 @@ type ReviewStepView struct {
 	ID, Title, Summary string
 	SummaryHTML        template.HTML
 	AnchorID           string
+	Number             int
 	Fragments          []FragmentView
 }
 type CategoryView struct {
@@ -190,7 +193,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			gv.Files = append(gv.Files, file)
 		}
 		for stepIndex, step := range group.ReviewSteps {
-			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, SummaryHTML: renderMarkdown(step.Summary), AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex)}
+			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, SummaryHTML: renderMarkdown(step.Summary), AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex), Number: stepIndex + 1}
 			for _, id := range step.FragmentIDs {
 				fragment := byID[id]
 				view := buildFragmentView(fragment, fileContents[fragment.Path], byPath[fragment.Path])

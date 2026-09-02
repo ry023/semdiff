@@ -590,8 +590,9 @@ func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
 }
 
 func TestBuildPreservesReviewStepFragmentOrderAcrossFiles(t *testing.T) {
+	order := 1
 	group := model.GroupsFile{Groups: []model.SemanticGroup{{
-		ID: "g", Title: "Guided", ReviewSteps: []model.ReviewStep{{ID: "first", Title: "Start", Summary: "Establish the prerequisite.", FragmentIDs: []string{"F2", "F1"}}},
+		ID: "g", Title: "Guided", Order: &order, ReviewSteps: []model.ReviewStep{{ID: "first", Title: "Start", Summary: "Establish the prerequisite.", FragmentIDs: []string{"F2", "F1"}}},
 		Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "First file."}, {ID: "F2", Path: "b.go", Description: "Second file."}},
 	}}}
 	page := Build(group, model.FragmentSet{Fragments: []model.MaterializedFragment{{ID: "F1", Path: "a.go", Patch: "patch"}, {ID: "F2", Path: "b.go", Patch: "patch"}}})
@@ -599,8 +600,24 @@ func TestBuildPreservesReviewStepFragmentOrderAcrossFiles(t *testing.T) {
 	if len(step.Fragments) != 2 || step.Fragments[0].ID != "F2" || step.Fragments[1].ID != "F1" {
 		t.Fatalf("guided order = %+v", step.Fragments)
 	}
+	if step.Number != 1 {
+		t.Fatalf("step number = %d, want 1", step.Number)
+	}
 	if page.Groups[0].Files[0].Path != "a.go" || page.Groups[0].Files[1].Path != "b.go" {
 		t.Fatalf("files are no longer file ordered: %+v", page.Groups[0].Files)
+	}
+	handler, err := Handler(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
+	body := response.Body.String()
+	if !strings.Contains(body, `<h2>Guided</h2>`) || strings.Contains(body, `<h2>1. Guided</h2>`) {
+		t.Fatal("group title should not include its order")
+	}
+	if !strings.Contains(body, `<h3>1. Start</h3>`) {
+		t.Fatal("step title should include its review order")
 	}
 }
 
