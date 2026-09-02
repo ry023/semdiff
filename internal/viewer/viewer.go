@@ -41,6 +41,8 @@ const guidedReviewStyle = `<style>.review-mode-toolbar{display:flex;justify-cont
 
 const summaryListStyle = `<style>.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}.summary li,.step-summary li{margin:4px 0!important;white-space:normal}.summary li>p,.step-summary li>p{margin:0!important}.summary ul ul,.summary ul ol,.summary ol ul,.summary ol ol,.step-summary ul ul,.step-summary ul ol,.step-summary ol ul,.step-summary ol ol{margin:4px 0 0!important;padding-left:20px!important}.diff-row,pre{font-family:"SFMono-Regular","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-variant-ligatures:none;letter-spacing:.005em}.diff-row{font-size:12.5px;line-height:1.45}.diff-row.add,.diff-row.del{color:var(--text)}body[data-view=split] .diff-row.del .old-number,body[data-view=split] .diff-row.del .old-code,body[data-view=split] .diff-row.add .new-number,body[data-view=split] .diff-row.add .new-code{color:var(--text)}.diff-row.other-change{background:#1b222b;color:#aeb8c4}.diff-row.other-change .line-number{border-right-color:#3a4654;color:#8d99a8}.syntax-keyword{color:#ff7b72}.syntax-function{color:#d2a8ff}.syntax-type{color:#79c0ff}.syntax-string{color:#a5d6ff}.syntax-number{color:#79c0ff}.syntax-comment{color:#8b949e;font-style:italic}.syntax-operator{color:#ff7b72}</style>`
 
+const colorTuningStyle = `<style>:root{--text:#d1d7e0}.guided-group>summary,.guided-group>summary h2{color:#dbe2ea!important}.guided-group-summary{color:#c7d3df}</style>`
+
 func addGuidedReviewMarkup(source string) string {
 	const groupStart = `</div>{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`
 	if !strings.Contains(source, groupStart) {
@@ -50,7 +52,7 @@ func addGuidedReviewMarkup(source string) string {
 	source = strings.ReplaceAll(source, `{{if .Order}}{{.Order}}. {{end}}{{.Title}}`, `{{.Title}}`)
 	source = strings.Replace(source, `<summary><h3>{{.Title}}</h3>`, `<summary><h3>{{.Number}}. {{.Title}}</h3>`, 1)
 	source = strings.Replace(source, `</main>`, `</section></main>`, 1)
-	return strings.Replace(source, `</head>`, summaryListStyle+guidedReviewStyle+`</head>`, 1)
+	return strings.Replace(source, `</head>`, summaryListStyle+guidedReviewStyle+colorTuningStyle+`</head>`, 1)
 }
 
 type FragmentView struct {
