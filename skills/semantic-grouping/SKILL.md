@@ -18,13 +18,13 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 7. For every new or revised fragment, write a short semantic label for the one change worth noticing. Include why only when it changes the review judgment because the purpose, constraint, or relationship is not clear from the diff. For every file referenced by a Group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 8. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
 9. Before finalizing, review each file for both under- and over-fragmentation. For a large suggestion or new file, inspect its top-level responsibilities and use `add_fragment` with explicit ranges when functions, types, handlers, or tests can be explained and questioned independently. Do not split merely at a file boundary, Git hunk, test boundary, import, comment, or formatting change. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
-10. After assigning fragments, create `review_steps` for every Group with `set_review_steps`. First list the questions a reviewer must answer in order, then map each Fragment to one Step. A Step exists only when it introduces a new prerequisite, question, or judgment; do not target a number of Steps. Write its title as a concise, concrete action that says what this part of the change does, such as `Add FindByID to Repository` or `Call CreateCommand.Execute from the Handler`. Do not use a noun phrase, a design label, or a reading instruction. In order, the Step titles should form an action-level outline that complements the Group summary. Its summary describes this stage's role in the change and its relationship to adjacent Steps: state what it establishes and which later behavior depends on it, or how it completes what came before. Write descriptively about the implementation; do not instruct the reviewer to “read,” “review,” or “look at” something. Adjacent Steps that answer the same question belong together. Each Group Fragment must occur exactly once across its Steps.
+10. After assigning fragments, create `review_steps` for every Group with `set_review_steps`. First list the questions a reviewer must answer in order, then map each Fragment to one Step. A Step exists only when it introduces a new prerequisite, question, or judgment; do not target a number of Steps. Write its title as a concise, concrete action that says what this part of the change does, such as `Add FindByID to Repository` or `Call CreateCommand.Execute from the Handler`. Do not use a noun phrase, a design label, or a reading instruction. In order, the Step titles should form an action-level outline that complements the Group summary. Write its summary as a compact Markdown outline: each bullet makes one claim about this stage, and a child bullet only supplies that parent claim's reason, concrete detail, consequence, or dependency. Write descriptively about the implementation; do not instruct the reviewer to “read,” “review,” or “look at” something. Adjacent Steps that answer the same question belong together. Each Group Fragment must occur exactly once across its Steps.
 11. Run `semdiff grouping finalize --json`. With no explicit output path, finalize writes the result to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`; use an explicit path only when the user or surrounding workflow requires one. Finalize succeeds only when every authored fragment is assigned, described, and placed in a complete review Step, every Group has a complete summary and file categories, and every changed line and metadata change is selected exactly once.
 
 The required shape is:
 
 ```json
-{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"Add Repository lookup","summary":"The Handler needs an existing record before it can apply the request. The change adds `FindByID` to the Repository interface and implements that lookup.","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"Add FindByID to Repository","summary":"`FindByID` provides the existing record required before the request can be processed.","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}]}]}
+{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"Add Repository lookup","summary":"- The Handler needs an existing record before it can apply the request.\n  - `FindByID` supplies that record.\n- Add `FindByID` to the Repository interface and implement the lookup.","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"Add FindByID to Repository","summary":"- `FindByID` supplies the existing record before the Handler processes the request.","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}]}]}
 ```
 
 Every Group must have `importance` set to `core`, `supporting`, or `side`. Every Fragment must have `review_level` set to `careful`, `normal`, or `skim`; omitted draft values default to `normal`. Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every Group must have one or more `review_steps`, and every Group Fragment must occur exactly once in their ordered `fragment_ids`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
@@ -48,10 +48,10 @@ An apply request contains a batch of operations. For example:
 ```json
 {
   "operations": [
-    {"op":"upsert_group","group_id":"repository-lookup","title":"Add Repository lookup","summary":"Adds the lookup used by the Handler.","importance":"core","order":1},
+    {"op":"upsert_group","group_id":"repository-lookup","title":"Add Repository lookup","summary":"- The Handler needs an existing record before it can apply the request.\n  - `FindByID` supplies that record.\n- Add `FindByID` to the Repository interface and implement the lookup.","importance":"core","order":1},
     {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"repository-find-by-id","description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}},
     {"op":"assign_fragments","group_id":"repository-lookup","members":["repository-find-by-id"]},
-    {"op":"set_review_steps","group_id":"repository-lookup","review_steps":[{"id":"repository-method","title":"Add FindByID to Repository","summary":"`FindByID` gives the Handler the record it needs before it processes the request.","fragment_ids":["repository-find-by-id"]}]},
+    {"op":"set_review_steps","group_id":"repository-lookup","review_steps":[{"id":"repository-method","title":"Add FindByID to Repository","summary":"- `FindByID` supplies the existing record before the Handler processes the request.","fragment_ids":["repository-find-by-id"]}]},
     {"op":"set_file_categories","group_id":"repository-lookup","categories":{"src/repository.go":"logic"}}
   ]
 }
@@ -129,27 +129,26 @@ Infer dependencies from imports and call sites, type and schema usage, configura
 
 When Groups are independent, order them to minimize context switching and make the change read as a coherent narrative—for example, shared foundations before feature-specific uses, and core or supporting Groups before side Groups. Do not invent a dependency solely to force a tidy sequence. Before finalizing, scan the ordered summaries from first to last and revise `order` if a Group requires knowledge that is introduced only later.
 
-## Group summaries
+## Group and Step summaries
 
-A group `summary` is a review narrative, not a one-line restatement of its fragments. Write multiple sentences (normally 2–4) so a reviewer can understand the motivation and shape of the change without opening every file. A useful summary generally covers:
+A Group or Step `summary` is a compact Markdown outline, not a prose narrative or a restatement of every Fragment. Write one claim per bullet so the reviewer can scan the shape of the change without opening every file. Use a child bullet only for its parent's reason, concrete detail, consequence, or dependency; keep parallel claims at the same indentation level. Prefer one nesting level and use a second only when it makes a real dependency clearer. Do not add bullets merely to reach a target count: one important claim may need one bullet, while a larger Group may need more.
 
-1. The background or existing situation, when it can be established from the commit history or surrounding code.
-2. The problem, limitation, or risk that motivated the work.
-3. The concrete implementation changes and, when needed, the rules they preserve.
-4. The resulting behavior, tests, or review implication when the evidence supports it.
+A Group summary generally covers the background or limitation when supported by evidence, the concrete implementation changes, and the resulting behavior, tests, or review implication when useful. A Step summary covers only that stage's role and its direct relationship to nearby Steps. Fragment descriptions remain short one-line labels, not outlines.
 
 Use `semdiff commits` as the primary source for background: consider commit subjects, commit bodies, chronology, and which files each commit touched. Use fragment evidence to verify what was actually implemented and to connect the narrative to the grouped changes. Commit history is the current boundary of available context; do not invent product requirements, incidents, user reports, or design decisions that are not supported by commits or code. If the motivation is unclear, say what limitation the diff addresses only when that is directly observable, and keep uncertain interpretation out of the summary.
 
-The summary should explain the relationship among the fragments rather than enumerate filenames or repeat each fragment description. Summary values support Markdown in the viewer. Put the main parts on separate lines in the JSON string: use one line for the background or problem, one for the approach, and optionally one for the result or review implication. Encode those line breaks as `\n` (use `\n\n` for separate Markdown paragraphs when useful). You may use ordinary Markdown such as paragraphs, lists, emphasis, and inline code; do not depend on raw HTML. Keep explicit causal links such as “because,” “so that,” or “which allows.” Do not compress the summary into one line merely to make the JSON shorter.
+The summary should explain the relationship among the fragments rather than enumerate filenames or repeat each fragment description. Summary values support Markdown in the viewer. Use `- ` for top-level bullets and two spaces before `- ` for a child bullet; encode line breaks as `\n` in JSON. Use inline code and emphasis where useful, but do not depend on raw HTML. Keep explicit causal links such as “because,” “so that,” or “which allows.”
 
 Prefer a summary shaped like:
 
 ```markdown
-The previous implementation spread state transitions across direct mutations, which made related updates difficult to keep consistent.
-The change adds `ApplyTransition(command)` and passes the inactive state through `SwitchMode`, so both call sites use the same state update.
-The associated tests call `ApplyTransition` for each supported mode and preserve the expected inactive state.
+- State transitions were spread across direct mutations.
+  - Related updates could diverge between call sites.
+- Add `ApplyTransition(command)` and pass the inactive state through `SwitchMode`.
+  - Both call sites now use the same state update.
+- Test each supported mode through `ApplyTransition`.
 ```
 
 Avoid a summary shaped like:
 
-`Replaces the old implementation with a command layer, adds caching, and adds tests.`
+`- Replace the old implementation with a command layer, add caching, and add tests.`
