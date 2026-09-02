@@ -34,7 +34,11 @@ func TestPublishCreatesAndPreservesArtifactBranch(t *testing.T) {
 	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
 		t.Fatalf("git init --bare: %v: %s", err, out)
 	}
-	store := Store{Dir: repo, Config: config.ReviewStore{Repository: remote, Branch: "semdiff/reviews"}}
+	nestedDir := filepath.Join(repo, "nested")
+	if err := os.Mkdir(nestedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	store := Store{Dir: nestedDir, Config: config.ReviewStore{Repository: remote, Branch: "semdiff/reviews"}}
 	first := model.GroupsFile{BaseSHA: strings.Repeat("a", 40), HeadSHA: strings.Repeat("b", 40)}
 	firstPath := filepath.Join(repo, "first.json")
 	if err := os.WriteFile(firstPath, []byte(`{"version":2}`), 0644); err != nil {
@@ -53,6 +57,13 @@ func TestPublishCreatesAndPreservesArtifactBranch(t *testing.T) {
 	}
 	if _, err := store.Read(context.Background(), Path(first.BaseSHA, first.HeadSHA)); err != nil {
 		t.Fatalf("read published artifact: %v", err)
+	}
+	entries, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("list published artifacts: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("List() returned %d entries, want 2: %+v", len(entries), entries)
 	}
 	tree := git(remote, "ls-tree", "-r", "--name-only", "semdiff/reviews")
 	if !strings.Contains(tree, Path(first.BaseSHA, first.HeadSHA)) || !strings.Contains(tree, Path(second.BaseSHA, second.HeadSHA)) {

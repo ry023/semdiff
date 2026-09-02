@@ -58,7 +58,10 @@ func (s Store) Fetch(ctx context.Context) error {
 }
 
 func (s Store) List(ctx context.Context) ([]Entry, error) {
-	b, err := s.git(ctx, nil, "ls-tree", "-r", "--name-only", cacheRef)
+	// ls-tree otherwise limits its output to s.Dir's path within the worktree.
+	// Reviews are stored at the artifact tree root, so viewing from a repository
+	// subdirectory would incorrectly produce an empty index.
+	b, err := s.git(ctx, nil, "ls-tree", "-r", "--full-tree", "--name-only", cacheRef)
 	if err != nil {
 		return nil, err
 	}
