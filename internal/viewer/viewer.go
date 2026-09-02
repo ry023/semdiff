@@ -37,7 +37,7 @@ const guidedReviewMarkup = `<div class="review-mode-toolbar" role="group" aria-l
 
 const guidedReviewStyle = `<style>.review-mode-toolbar{display:flex;justify-content:flex-end;margin:-16px 0 18px}.review-mode-toggle{padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}.review-mode-toggle:first-child{border-radius:6px 0 0 6px}.review-mode-toggle:last-child{border-radius:0 6px 6px 0}.review-mode-toggle[aria-pressed=true]{background:#1f4675;color:#fff;border-color:#3977b9}.files-view{display:none}.guided-view .group{margin-top:0}.guided-group>summary{padding:14px 18px!important;background:#202b38!important;border-bottom:1px solid #36516f!important;border-left:4px solid var(--accent)!important;color:#f0f6fc!important;box-shadow:0 3px 10px rgba(0,0,0,.28)!important}.guided-group>summary h2{color:#f0f6fc}.guided-group>summary .count{color:#b6c5d6}.guided-group-summary{margin:12px 18px 2px;padding:10px 12px;border:1px solid #284560;border-left:3px solid #3977b9;border-radius:6px;background:#172638;color:#d7e5f4;line-height:1.5}.guided-group-summary p{margin:0 0 8px}.guided-group-summary p:last-child{margin-bottom:0}.guided-group-summary code{color:#b7d8ff}.review-step{border-top:1px solid var(--line);padding:14px 16px;overflow-anchor:none}.review-step>summary,.guided-file>summary{cursor:pointer;list-style:none}.review-step>summary::-webkit-details-marker,.guided-file>summary::-webkit-details-marker{display:none}.review-step>summary:before,.guided-file>summary:before{content:'▶';display:inline-block;margin-right:8px;font-size:10px}.review-step[open]>summary:before,.guided-file[open]>summary:before{transform:rotate(90deg)}.guided-group .review-step[open]>summary{position:sticky;top:var(--group-header-height,0px);z-index:11;margin:-8px -8px 8px;padding:8px;background:#202733;border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,.3)}.guided-group .review-step[open] .guided-file[open]>summary{position:sticky;top:calc(var(--group-header-height,0px) + var(--step-header-height,0px));z-index:10;margin:-4px -4px 8px;padding:7px;background:#202733;border:1px solid var(--line);border-radius:6px;box-shadow:0 3px 8px rgba(0,0,0,.25)}.review-step h3{display:inline;font-size:15px}.step-summary{margin:7px 0 0 19px;color:var(--muted);line-height:1.45}.step-summary p{margin:0}.guided-file{margin:14px 0 22px;border:1px solid var(--line);border-radius:6px;padding:10px;background:#111821;overflow-anchor:none}.guided-file .file-heading{max-width:none}.guided-file .file-heading h3{font:400 14px ui-monospace,monospace;margin:0;color:var(--text)}.guided-fragment-description{margin:6px 0 0 19px}.guided-file .fragment-note{border:0;border-radius:0;background:transparent;padding:0}.guided-file .fragment-note .ask-button{margin-left:8px}@media(max-width:850px){.review-mode-toolbar{margin-top:0}}</style><script>(function(){function start(){function setMode(mode){document.body.dataset.reviewMode=mode;document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.reviewMode===mode))});document.querySelector('.guided-view').style.display=mode==='guided'?'block':'none';document.querySelector('.files-view').style.display=mode==='files'?'block':'none'}function updateStepHeaderHeight(step){var summary=step.querySelector(':scope > summary');if(summary)step.style.setProperty('--step-header-height',summary.offsetHeight+'px')}var observer=typeof ResizeObserver==='function'?new ResizeObserver(function(entries){entries.forEach(function(entry){var step=entry.target.closest('.review-step');if(step)updateStepHeaderHeight(step)})}):null;var closingTops=new WeakMap();document.addEventListener('click',function(event){var summary=event.target.closest('.guided-file>summary,.review-step>summary');if(!summary)return;var details=summary.parentElement;if(details.open)closingTops.set(details,summary.getBoundingClientRect().top)},true);document.addEventListener('toggle',function(event){var details=event.target;if(!(details instanceof HTMLDetailsElement)||details.open)return;var top=closingTops.get(details);if(top===undefined)return;closingTops.delete(details);requestAnimationFrame(function(){window.scrollBy(0,details.querySelector(':scope > summary').getBoundingClientRect().top-top)})},true);document.querySelectorAll('.review-step').forEach(function(step){var summary=step.querySelector(':scope > summary');updateStepHeaderHeight(step);if(observer&&summary)observer.observe(summary)});window.addEventListener('resize',function(){document.querySelectorAll('.review-step').forEach(updateStepHeaderHeight)});document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.addEventListener('click',function(){setMode(button.dataset.reviewMode)})});setMode('guided')}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start()})();</script>`
 
-const summaryListStyle = `<style>.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}.summary li,.step-summary li{margin:4px 0!important;white-space:normal}.summary li>p,.step-summary li>p{margin:0!important}.summary ul ul,.summary ul ol,.summary ol ul,.summary ol ol,.step-summary ul ul,.step-summary ul ol,.step-summary ol ul,.step-summary ol ol{margin:4px 0 0!important;padding-left:20px!important}</style>`
+const summaryListStyle = `<style>.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}.summary li,.step-summary li{margin:4px 0!important;white-space:normal}.summary li>p,.step-summary li>p{margin:0!important}.summary ul ul,.summary ul ol,.summary ol ul,.summary ol ol,.step-summary ul ul,.step-summary ul ol,.step-summary ol ul,.step-summary ol ol{margin:4px 0 0!important;padding-left:20px!important}.diff-row.other-change{background:#1b222b;color:#aeb8c4}.diff-row.other-change .line-number{border-right-color:#3a4654;color:#8d99a8}</style>`
 
 func addGuidedReviewMarkup(source string) string {
 	const groupStart = `</div>{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`
@@ -196,7 +196,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, SummaryHTML: renderMarkdown(step.Summary), AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex), Number: stepIndex + 1}
 			for _, id := range step.FragmentIDs {
 				fragment := byID[id]
-				view := buildFragmentView(fragment, fileContents[fragment.Path], byPath[fragment.Path])
+				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path])
 				view.Description = descriptions[id]
 				view.RangeLabel = rangeLabels[id]
 				view.ReviewLevel = reviewLevels[id]
@@ -473,7 +473,7 @@ func sourceLines(content string) []string {
 	return lines
 }
 
-func buildFragmentView(f model.MaterializedFragment, content string, siblings []model.MaterializedFragment) FragmentView {
+func buildFragmentView(f model.MaterializedFragment, content string, boundaries, highlights []model.MaterializedFragment) FragmentView {
 	header, hunk := splitPatch(f.Patch)
 	lines := sourceLines(content)
 	view := FragmentView{MaterializedFragment: f, HeaderHTML: colorPatch(header), HunkHTML: colorPatchWithContext(hunk, lines)}
@@ -483,16 +483,16 @@ func buildFragmentView(f model.MaterializedFragment, content string, siblings []
 	}
 	end := min(len(lines), start+fragmentLines(f))
 	upperStart, lowerEnd := 0, len(lines)
-	for i, sibling := range siblings {
+	for i, sibling := range boundaries {
 		if sibling.ID != f.ID {
 			continue
 		}
 		if i > 0 {
-			previous := siblings[i-1]
+			previous := boundaries[i-1]
 			upperStart = min(start, fragmentStart(previous)-1+fragmentLines(previous))
 		}
-		if i+1 < len(siblings) {
-			lowerEnd = max(end, fragmentStart(siblings[i+1])-1)
+		if i+1 < len(boundaries) {
+			lowerEnd = max(end, fragmentStart(boundaries[i+1])-1)
 		}
 		break
 	}
@@ -506,8 +506,8 @@ func buildFragmentView(f model.MaterializedFragment, content string, siblings []
 		upperOldFirst = max(1, first.oldStart-(start-upperStart)+1)
 		lowerOldFirst = last.oldEnd + 1
 	}
-	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperOldFirst, upperStart+1, "up")
-	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], lowerOldFirst, end+1, "down")
+	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperOldFirst, upperStart+1, "up", highlights)
+	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], lowerOldFirst, end+1, "down", highlights)
 	return view
 }
 
@@ -531,7 +531,7 @@ func colorPatchWithContext(patch string, lines []string) template.HTML {
 			currentStart = max(previousEnd, min(currentStart, len(lines)))
 			gapLines := lines[previousEnd:currentStart]
 			oldFirst := max(1, current.oldStart-len(gapLines)+1)
-			out.WriteString(string(expandableGap(gapLines, oldFirst, previousEnd+1)))
+			out.WriteString(string(expandableGap(gapLines, oldFirst, previousEnd+1, nil)))
 		}
 		out.WriteString(string(colorPatch(block)))
 	}
@@ -619,7 +619,7 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 	file.StatusIcon = fileStatusIcon(file.Status)
 	file.Diffstat = diffstatBlocks(file.Additions, file.Deletions)
 	for _, fragment := range fragments {
-		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, siblings))
+		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, fragments, siblings))
 	}
 	if len(file.Fragments) == 0 {
 		return file
@@ -628,17 +628,10 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 	for i := range file.Fragments {
 		file.Fragments[i].HeaderHTML = ""
 	}
-	globalIndex := map[string]int{}
-	for i, fragment := range siblings {
-		globalIndex[fragment.ID] = i
-	}
 	lines := sourceLines(content)
 	for i := 1; i < len(file.Fragments); i++ {
 		previous := &file.Fragments[i-1]
 		current := &file.Fragments[i]
-		if globalIndex[current.ID] != globalIndex[previous.ID]+1 {
-			continue
-		}
 		start := fragmentStart(previous.MaterializedFragment) - 1 + fragmentLines(previous.MaterializedFragment)
 		end := fragmentStart(current.MaterializedFragment) - 1
 		start = max(0, min(start, len(lines)))
@@ -651,7 +644,7 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 			bounds := parseHunkBounds(currentBlocks[0])
 			oldFirst = max(1, bounds.oldStart-len(gapLines)+1)
 		}
-		previous.LowerContextHTML = expandableGap(gapLines, oldFirst, start+1)
+		previous.LowerContextHTML = expandableGap(gapLines, oldFirst, start+1, siblings)
 		current.UpperContextHTML = ""
 	}
 	return file
@@ -725,7 +718,7 @@ func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber strin
 	out.WriteString(`</span>`)
 }
 
-func expandableContext(lines []string, firstOldLine, firstNewLine int, direction string) template.HTML {
+func expandableContext(lines []string, firstOldLine, firstNewLine int, direction string, highlights []model.MaterializedFragment) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
@@ -751,13 +744,13 @@ func expandableContext(lines []string, firstOldLine, firstNewLine int, direction
 		}
 		oldNumber := strconv.Itoa(firstOldLine + i)
 		newNumber := strconv.Itoa(firstNewLine + i)
-		appendDiffRow(&out, " "+line, "ctx", oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
+		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
 	}
 	out.WriteString(`</span>`)
 	return template.HTML(out.String())
 }
 
-func expandableGap(lines []string, firstOldLine, firstNewLine int) template.HTML {
+func expandableGap(lines []string, firstOldLine, firstNewLine int, highlights []model.MaterializedFragment) template.HTML {
 	if len(lines) == 0 {
 		return ""
 	}
@@ -775,10 +768,20 @@ func expandableGap(lines []string, firstOldLine, firstNewLine int) template.HTML
 		}
 		oldNumber := strconv.Itoa(firstOldLine + i)
 		newNumber := strconv.Itoa(firstNewLine + i)
-		appendDiffRow(&out, " "+line, "ctx", oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
+		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd)
 	}
 	out.WriteString(`</span>`)
 	return template.HTML(out.String())
+}
+
+func contextRowClass(line int, fragments []model.MaterializedFragment) string {
+	for _, fragment := range fragments {
+		start, count := fragmentStart(fragment), fragmentLines(fragment)
+		if count > 0 && line >= start && line < start+count {
+			return "ctx other-change"
+		}
+	}
+	return "ctx"
 }
 
 func colorPatch(patch string) template.HTML {

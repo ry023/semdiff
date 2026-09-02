@@ -589,6 +589,26 @@ func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
 	}
 }
 
+func TestContextExpansionShowsOtherFragments(t *testing.T) {
+	first := model.MaterializedFragment{ID: "F1", Path: "a.go", NewStart: 5, NewLines: 1, Patch: "@@ -5,1 +5,1 @@\n-old\n+first\n"}
+	other := model.MaterializedFragment{ID: "F2", Path: "a.go", NewStart: 12, NewLines: 2, Patch: "@@ -12,2 +12,2 @@\n-old\n+other\n"}
+	last := model.MaterializedFragment{ID: "F3", Path: "a.go", NewStart: 20, NewLines: 1, Patch: "@@ -20,1 +20,1 @@\n-old\n+last\n"}
+	content := strings.Repeat("line\n", 30)
+	file := buildFileView("a.go", []model.MaterializedFragment{first, last}, content, []model.MaterializedFragment{first, other, last})
+	between := string(file.Fragments[0].LowerContextHTML)
+	if !strings.Contains(between, `diff-row ctx other-change`) {
+		t.Fatalf("context should mark other fragment lines: %q", between)
+	}
+	if !strings.Contains(between, "Show 4 lines below") {
+		t.Fatalf("context should remain expandable across other fragment lines: %q", between)
+	}
+
+	guided := buildFragmentView(first, content, nil, []model.MaterializedFragment{first, other, last})
+	if !strings.Contains(string(guided.LowerContextHTML), `diff-row ctx other-change`) {
+		t.Fatalf("guided context should extend through other fragments: %q", guided.LowerContextHTML)
+	}
+}
+
 func TestBuildPreservesReviewStepFragmentOrderAcrossFiles(t *testing.T) {
 	order := 1
 	group := model.GroupsFile{Groups: []model.SemanticGroup{{
@@ -649,7 +669,7 @@ func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
 }
 
 func TestShortRangeGapIsInitiallyVisibleWithoutExpandControls(t *testing.T) {
-	html := string(expandableGap(strings.Split("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine", "\n"), 11, 11))
+	html := string(expandableGap(strings.Split("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine", "\n"), 11, 11, nil))
 	if strings.Contains(html, "expand-lines") || strings.Contains(html, "context-hidden") {
 		t.Fatalf("a gap covered by five lines of context on each side should be fully visible: %q", html)
 	}
