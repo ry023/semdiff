@@ -15,16 +15,16 @@ Create `groups.json` as a derived review layer. Preserve commits and repository 
 4. Run `semdiff grouping inspect --suggestions --json` and review suggestions by file and neighboring code. For a seeded draft, prioritize ungrouped suggestions and Groups whose files changed after the source review. Use `semdiff show --draft .semdiff/grouping-draft.json <id> --json` for the relevant candidates.
 5. Compose authored fragments from the suggestions with `merge_fragments`: one `member` promotes a semantically complete suggestion, while several same-path `members` become one multi-range fragment. Use `add_fragment`, `update_fragment`, and `delete_fragments` when the intended definition needs explicit ranges or an inherited definition must change. Only authored fragments appear in status and require assignment.
 6. Create a small number of cohesive groups and apply the decisions in batches with `semdiff grouping apply <operations-file|-> --json`. Preserve an inherited Group when its concern remains intact; revise, split, merge, or move it when the new change alters that concern. Assign each fragment one primary membership even when it relates to several concerns. Assign Group `importance` using `core`, `supporting`, or `side` relative to the PR as a whole, following the removal test below. Assign Fragment `review_level` using `careful`, `normal`, or `skim` to tell the reviewer how closely to read it; use `normal` unless the fragment clearly warrants more or less attention. Set each group's `order` so prerequisites appear before groups that depend on them. Use a clearly named fallback such as `mechanical-changes` or `unclassified` when evidence is insufficient.
-7. For every new or revised fragment, write a concise semantic description of what changed and, when the evidence supports it, why the change was made. For every file referenced by a Group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
+7. For every new or revised fragment, write a short semantic label for the one change worth noticing. Include why only when it changes the review judgment because the purpose, constraint, or relationship is not clear from the diff. For every file referenced by a Group's fragments, set exactly one `file_categories` entry. Start from `classify` output, then confirm or revise it using commit intent, path semantics, and relevant Fragment content.
 8. Repeat `status`, `inspect`, and `apply` as needed. Drafts are intentionally allowed to be incomplete; do not stop merely because one batch has unassigned fragments.
-9. Before finalizing, review each file for both under- and over-fragmentation. For a large suggestion or new file, inspect its top-level responsibilities and use `add_fragment` with explicit ranges when functions, types, handlers, or tests can be explained and questioned independently. Do not split merely at a file boundary, Git hunk, or test boundary. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
-10. After assigning fragments, create `review_steps` for every Group with `set_review_steps`. First list the questions a reviewer must answer in order, then map each Fragment to one Step. A Step exists only when it introduces a new prerequisite, question, or judgment; do not target a number of Steps. Its summary describes this stage's role in the change and its relationship to adjacent Steps: state what it establishes and which later behavior depends on it, or how it completes what came before. Write descriptively about the implementation; do not instruct the reviewer to “read,” “review,” or “look at” something. Adjacent Steps that answer the same question belong together. Each Group Fragment must occur exactly once across its Steps.
+9. Before finalizing, review each file for both under- and over-fragmentation. For a large suggestion or new file, inspect its top-level responsibilities and use `add_fragment` with explicit ranges when functions, types, handlers, or tests can be explained and questioned independently. Do not split merely at a file boundary, Git hunk, test boundary, import, comment, or formatting change. Merge fragments whose meaning cannot be explained independently, especially delimiter-only or syntax-only fragments and fragments that merely complete a neighboring construct.
+10. After assigning fragments, create `review_steps` for every Group with `set_review_steps`. First list the questions a reviewer must answer in order, then map each Fragment to one Step. A Step exists only when it introduces a new prerequisite, question, or judgment; do not target a number of Steps. Write its title as a concise, concrete action that says what this part of the change does, such as `Add FindByID to Repository` or `Call CreateCommand.Execute from the Handler`. Do not use a noun phrase, a design label, or a reading instruction. In order, the Step titles should form an action-level outline that complements the Group summary. Its summary describes this stage's role in the change and its relationship to adjacent Steps: state what it establishes and which later behavior depends on it, or how it completes what came before. Write descriptively about the implementation; do not instruct the reviewer to “read,” “review,” or “look at” something. Adjacent Steps that answer the same question belong together. Each Group Fragment must occur exactly once across its Steps.
 11. Run `semdiff grouping finalize --json`. With no explicit output path, finalize writes the result to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`; use an explicit path only when the user or surrounding workflow requires one. Finalize succeeds only when every authored fragment is assigned, described, and placed in a complete review Step, every Group has a complete summary and file categories, and every changed line and metadata change is selected exactly once.
 
 The required shape is:
 
 ```json
-{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"Add Repository lookup","summary":"The Handler needs an existing record before it can apply the request. The change adds `FindByID` to the Repository interface and implements that lookup.","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"Add the Repository method","summary":"`FindByID` provides the existing record required before the request can be processed.","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}]}]}
+{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"Add Repository lookup","summary":"The Handler needs an existing record before it can apply the request. The change adds `FindByID` to the Repository interface and implements that lookup.","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"Add FindByID to Repository","summary":"`FindByID` provides the existing record required before the request can be processed.","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}]}]}
 ```
 
 Every Group must have `importance` set to `core`, `supporting`, or `side`. Every Fragment must have `review_level` set to `careful`, `normal`, or `skim`; omitted draft values default to `normal`. Every fragment must occur exactly once across all groups and must contain `id`, `path`, at least one `ranges` entry (or `file_metadata: true`), and a non-empty `description`. Every Group must have one or more `review_steps`, and every Group Fragment must occur exactly once in their ordered `fragment_ids`. Every changed old/new line and file metadata change must be selected exactly once. Every file referenced by a Group must occur exactly once in that Group's `file_categories`.
@@ -51,7 +51,7 @@ An apply request contains a batch of operations. For example:
     {"op":"upsert_group","group_id":"repository-lookup","title":"Add Repository lookup","summary":"Adds the lookup used by the Handler.","importance":"core","order":1},
     {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"repository-find-by-id","description":"Adds `FindByID` to the Repository interface and implements the lookup.","review_level":"careful"}},
     {"op":"assign_fragments","group_id":"repository-lookup","members":["repository-find-by-id"]},
-    {"op":"set_review_steps","group_id":"repository-lookup","review_steps":[{"id":"repository-method","title":"Add the Repository method","summary":"`FindByID` gives the Handler the record it needs before it processes the request.","fragment_ids":["repository-find-by-id"]}]},
+    {"op":"set_review_steps","group_id":"repository-lookup","review_steps":[{"id":"repository-method","title":"Add FindByID to Repository","summary":"`FindByID` gives the Handler the record it needs before it processes the request.","fragment_ids":["repository-find-by-id"]}]},
     {"op":"set_file_categories","group_id":"repository-lookup","categories":{"src/repository.go":"logic"}}
   ]
 }
@@ -90,6 +90,8 @@ Prefer vocabulary that maps directly to the code: interface, type, method, funct
 
 When design meaning is useful, explain it after the concrete code change. Use abstract terms such as `contract`, `boundary`, `ownership`, `wiring`, and `responsibility` when those concepts are themselves under discussion, not as replacements for a direct description of the implementation. Prefer precise and direct wording over formal or abstract wording with the same meaning.
 
+Step titles follow the same rule: name the concrete action rather than a category or an abstract design concept. When writing Japanese, use a natural action phrase such as `Repository に FindByID を追加する` or `Handler から CreateCommand.Execute を呼び出す`. Avoid noun phrases such as `Repository メソッド` and abstract labels such as `検索の責務`.
+
 ### Japanese technical vocabulary
 
 When writing Japanese, use vocabulary and notation natural to Japanese software development. Do not mechanically translate English technical terms into unfamiliar Japanese expressions. In particular, do not automatically translate `contract`, `wiring`, `ownership`, or `boundary` as `契約`, `接続`, `所有`, or `境界`.
@@ -98,21 +100,26 @@ Keep terms in English or katakana when that is natural in Japanese technical wri
 
 ## Fragment descriptions
 
-Describe the concrete code change and its behavior or test coverage—not the file operation. Do not repeat the file name or path, and do not lead with bookkeeping such as “updated,” “added,” “deleted,” “new file,” or “first half”; the data structure and viewer already show that context.
+Fragment descriptions are short labels, not miniature summaries. State the one concrete code change worth noticing, normally as one clause or sentence. Do not repeat the file name or path, and do not lead with bookkeeping such as “updated,” “added,” “deleted,” “new file,” or “first half”; the data structure and viewer already show that context.
 
-When the diff, surrounding code, commit narrative, or group intent provides evidence, include the reason or purpose after the concrete change. Useful reasons include enabling a workflow, removing duplicated code, preserving a validation rule, adapting callers to a new method, or preventing a regression. Do not invent rationale that the available evidence does not support; when the reason is unclear, state only the concrete semantic change.
+Do not enumerate imports, comments, formatting, generated output, test setup, or other supporting mechanics when they have no independent review meaning. Include them in the Fragment that owns the behavior they support. If such a change must remain separate, give it the minimum direct label and use `skim` when appropriate.
+
+Why is optional, not a default. Add it only when the reason is needed for review judgment and is not apparent from the diff: for example, a validation rule, a non-obvious caller adaptation, or a regression that the change prevents. Do not invent rationale that the available evidence does not support. For `skim` Fragments, omit why unless it is essential to avoid a misleading review.
 
 Prefer descriptions such as:
 
-- `Removes the duplicate render call and invokes SharedButton.Render instead.`
-- `Adds table-driven tests for the supported operations and their error results.`
-- `Calls CreateCommand.Execute from the create Handler so creation uses the same validation as the CLI command.`
+- `Adds FindByID to the Repository interface.`
+- `Calls CreateCommand.Execute from the create Handler.`
+- `Rejects duplicate IDs so retries cannot create a second record.`
+- `Adds table-driven tests for duplicate-ID errors.`
 
 Avoid descriptions such as:
 
 - `ファイルを更新。古いコードを削除。`
 - `テストファイルを新規追加。関連するテストを追加。`
 - `ファイル前半部分を更新。新しい依存関係を追加。`
+- `FindByID のための import とコメントを追加。`
+- `空IDを拒否する理由を説明するコメントを追加。`
 
 ## Group review order
 
