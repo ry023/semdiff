@@ -1,0 +1,16 @@
+{
+  "name": "semdiff",
+  "description": "Organize Git diffs into semantic reviews and answer questions about them.",
+  "version": "0.1.0",
+  "author": {
+    "name": "ry023"
+  },
+  "homepage": "https://github.com/ry023/semdiff",
+  "repository": "https://github.com/ry023/semdiff",
+  "keywords": [
+    "code-review",
+    "git-diff",
+    "semantic-diff"
+  ],
+  "skills": "./skills/"
+}

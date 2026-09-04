@@ -23,19 +23,32 @@ Quick Start は人間のレビュー workflow を中心にしています。CLI 
 
 ### 1. CLI とスキルをインストールする
 
-リポジトリを clone し、CLI をインストールして、同梱されている2つのスキルを Agent の skills directory にコピーします。Codex の場合は次の通りです。
+CLI をインストールします。
+
+```sh
+go install github.com/ry023/semdiff@latest
+```
+
+GitHub Copilot CLI では、このリポジトリから同梱スキルを plugin として直接インストールできます。
+
+```sh
+copilot plugin install ry023/semdiff
+```
+
+インストール後に Copilot CLI を再起動すると、スキルが認識されます。`semdiff` 実行ファイルも Agent の `PATH` に含まれている必要があります。
+
+Codex では、リポジトリを clone して同梱されている2つのスキルを skills directory にコピーします。
 
 ```sh
 git clone https://github.com/ry023/semdiff.git
 cd semdiff
-go install .
 
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 cp -R skills/semantic-grouping skills/answer-semdiff \
   "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
-インストール後に Agent を再起動すると、スキルが認識されます。`semdiff` 実行ファイルも Agent の `PATH` に含まれている必要があります。
+インストール後に Codex を再起動すると、スキルが認識されます。
 
 ### 2. Agent に変更を整理させる
 

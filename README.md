@@ -21,19 +21,32 @@ Quick Start is intentionally centered on the human workflow. Install the CLI and
 
 ### 1. Install the CLI and skills
 
-Clone the repository, install the CLI, and copy the two bundled skills into your agent's skills directory. For Codex:
+Install the CLI:
+
+```sh
+go install github.com/ry023/semdiff@latest
+```
+
+For GitHub Copilot CLI, install the bundled skills as a plugin directly from this repository:
+
+```sh
+copilot plugin install ry023/semdiff
+```
+
+Restart Copilot CLI after installing the plugin so it can discover the skills. The `semdiff` executable must also be on the agent's `PATH`.
+
+For Codex, clone the repository and copy the two bundled skills into the skills directory:
 
 ```sh
 git clone https://github.com/ry023/semdiff.git
 cd semdiff
-go install .
 
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 cp -R skills/semantic-grouping skills/answer-semdiff \
   "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
-Restart the agent after installing the skills so it can discover them. The `semdiff` executable must also be on the agent's `PATH`.
+Restart Codex after installing the skills so it can discover them.
 
 ### 2. Ask an agent to organize the change
 
