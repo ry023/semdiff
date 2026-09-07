@@ -1,0 +1,36 @@
+{
+  "name": "semdiff",
+  "version": "0.1.0",
+  "description": "Organize Git diffs into semantic reviews and answer questions about them.",
+  "author": {
+    "name": "ry023",
+    "url": "https://github.com/ry023"
+  },
+  "homepage": "https://github.com/ry023/semdiff",
+  "repository": "https://github.com/ry023/semdiff",
+  "license": "MIT",
+  "keywords": [
+    "code-review",
+    "git-diff",
+    "semantic-diff",
+    "pull-request"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "semdiff",
+    "shortDescription": "Organize pull request diffs for semantic review",
+    "longDescription": "Group related Git changes into a review-oriented story, validate complete diff coverage, and answer questions about the resulting semantic review.",
+    "developerName": "ry023",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/ry023/semdiff",
+    "defaultPrompt": [
+      "Group the current Git range for semantic review",
+      "Answer questions about the current semdiff review"
+    ]
+  }
+}

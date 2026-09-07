@@ -35,18 +35,19 @@ copilot plugin install ry023/semdiff
 
 Restart Copilot CLI after installing the plugin so it can discover the skills. The `semdiff` executable must also be on the agent's `PATH`.
 
-For Codex, clone the repository and copy the two bundled skills into the skills directory:
+For Codex, install the plugin from this repository's marketplace:
 
 ```sh
-git clone https://github.com/ry023/semdiff.git
-cd semdiff
-
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-cp -R skills/semantic-grouping skills/answer-semdiff \
-  "${CODEX_HOME:-$HOME/.codex}/skills/"
+codex plugin marketplace add ry023/semdiff
+codex plugin add semdiff@semdiff
 ```
 
-Restart Codex after installing the skills so it can discover them.
+When testing a local checkout, use `codex plugin marketplace add .` instead of the GitHub shorthand.
+You can also open `/plugins` in Codex to browse and install the plugin after adding the marketplace.
+Start a new Codex session after installation so it can discover the bundled skills.
+
+The repository also keeps the raw `skills/` directories for GitHub Copilot CLI and other agents
+that support direct skill installation.
 
 ### 2. Ask an agent to organize the change
 

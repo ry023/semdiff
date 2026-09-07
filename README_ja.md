@@ -37,18 +37,18 @@ copilot plugin install ry023/semdiff
 
 インストール後に Copilot CLI を再起動すると、スキルが認識されます。`semdiff` 実行ファイルも Agent の `PATH` に含まれている必要があります。
 
-Codex では、リポジトリを clone して同梱されている2つのスキルを skills directory にコピーします。
+Codex では、このリポジトリの marketplace から plugin をインストールします。
 
 ```sh
-git clone https://github.com/ry023/semdiff.git
-cd semdiff
-
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-cp -R skills/semantic-grouping skills/answer-semdiff \
-  "${CODEX_HOME:-$HOME/.codex}/skills/"
+codex plugin marketplace add ry023/semdiff
+codex plugin add semdiff@semdiff
 ```
 
-インストール後に Codex を再起動すると、スキルが認識されます。
+ローカル checkout で試す場合は、GitHub shorthand の代わりに `codex plugin marketplace add .` を使います。
+marketplace を追加したあと、Codex で `/plugins` を開いて plugin を探してインストールすることもできます。
+インストール後は、新しい Codex session を開始すると同梱 skill が認識されます。
+
+この repository には、GitHub Copilot CLI や skill の直接インストールに対応する他の Agent 向けに、raw な `skills/` directory も残しています。
 
 ### 2. Agent に変更を整理させる
 
