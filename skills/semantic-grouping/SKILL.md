@@ -99,7 +99,7 @@ Importance は、Group が PR の目的にどう関係するかを示すもの�
 - `skim`: 挙動を変えないことが確認できる整形や機械的な追随など、詳細な論理判断がほぼ不要な変更。
 - `normal`: 上記に当てはまらない変更。判断材料が足りない場合も既定値とします。
 
-ファイルの種類、行数、新規追加というだけで判定しないでください。テストや生成物でも重要な条件の判断を含めば `careful` になりえます。`careful` を選んだ場合は、その注意点が description または所属 Step の説明から読み取れるようにします。
+ファイルの種類、行数、新規追加というだけで判定しないでください。テストや生成物でも重要な条件の判断を含めば `careful` になりえます。`careful` を選んだ場合は、その根拠となる変更内容や影響を description または所属 Step に記述します。
 
 ### ファイルの file_categories
 
@@ -146,7 +146,6 @@ Group と Step の summary は、原則として次の順番で説明します�
 - Why: 対処する問題・制約、またはこの変更が必要になる処理上の理由。
 - What: 何をどう変えるか。識別子の種別と新規／既存を示す。
 - So what: その結果、何が可能になるか、どの挙動が変わるか、何を防げるか。
-- Review focus: 判断が必要な条件や失敗時の扱いがある場合だけ追加する。未確認の正しさを断定せず、判断対象を具体的に示す。
 
 Group は成果全体、Step はその段階が必要な理由と後続の処理への効果を扱います。Step ごとに PR 全体の動機を繰り返さないでください。Why・What・So what のラベルを基本にしますが、同じ意味になる項目はまとめて構いません。自明な理由や名前の言い換えで項目を埋めず、説明全体から理由・変更・効果を理解できるようにします。Fragment description は短い説明に保ち、同じ構成を強制しません。
 
@@ -154,7 +153,7 @@ Why は、変更前のどの不足・制約が今回の変更を必要にする�
 
 変更の動機と、コード上で果たす役割を区別します。動機が不明な場合は、コードから確認できる必要条件や前後の処理との関係を Why として説明します。それも確認できなければ、Why を捏造して埋めないでください。
 
-単一 Step の Group では内容が重なることを許容しますが、summary 全文を複製しません。Group で問題と成果を説明し、Step では具体的な変更と判断に必要な条件を短く示します。この場合、Step で既出の Why を繰り返す必要はありません。
+単一 Step の Group では内容が重なることを許容しますが、summary 全文を複製しません。Group で問題と成果を説明し、Step では具体的な変更とその効果を短く示します。この場合、Step で既出の Why を繰り返す必要はありません。
 
 背景の主な source として `semdiff commits` を使います。commit subject、commit body、時系列、各 commit が変更したファイルを確認します。Fragment の根拠で、実際に実装された内容を検証し、変更の経緯と grouped change を結び付けます。commit history は利用できる context の境界です。commit や code に裏付けのない product requirement、incident、user report、design decision を作らないでください。動機が不明な場合、diff から直接観察できるときに限って、どの制約に対処する変更かを述べます。不確かな解釈は summary に入れないでください。
 
@@ -168,7 +167,6 @@ summary は、ファイル名を列挙したり各 Fragment の description を�
 - Why: 状態の更新処理が二箇所に分散し、呼び出し元によって更新内容が食い違う可能性がある。
 - What: 新規関数 `ApplyTransition` に状態更新をまとめ、既存関数 `SwitchMode` から呼び出す。この処理は、動作モードと停止状態を一緒に更新する。
 - So what: 両方の呼び出し元が同じ処理を使い、状態の組み合わせを統一できる。
-- Review focus: 各モードへの切り替え後も、停止状態が意図どおり維持されるか。
 ```
 
 次のような summary は避けます。
@@ -243,7 +241,7 @@ apply request は operation の batch を含みます。例:
         {
           "id": "repository-method",
           "title": "保存済みレコードを ID で取得できるようにする",
-          "summary": "- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。\n- Review focus: 指定 ID が存在しない場合の戻り値が、interface と実装で一致するか。",
+          "summary": "- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。",
           "fragment_ids": [
             "repository-find-by-id"
           ]
@@ -270,7 +268,7 @@ apply request は operation の batch を含みます。例:
 必須の形は次のとおりです。以下は、更新前の照合に取得メソッドが不足していることをコードで確認できた場合の例です。呼び出し元の更新処理の実装まで完了したとは主張しません。
 
 ```json
-{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- Why: 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には取得メソッドがない。\n- What: 新規メソッド `FindByID` を追加し、ID による取得処理を実装する。\n- So what: 呼び出し元で、保存済みの値に基づく更新可否の判断を組み立てられる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。\n- Review focus: 指定 ID が存在しない場合の戻り値が、interface と実装で一致するか。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"normal"}]}]}
+{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- Why: 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には取得メソッドがない。\n- What: 新規メソッド `FindByID` を追加し、ID による取得処理を実装する。\n- So what: 呼び出し元で、保存済みの値に基づく更新可否の判断を組み立てられる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"normal"}]}]}
 ```
 
 すべての Group に `importance` として `core`、`supporting`、`side` のいずれかを設定します。すべての Fragment に `review_level` として `careful`、`normal`、`skim` のいずれかを設定します。draft で省略された値は `normal` が既定値になります。すべての Fragment には `id`、`path`、少なくとも 1 つの `ranges` entry（または `file_metadata: true`）、空でない `description` が必要です。すべての Group には 1 つ以上の `review_steps` が必要で、Group の各 Fragment は順序付き `fragment_ids` の中にちょうど 1 回だけ現れる必要があります。変更されたすべての old/new line と file metadata change は、ちょうど 1 回選択する必要があります。Group が参照するすべてのファイルは、その Group の `file_categories` にちょうど 1 回現れる必要があります。
