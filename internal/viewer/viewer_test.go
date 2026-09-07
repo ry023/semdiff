@@ -646,6 +646,19 @@ func TestBuildPreservesReviewStepFragmentOrderAcrossFiles(t *testing.T) {
 	if !strings.Contains(body, `<h3>1. Start</h3>`) {
 		t.Fatal("step title should include its review order")
 	}
+	for _, want := range []string{
+		`class="guided-file main-guided-fragment"`,
+		`class="file-status-icon updated"`,
+		`class="file-stats"`,
+		`Mark fragment as reviewed`,
+		`.main-group>summary{display:flex!important`,
+		`group.querySelectorAll('.review-step,.guided-file')`,
+		`</summary><div class="summary guided-group-summary">`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("guided/files visual parity is missing %q", want)
+		}
+	}
 }
 
 func TestHighlightedLineKeepsDiffMarkerAndEscapesCode(t *testing.T) {
