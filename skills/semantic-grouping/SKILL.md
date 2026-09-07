@@ -18,13 +18,13 @@ description: semdiff CLI を使って Git のコミット範囲をレビュー�
 7. 新規または修正した各 Fragment には、注目すべき 1 つの変更を表す短い意味的なラベルを書きます。目的、制約、関係が diff から明らかでなく、その点がレビュー判断を変える場合にだけ理由を加えます。Group の Fragment が参照する各ファイルには、`file_categories` の entry をちょうど 1 つ設定します。まず `classify` の出力を使い、commit intent、パスの意味、関連する Fragment の内容で確認または修正します。
 8. 必要に応じて `status`、`inspect`、`apply` を繰り返します。draft は意図的に未完成でもよいものです。1 回の batch で未割り当ての Fragment が残っただけで停止しないでください。
 9. 最終化の前に、各ファイルについて Fragment が不足していないか、細かく分けすぎていないかを確認します。大きな suggestion や新規ファイルでは、トップレベルの責務を確認し、関数、型、handler、test を独立して説明・検討できる場合は `add_fragment` と明示的な範囲を使います。ファイル境界、Git hunk、test 境界、import、コメント、formatting の変更だけを理由に分割しないでください。意味を独立して説明できない Fragment、特に delimiter だけの Fragment や syntax だけの Fragment、隣接する構造を完成させるだけの Fragment は統合します。
-10. Fragment を割り当てた後、`set_review_steps` で各 Group の `review_steps` を作成します。Step は、以下で説明する実際の依存関係と推論の経路から導きます。一般的な setup/implementation/integration/test の構成を使い回さないでください。各 Step の title は、`Add FindByID to Repository` や `Call CreateCommand.Execute from the Handler` のように、その部分が何をするかを示す簡潔で具体的な action にします。名詞句、design label、読解の指示は使わないでください。順番に並べた Step の title は、Group summary を補う action レベルの outline になる必要があります。summary は簡潔な Markdown outline とし、各 bullet はこの段階について 1 つの主張を述べ、子 bullet はその親の理由、具体的な詳細、結果、依存関係だけを補足します。実装を説明する形で書き、「reviewer が読む」「review する」「見る」よう指示しないでください。日本語で書く場合は、`Repository に FindByID を追加する` や `Handler から CreateCommand.Execute を呼び出す` のような自然な action phrase にします。`Repository メソッド` のような名詞句や、`検索の責務` のような抽象的な label は避けてください。各 Group Fragment は、その Group の Step の中にちょうど 1 回だけ現れる必要があります。
+10. Fragment を割り当てた後、`set_review_steps` で各 Group の `review_steps` を作成します。Step は以下の実際の依存関係と推論の経路から導き、一般的な setup/implementation/integration/test の構成を使い回さないでください。title は「保存済みレコードを ID で取得できるようにする」のように、具体的な目的・効果を示す動作の表現にします。名詞句、抽象的なラベル、読解の指示は使わないでください。順に並べた title が Group summary を補う変更の概要になるようにします。summary は「Group と Step の summary」に従い、Why → What → So what を基本に書きます。各 Group Fragment は、その Group の Step の中にちょうど 1 回だけ現れる必要があります。
 11. `semdiff grouping finalize --json` を実行します。明示的な output path がない場合、finalize は結果を Git-ignored な `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に書き込みます。ユーザーまたは周辺 workflow から必要とされる場合だけ明示的な path を使います。すべての authored fragment が割り当てられ、説明され、完全な review Step に配置され、すべての Group に完全な summary と file categories があり、変更されたすべての行と metadata change がちょうど 1 回選択されている場合にだけ finalize は成功します。
 
 必須の形は次のとおりです。
 
 ```json
-{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"Repository に lookup を追加","summary":"- Handler は request を処理する前に既存の record を必要とする。\n  - `FindByID` がその record を提供する。\n- Repository interface に `FindByID` を追加し、lookup を実装する。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"Repository に FindByID を追加する","summary":"- `FindByID` が Handler の request 処理前に既存の record を提供する。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"Repository interface に `FindByID` を追加し、lookup を実装する。","review_level":"careful"}]}]}
+{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- Why: 更新処理に渡す保存済みレコードを、ID から取得する必要がある。\n- What: 既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。\n- So what: 呼び出し元が更新対象のレコードを取得できるようになる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- Why: 更新処理に渡す保存済みレコードを、ID から取得する必要がある。\n- What: 既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。\n- So what: 呼び出し元が更新対象のレコードを取得できるようになる。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"careful"}]}]}
 ```
 
 すべての Group に `importance` として `core`、`supporting`、`side` のいずれかを設定します。すべての Fragment に `review_level` として `careful`、`normal`、`skim` のいずれかを設定します。draft で省略された値は `normal` が既定値になります。すべての Fragment には `id`、`path`、少なくとも 1 つの `ranges` entry（または `file_metadata: true`）、空でない `description` が必要です。すべての Group には 1 つ以上の `review_steps` が必要で、Group の各 Fragment は順序付き `fragment_ids` の中にちょうど 1 回だけ現れる必要があります。変更されたすべての old/new line と file metadata change は、ちょうど 1 回選択する必要があります。Group が参照するすべてのファイルは、その Group の `file_categories` にちょうど 1 回現れる必要があります。
@@ -74,11 +74,54 @@ apply request は operation の batch を含みます。例:
 ```json
 {
   "operations": [
-    {"op":"upsert_group","group_id":"repository-lookup","title":"Repository に lookup を追加","summary":"- Handler は request を処理する前に既存の record を必要とする。\n  - `FindByID` がその record を提供する。\n- Repository interface に `FindByID` を追加し、lookup を実装する。","importance":"core","order":1},
-    {"op":"merge_fragments","members":["F-candidate-1","F-candidate-2"],"fragment":{"id":"repository-find-by-id","description":"Repository interface に `FindByID` を追加し、lookup を実装する。","review_level":"careful"}},
-    {"op":"assign_fragments","group_id":"repository-lookup","members":["repository-find-by-id"]},
-    {"op":"set_review_steps","group_id":"repository-lookup","review_steps":[{"id":"repository-method","title":"Repository に FindByID を追加する","summary":"- `FindByID` が Handler の request 処理前に既存の record を提供する。","fragment_ids":["repository-find-by-id"]}]},
-    {"op":"set_file_categories","group_id":"repository-lookup","categories":{"src/repository.go":"logic"}}
+    {
+      "op": "upsert_group",
+      "group_id": "repository-lookup",
+      "title": "保存済みレコードを ID で取得できるようにする",
+      "summary": "- Why: 更新処理に渡す保存済みレコードを、ID から取得する必要がある。\n- What: 既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。\n- So what: 呼び出し元が更新対象のレコードを取得できるようになる。",
+      "importance": "core",
+      "order": 1
+    },
+    {
+      "op": "merge_fragments",
+      "members": [
+        "F-candidate-1",
+        "F-candidate-2"
+      ],
+      "fragment": {
+        "id": "repository-find-by-id",
+        "description": "既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。",
+        "review_level": "careful"
+      }
+    },
+    {
+      "op": "assign_fragments",
+      "group_id": "repository-lookup",
+      "members": [
+        "repository-find-by-id"
+      ]
+    },
+    {
+      "op": "set_review_steps",
+      "group_id": "repository-lookup",
+      "review_steps": [
+        {
+          "id": "repository-method",
+          "title": "保存済みレコードを ID で取得できるようにする",
+          "summary": "- Why: 更新処理に渡す保存済みレコードを、ID から取得する必要がある。\n- What: 既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。\n- So what: 呼び出し元が更新対象のレコードを取得できるようになる。",
+          "fragment_ids": [
+            "repository-find-by-id"
+          ]
+        }
+      ]
+    },
+    {
+      "op": "set_file_categories",
+      "group_id": "repository-lookup",
+      "categories": {
+        "src/repository.go": "logic"
+      }
+    }
   ]
 }
 ```
@@ -112,11 +155,23 @@ file boundary と Fragment boundary は別々に扱います。特に、Git が�
 
 説明するコードの abstraction level に合わせます。追加の design 上の意味が必要でない限り、具体的な変更をより高いレベルの design language に一般化しないでください。
 
-コードに直接対応する vocabulary を優先します。interface、type、method、function、signature、parameter、return value、construction、call、registration、DI、implementation、conversion などです。たとえば interface に method を追加する変更では、単に contract を拡張した、boundary を変更したと書くのではなく、まず `Repository interface に FindByID を追加する` と書きます。
+コードに直接対応する vocabulary を優先します。interface、type、method、function、signature、parameter、return value、construction、call、registration、DI、implementation、conversion などです。たとえば interface に method を追加する変更では、単に contract を拡張した、boundary を変更したと書くのではなく、まず「既存の `Repository` interface に、新規メソッド `FindByID` を追加する」と書きます。
 
 design の意味が有用なら、具体的なコード変更の後に説明します。`contract`、`boundary`、`ownership`、`wiring`、`responsibility` のような抽象語は、それ自体が議論の対象である場合に使い、直接的な implementation の説明の代わりにはしません。同じ意味なら、形式的・抽象的な表現より正確で直接的な表現を優先します。
 
-Step title も同じルールに従います。category や抽象的な design concept ではなく、具体的な action を命名します。日本語では、`Repository に FindByID を追加する` や `Handler から CreateCommand.Execute を呼び出す` のような自然な action phrase にします。`Repository メソッド` のような名詞句や、`検索の責務` のような抽象 label は避けてください。
+Step title は「保存済みレコードを ID で取得できるようにする」のように、具体的な目的・効果を動作の表現で示します。識別子は追跡に役立つ場合に含め、種別や新規／既存の詳細は summary に書きます。「Repository メソッド」「検索の責務」のような名詞句や抽象的なラベルは避けます。
+
+### 識別子の種別と新規／既存
+
+レビュアーがプロジェクトのコードをまだ十分理解していない前提で書きます。Group・Step の summary と Fragment description で、理解に必要な識別子を初めて出すときは、関数、メソッド、型、interface、変数、引数などの種別と、新規／既存の区別を簡潔に明示します。同じ説明の中では繰り返さず、標準ライブラリや変更の理解に不要なローカル変数の解説は増やしません。
+
+種別は名前から推測せず、宣言や呼び出し元を確認します。新規／既存はレビュー範囲の Base と Head を比較して判断します。既存メソッドへの呼び出し追加や、移動・改名を新規メソッドの導入と混同しないでください。既存の型に新規メソッドを追加する場合は、それぞれを区別します。確認できない場合は断定しません。
+
+役割の補足は、名前だけでは読み取れず、変更を理解するために必要な内容に限ります。補足は括弧書きにせず、変更を述べた後の文として続けます。名前の言い換えや interface などの一般的な概念の説明は不要です。
+
+- 名前で伝わる例: 既存の `Repository` interface に、新規メソッド `FindByID` を追加する。
+- 補足が必要な例: 既存の `ReviewStore` 型に、新規メソッド `Resolve` を追加する。このメソッドは、現在のコミット範囲に一致するレビューを探し、見つからなければ祖先コミットのレビューを再利用候補として返す。
+- 既存処理を変更する例: 既存メソッド `ApplyTransition` に、新規引数 `inactive` を追加する。この引数で、状態変更後も処理を停止したままにするかを指定する。
 
 ### 日本語の技術用語
 
@@ -126,18 +181,18 @@ Step title も同じルールに従います。category や抽象的な design c
 
 ## Fragment の description
 
-Fragment description は短い label であり、小さな summary ではありません。通常は、注目すべき 1 つの具体的な code change を 1 つの clause または sentence で示します。file name や path を繰り返さず、「更新した」「追加した」「削除した」「新規ファイル」「前半」のような bookkeeping から始めないでください。その context は data structure と viewer がすでに示しています。
+Fragment description は、注目すべき 1 つの具体的な変更を短く説明します。通常は 1 文とし、名前からわからない役割や理由の補足が必要なら、続く文に書きます。file name や path を繰り返したり、「ファイルを更新」「前半を修正」のような作業記録だけで済ませたりしないでください。識別子の種別と新規／既存の区別は明示します。
 
 独立したレビュー上の意味を持たない import、comment、formatting、generated output、test setup、その他の supporting mechanics を列挙しないでください。それらは、それを支える behavior を所有する Fragment に含めます。そのような変更を分ける必要がある場合は、最小限の直接的な label を付け、必要に応じて `skim` を使います。
 
-Why は任意であり、常に書くものではありません。validation rule、わかりにくい caller adaptation、変更が防ぐ regression など、レビュー判断に理由が必要で、その理由が diff から明らかでない場合だけ追加します。利用できる evidence が裏付けていない rationale を作らないでください。`skim` Fragment では、誤解を避けるために不可欠な場合を除いて why を省略します。
+Fragment では What と、その変更の役割・効果が伝わるように書きます。名前で役割が伝わる場合は補足を省きます。Group・Step と違い、Why を独立した項目にする必要はありません。自明でない制約や防ぐ不具合など、理解に必要な理由だけを加え、Group の背景を繰り返さないでください。`skim` でも、理解に必要な補足は残します。根拠のない理由は作りません。
 
 次のような description を優先します。
 
-- `Repository interface に FindByID を追加する。`
-- `create Handler から CreateCommand.Execute を呼び出す。`
-- `duplicate ID を拒否し、retry で 2 つ目の record が作成されないようにする。`
-- `duplicate-ID error の table-driven test を追加する。`
+- 既存の `Repository` interface に、新規メソッド `FindByID` を追加する。
+- 既存メソッド `CreateCommand.Execute` の呼び出しを追加し、受信した作成リクエストの保存処理を開始する。
+- 重複 ID を拒否し、再試行でレコードが二重作成されないようにする。
+- 重複 ID のエラーを検証するテーブル駆動テストを追加する。
 
 次のような description は避けます。
 
@@ -159,22 +214,34 @@ Group が独立している場合は、context switching を最小化し、変�
 
 Group または Step の `summary` は、prose narrative やすべての Fragment の言い換えではなく、簡潔な Markdown outline です。各 bullet で 1 つの主張を述べ、reviewer がすべてのファイルを開かなくても変更の形を把握できるようにします。子 bullet は、親の理由、具体的な詳細、結果、依存関係だけを補足します。通常は 1 level の nesting を優先し、2 level 目は本当の dependency を明確にする場合だけ使います。target count に達するためだけに bullet を増やさないでください。重要な主張が 1 つなら 1 bullet でよく、大きな Group ならそれ以上必要になることがあります。
 
-Group summary は通常、evidence がある場合の background や limitation、具体的な implementation change、結果としての behavior、test、review 上の意味を必要に応じて扱います。Step summary は、その stage の役割と隣接する Step との直接的な関係だけを扱います。Fragment description は短い 1 行の label のままで、outline にはしません。
+Group と Step の summary は、原則として次の順番で説明します。
+
+- Why: 対処する問題・制約、またはこの変更が必要になる処理上の理由。
+- What: 何をどう変えるか。識別子の種別と新規／既存を示す。
+- So what: その結果、何が可能になるか、どの挙動が変わるか、何を防げるか。
+- Review focus: 判断が必要な条件や失敗時の扱いがある場合だけ追加する。未確認の正しさを断定せず、判断対象を具体的に示す。
+
+Group は成果全体、Step はその段階が必要な理由と後続の処理への効果を扱います。Step ごとに PR 全体の動機を繰り返さないでください。Why・What・So what のラベルを基本にしますが、同じ意味になる項目はまとめて構いません。自明な理由や名前の言い換えで項目を埋めず、説明全体から理由・変更・効果を理解できるようにします。Fragment description は短い説明に保ち、同じ outline を強制しません。
+
+変更の動機と、コード上で果たす役割を区別します。動機が不明な場合は、コードから確認できる必要条件や前後の処理との関係を Why として説明します。それも確認できなければ、Why を捏造して埋めないでください。
 
 background の主な source として `semdiff commits` を使います。commit subject、commit body、chronology、各 commit が変更したファイルを確認します。fragment evidence で、実際に実装された内容を検証し、narrative と grouped change を結び付けます。commit history は利用できる context の境界です。commit や code に裏付けのない product requirement、incident、user report、design decision を作らないでください。motivation が不明な場合、diff から直接観察できるときに限って、どの limitation に対処する変更かを述べます。不確かな解釈は summary に入れないでください。
 
-summary は、ファイル名を列挙したり各 Fragment の description を繰り返したりするのではなく、Fragment 同士の関係を説明します。summary の値は viewer で Markdown を使えます。top-level bullet には `- `、child bullet には 2 つの space の後に `- ` を使います。JSON では改行を `\\n` として encode します。必要なら inline code と emphasis を使いますが、raw HTML には依存しないでください。「なぜなら」「そのため」「これにより」のような明示的な因果関係を保ちます。
+summary は、ファイル名を列挙したり各 Fragment の description を繰り返したりするのではなく、Fragment 同士の関係を説明します。summary の値は viewer で Markdown を使えます。top-level bullet には `- `、child bullet には 2 つの space の後に `- ` を使います。JSON では改行を `\n` として encode します。必要なら inline code と emphasis を使いますが、raw HTML には依存しないでください。「なぜなら」「そのため」「これにより」のような明示的な因果関係を保ちます。
 
 次のような summary の形を優先します。
 
+以下は、既存コードで状態更新が二箇所に分散していることを確認できた場合の例です。
+
 ```markdown
-- State transition が direct mutation に分散していた。
-  - call site 間で関連する update が分岐する可能性があった。
-- `ApplyTransition(command)` を追加し、`SwitchMode` に inactive state を渡す。
-  - 両方の call site が同じ state update を使うようになる。
-- `ApplyTransition` を通じて各 supported mode を test する。
+- Why: 状態の更新処理が二箇所に分散し、呼び出し元によって更新内容が食い違う可能性がある。
+- What: 新規関数 `ApplyTransition` に状態更新をまとめ、既存関数 `SwitchMode` から呼び出す。この処理は、動作モードと停止状態を一緒に更新する。
+- So what: 両方の呼び出し元が同じ処理を使い、状態の組み合わせを統一できる。
+- Review focus: 各モードへの切り替え後も、停止状態が意図どおり維持されるか。
 ```
 
 次のような summary は避けます。
 
 `- 古い implementation を command layer に置き換え、cache と test を追加する。`
+
+最終化の前に、コードをまだ読んでいない人の視点で title・summary・description を通読します。理由・変更・効果がつながるか、識別子の種別と新規／既存がわかるか、名前の言い換えや括弧の補足で文章が膨らんでいないかを確認します。
