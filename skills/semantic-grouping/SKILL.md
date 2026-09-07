@@ -7,6 +7,19 @@ description: semdiff CLI を使って Git のコミット範囲をレビュー�
 
 `groups.json` を、レビューのために導出されるレイヤーとして作成します。コミットとリポジトリの履歴は保持します。事実の抽出・保存・検証は CLI に任せ、グループ化、タイトル、要約、説明、レビュー順だけに意味的な判断を使います。最終 JSON を直接書かず、再開可能な grouping draft を作って結果を構築します。
 
+## 成果物の構造
+
+`groups.json` は、レビュー判断を表す Group、理解する順序を表す Step、具体的な変更を表す Fragment で構成します。構造上、Step と Fragment は Group の配下にあり、Step は `fragment_ids` で Fragment を参照します。
+
+```text
+Group（1 つの成果に対するレビュー判断）
+├── Step（成果を理解するための順序付きの段階）
+│   └── fragment_ids ──参照──> Fragment
+└── Fragment（具体的な変更の定義）
+```
+
+各 Fragment は 1 つの Group に所属し、その Group にあるいずれか 1 つの Step から、ちょうど 1 回参照されます。
+
 ## 実行手順
 
 以下の手順を実行します。構成中の説明は暫定で構いません。境界を見直した後は、関係する title・summary・description も更新し、古い説明を残さないでください。
@@ -115,11 +128,13 @@ Step title は「保存済みレコードを ID で取得できるようにす�
 
 ## Group
 
+Group は、PR の一つの成果についてレビュー判断をまとめる単位です。Fragment の定義、Fragment を読む順序を示す Step、`importance`、`order`、`file_categories`、title、summary を持ちます。
+
 ### 境界
 
 #### 位置付け
 
-Group は、PR の一つの成果について、独立した採否判断の対象となる Fragment の集合です。
+Group の境界は、どの Fragment を一つの成果としてまとめ、どこから別のレビュー判断として分けるかを定めます。
 
 #### 原則
 
@@ -201,11 +216,13 @@ summary は成果全体の Why・What・So what を説明します。すべて�
 
 ## Step
 
+Step は、一つの Group の変更を理解するための順序付きの段階です。`fragment_ids` で Group 内の Fragment を参照し、title と summary でその段階の役割を説明します。
+
 ### 境界
 
 #### 位置付け
 
-Step は、一つの Group の内容を理解するための、順序付きの説明段階です。各 Step は、その Group に属する Fragment を参照します。
+Step の境界は、一つの説明段階に含める Fragment と、次の段階へ分ける Fragment を定めます。
 
 #### 原則
 
@@ -234,11 +251,13 @@ summary は、その段階の具体的な変更と、前後の Step との関係
 
 ## Fragment
 
+Fragment は、独立して説明できる一つの具体的な変更を表す最小単位です。一つのファイル内の行範囲またはメタデータ変更を選択し、`description` と `review_level` を持ちます。
+
 ### 境界
 
 #### 位置付け
 
-Fragment は、レビュアーが独立して理解し説明できる最小の変更単位です。一つのファイル内の、一つ以上の行範囲またはファイルのメタデータ変更を表します。
+Fragment の境界は、どの行範囲を一つの意味的な変更として説明するかを定めます。
 
 #### 原則
 
