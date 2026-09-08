@@ -46,7 +46,7 @@ const colorTuningStyle = `<style>:root{--bg:#11111b;--panel:#1e1e2e;--line:#3132
 const reviewParityStyle = `<style>
 .main-group>summary{display:flex!important;align-items:center;gap:8px;min-height:38px;padding:7px 12px!important;border-bottom:1px solid #45475a!important;border-left:4px solid #cba6f7!important;background:#313244!important;color:var(--text)!important;box-shadow:0 2px 7px rgba(0,0,0,.24)!important}
 .main-group>summary:before{margin-right:4px}.main-group>summary h2{min-width:0;font-size:16px}.main-group>summary .count{order:2;float:none;margin-left:auto;white-space:nowrap;font-size:12px}.main-group>summary .group-actions{position:static!important;order:3;flex:none;float:none;margin:0!important}.main-group>summary .group-action{padding:3px 7px;font-size:10px}
-.files-view .guided-group-summary{margin:12px 18px 2px}.guided-file .file-heading{max-width:calc(100% - 210px)}.guided-file .file-stats{margin-right:0}.guided-file.is-reviewed h3{text-decoration:line-through;color:var(--muted)}.guided-file.is-reviewed>pre,.guided-file.is-reviewed .file-fragment-description{opacity:.45}.guided-file.is-reviewed>summary{background:#171c23!important;color:var(--muted)}
+.files-view .guided-group-summary{margin:12px 18px 2px}.fragment-note-description code,.file-fragment-description code{padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:#1f2630;color:#89dceb;font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace}.guided-file .file-heading{max-width:calc(100% - 210px)}.guided-file .file-stats{margin-right:0}.guided-file.is-reviewed h3{text-decoration:line-through;color:var(--muted)}.guided-file.is-reviewed>pre,.guided-file.is-reviewed .file-fragment-description{opacity:.45}.guided-file.is-reviewed>summary{background:#171c23!important;color:var(--muted)}
 @media(max-width:700px){.main-group>summary{align-items:flex-start;flex-wrap:wrap}.main-group>summary .count{margin-left:0}.main-group>summary .group-actions{width:100%;padding-left:21px}.guided-file .file-heading{max-width:calc(100% - 34px)}.guided-file .file-stats{float:none;margin:7px 0 0 19px}}
 </style><script>(function(){function start(){document.querySelectorAll('.guided-file').forEach(function(file){var summary=file.querySelector(':scope > summary');var stats=summary.querySelector('.file-stats');var button=document.createElement('button');button.type='button';button.className='file-review-toggle';button.setAttribute('aria-pressed','false');button.setAttribute('aria-label','Mark fragment as reviewed');button.title='Mark fragment as reviewed';button.textContent='✓';if(stats)summary.insertBefore(button,stats);else summary.append(button);button.addEventListener('click',function(event){event.preventDefault();event.stopPropagation();var reviewed=!file.classList.contains('is-reviewed');file.classList.toggle('is-reviewed',reviewed);button.setAttribute('aria-pressed',String(reviewed));button.setAttribute('aria-label',reviewed?'Mark fragment as unreviewed':'Mark fragment as reviewed');button.title=button.getAttribute('aria-label');if(reviewed)file.open=false})});document.querySelectorAll('.guided-group .group-actions').forEach(function(actions){actions.addEventListener('click',function(event){var button=event.target.closest('[data-group-action]');if(!button)return;var group=actions.closest('.guided-group');var open=button.dataset.groupAction==='open';group.querySelectorAll('.review-step,.guided-file').forEach(function(details){details.open=open})})})}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start()})();</script>`
 
@@ -57,6 +57,8 @@ func addGuidedReviewMarkup(source string) string {
 	}
 	source = strings.Replace(source, groupStart, `</div>`+guidedReviewMarkup+`{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`, 1)
 	source = strings.Replace(source, `<div class="summary">{{.SummaryHTML}}</div></summary>{{range .Categories}}`, `</summary><div class="summary guided-group-summary">{{.SummaryHTML}}</div>{{range .Categories}}`, 1)
+	source = strings.ReplaceAll(source, `<span>{{.Description}}</span>`, `<span>{{.DescriptionHTML}}</span>`)
+	source = strings.ReplaceAll(source, `<span class="fragment-note-description">{{.Description}}</span>`, `<span class="fragment-note-description">{{.DescriptionHTML}}</span>`)
 	source = strings.ReplaceAll(source, `{{if .Order}}{{.Order}}. {{end}}{{.Title}}`, `{{.Title}}`)
 	source = strings.Replace(source, `<summary><h3>{{.Title}}</h3>`, `<summary><h3>{{.Number}}. {{.Title}}</h3>`, 1)
 	source = strings.Replace(source, `</main>`, `</section></main>`, 1)
@@ -66,6 +68,7 @@ func addGuidedReviewMarkup(source string) string {
 type FragmentView struct {
 	model.MaterializedFragment
 	Description      string
+	DescriptionHTML  template.HTML
 	ReviewLevel      model.ReviewLevel
 	RangeLabel       string
 	Directory        string
@@ -219,6 +222,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			file.AnchorID = fmt.Sprintf("file-%d-%d", groupIndex, fileIndex)
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
+				file.Fragments[i].DescriptionHTML = renderInlineMarkdown(file.Fragments[i].Description)
 				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
 				file.Fragments[i].ReviewLevel = reviewLevels[file.Fragments[i].ID]
 				file.ReviewLevel = strongerReviewLevel(file.ReviewLevel, file.Fragments[i].ReviewLevel)
@@ -232,6 +236,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path], highlighterFor(fragment.Path))
 				file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, fileContents[fragment.Path], byPath[fragment.Path], highlighterFor(fragment.Path))
 				view.Description = descriptions[id]
+				view.DescriptionHTML = renderInlineMarkdown(view.Description)
 				view.RangeLabel = rangeLabels[id]
 				view.ReviewLevel = reviewLevels[id]
 				view.Directory = file.Directory
@@ -477,6 +482,16 @@ func renderMarkdown(source string) template.HTML {
 		return template.HTML(template.HTMLEscapeString(source))
 	}
 	return template.HTML(rendered.String())
+}
+
+func renderInlineMarkdown(source string) template.HTML {
+	// Fragment descriptions are inline prose. Escape raw HTML before parsing so
+	// angle-bracketed identifiers remain visible instead of becoming HTML nodes.
+	rendered := string(renderMarkdown(template.HTMLEscapeString(source)))
+	if strings.HasPrefix(rendered, "<p>") && strings.HasSuffix(rendered, "</p>\n") {
+		rendered = strings.TrimSuffix(strings.TrimPrefix(rendered, "<p>"), "</p>\n")
+	}
+	return template.HTML(rendered)
 }
 
 func fragmentStart(f model.MaterializedFragment) int {
