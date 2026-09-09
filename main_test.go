@@ -311,7 +311,7 @@ func TestViewWithoutDraftFallsBackToAncestorReviewAndShowsDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"This semantic review is 1 unreviewed commit behind HEAD.", reviewedHead, currentHead, "follow-up", "follow-up.txt"} {
+	for _, want := range []string{`"drift":{`, `"current_head_sha":"` + currentHead + `"`, reviewedHead, `"subject":"follow-up"`, "follow-up.txt"} {
 		if !strings.Contains(string(body), want) {
 			t.Fatalf("exported ancestor review is missing %q", want)
 		}

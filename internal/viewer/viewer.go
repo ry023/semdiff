@@ -23,7 +23,7 @@ import (
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-//go:embed index.html importance.css importance.js questions.css questions.js answers.js review-drift.css
+//go:embed index.html importance.css importance.js questions.css questions.js answers.js review-drift.css dist/viewer.css dist/viewer.js
 var assets embed.FS
 
 const defaultContextLines = 5
@@ -67,21 +67,21 @@ func addGuidedReviewMarkup(source string) string {
 
 type FragmentView struct {
 	model.MaterializedFragment
-	Description      string
-	DescriptionHTML  template.HTML
-	ReviewLevel      model.ReviewLevel
-	RangeLabel       string
-	Directory        string
-	Name             string
-	Status           string
-	StatusIcon       template.HTML
-	Additions        int
-	Deletions        int
-	Diffstat         []string
-	HeaderHTML       template.HTML
-	HunkHTML         template.HTML
-	UpperContextHTML template.HTML
-	LowerContextHTML template.HTML
+	Description      string            `json:"description"`
+	DescriptionHTML  template.HTML     `json:"description_html"`
+	ReviewLevel      model.ReviewLevel `json:"review_level"`
+	RangeLabel       string            `json:"range_label"`
+	Directory        string            `json:"directory"`
+	Name             string            `json:"name"`
+	Status           string            `json:"status"`
+	StatusIcon       template.HTML     `json:"status_icon_html"`
+	Additions        int               `json:"additions"`
+	Deletions        int               `json:"deletions"`
+	Diffstat         []string          `json:"diffstat"`
+	HeaderHTML       template.HTML     `json:"header_html"`
+	HunkHTML         template.HTML     `json:"hunk_html"`
+	UpperContextHTML template.HTML     `json:"upper_context_html"`
+	LowerContextHTML template.HTML     `json:"lower_context_html"`
 }
 
 type syntaxHighlighter struct {
@@ -89,84 +89,92 @@ type syntaxHighlighter struct {
 	lines map[int]template.HTML
 }
 type FileView struct {
-	Path        string
-	AnchorID    string
-	Directory   string
-	Name        string
-	Status      string
-	StatusIcon  template.HTML
-	Additions   int
-	Deletions   int
-	Diffstat    []string
-	HeaderHTML  template.HTML
-	Fragments   []FragmentView
-	ReviewLevel model.ReviewLevel
+	Path        string            `json:"path"`
+	AnchorID    string            `json:"anchor_id"`
+	Directory   string            `json:"directory"`
+	Name        string            `json:"name"`
+	Status      string            `json:"status"`
+	StatusIcon  template.HTML     `json:"status_icon_html"`
+	Additions   int               `json:"additions"`
+	Deletions   int               `json:"deletions"`
+	Diffstat    []string          `json:"diffstat"`
+	HeaderHTML  template.HTML     `json:"header_html"`
+	Fragments   []FragmentView    `json:"fragments"`
+	ReviewLevel model.ReviewLevel `json:"review_level"`
 }
 type GroupView struct {
-	ID, Title, Summary string
-	Importance         model.Importance
-	AnchorID           string
-	SummaryHTML        template.HTML
-	Order              *int
-	Files              []FileView
-	Categories         []CategoryView
-	Steps              []ReviewStepView
-	FragmentCount      int
+	ID            string           `json:"id"`
+	Title         string           `json:"title"`
+	Summary       string           `json:"summary"`
+	Importance    model.Importance `json:"importance"`
+	AnchorID      string           `json:"anchor_id"`
+	SummaryHTML   template.HTML    `json:"summary_html"`
+	Order         *int             `json:"order,omitempty"`
+	Files         []FileView       `json:"files"`
+	Categories    []CategoryView   `json:"categories"`
+	Steps         []ReviewStepView `json:"steps"`
+	FragmentCount int              `json:"fragment_count"`
 }
 
 type ReviewStepView struct {
-	ID, Title, Summary string
-	SummaryHTML        template.HTML
-	AnchorID           string
-	Number             int
-	Fragments          []FragmentView
+	ID          string         `json:"id"`
+	Title       string         `json:"title"`
+	Summary     string         `json:"summary"`
+	SummaryHTML template.HTML  `json:"summary_html"`
+	AnchorID    string         `json:"anchor_id"`
+	Number      int            `json:"number"`
+	Fragments   []FragmentView `json:"fragments"`
 }
 type CategoryView struct {
-	Name      string
-	Icon      template.HTML
-	IconClass string
-	Standard  bool
-	Files     []FileView
-	Added     int
-	Updated   int
-	Deleted   int
+	Name      string        `json:"name"`
+	Icon      template.HTML `json:"icon_html"`
+	IconClass string        `json:"icon_class"`
+	Standard  bool          `json:"standard"`
+	Files     []FileView    `json:"files"`
+	Added     int           `json:"added"`
+	Updated   int           `json:"updated"`
+	Deleted   int           `json:"deleted"`
 }
 
 type ReviewDrift struct {
-	CurrentBaseSHA string
-	CurrentHeadSHA string
-	Commits        []model.Commit
-	Paths          []string
+	CurrentBaseSHA string         `json:"current_base_sha"`
+	CurrentHeadSHA string         `json:"current_head_sha"`
+	Commits        []model.Commit `json:"commits"`
+	Paths          []string       `json:"paths"`
 }
 
 type Page struct {
-	BaseSHA, HeadSHA         string
-	Drift                    *ReviewDrift
-	Groups                   []GroupView
-	SidebarDirectories       []SidebarDirectory
-	SidebarFiles             []SidebarFile
-	FragmentCount, FileCount int
+	BaseSHA            string             `json:"base_sha"`
+	HeadSHA            string             `json:"head_sha"`
+	Drift              *ReviewDrift       `json:"drift,omitempty"`
+	Groups             []GroupView        `json:"groups"`
+	SidebarDirectories []SidebarDirectory `json:"sidebar_directories"`
+	SidebarFiles       []SidebarFile      `json:"sidebar_files"`
+	FragmentCount      int                `json:"fragment_count"`
+	FileCount          int                `json:"file_count"`
 }
 
 type SidebarOccurrence struct {
-	GroupID, GroupTitle string
-	FileAnchorID        string
-	FragmentCount       int
-	ReviewLevel         model.ReviewLevel
+	GroupID       string            `json:"group_id"`
+	GroupTitle    string            `json:"group_title"`
+	FileAnchorID  string            `json:"file_anchor_id"`
+	FragmentCount int               `json:"fragment_count"`
+	ReviewLevel   model.ReviewLevel `json:"review_level"`
 }
 
 type SidebarFile struct {
-	Path, Name  string
-	StatusIcon  template.HTML
-	ReviewLevel model.ReviewLevel
-	Occurrences []SidebarOccurrence
+	Path        string              `json:"path"`
+	Name        string              `json:"name"`
+	StatusIcon  template.HTML       `json:"status_icon_html"`
+	ReviewLevel model.ReviewLevel   `json:"review_level"`
+	Occurrences []SidebarOccurrence `json:"occurrences"`
 }
 
 type SidebarDirectory struct {
-	Name        string
-	FileCount   int
-	Directories []SidebarDirectory
-	Files       []SidebarFile
+	Name        string             `json:"name"`
+	FileCount   int                `json:"file_count"`
+	Directories []SidebarDirectory `json:"directories"`
+	Files       []SidebarFile      `json:"files"`
 }
 
 func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]string) Page {
@@ -990,57 +998,8 @@ func HandlerWithQuestionsAt(page Page, store questions.Store, basePath string) (
 // ExportHTML renders a self-contained, read-only viewer. When threads are
 // provided, only answered turns are included in the exported snapshot.
 func ExportHTML(page Page, threads []questions.Thread) ([]byte, error) {
-	index, err := assets.ReadFile("index.html")
-	if err != nil {
-		return nil, err
-	}
-	importanceCSS, err := assets.ReadFile("importance.css")
-	if err != nil {
-		return nil, err
-	}
-	reviewDriftCSS, err := assets.ReadFile("review-drift.css")
-	if err != nil {
-		return nil, err
-	}
-	importanceJS, err := assets.ReadFile("importance.js")
-	if err != nil {
-		return nil, err
-	}
-	importanceJS = []byte(strings.Replace(string(importanceJS), "var importanceData=window.semdiffImportance?Promise.resolve(window.semdiffImportance):fetch('/importance.json').then(function(response){return response.json()});", "var importanceData=Promise.resolve(window.semdiffImportance);", 1))
-	importanceJSON, err := json.Marshal(buildImportanceData(page))
-	if err != nil {
-		return nil, err
-	}
-	source := addGuidedReviewMarkup(addReviewDriftMarkup(string(index)))
-	source = strings.Replace(source, "</head>", "<style>"+string(importanceCSS)+string(reviewDriftCSS)+"</style></head>", 1)
-	scripts := "<script>window.semdiffImportance=" + string(importanceJSON) + ";</script><script>" + string(importanceJS) + "</script>"
 	answered := answeredThreads(threads)
-	if len(answered) > 0 {
-		questionsCSS, readErr := assets.ReadFile("questions.css")
-		if readErr != nil {
-			return nil, readErr
-		}
-		answersJS, readErr := assets.ReadFile("answers.js")
-		if readErr != nil {
-			return nil, readErr
-		}
-		answersJSON, marshalErr := json.Marshal(answered)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		source = strings.Replace(source, "</head>", "<style>"+string(questionsCSS)+"</style></head>", 1)
-		scripts += "<script>window.semdiffAnswers=" + string(answersJSON) + ";</script><script>" + string(answersJS) + "</script>"
-	}
-	source = strings.Replace(source, "</body>", scripts+"</body>", 1)
-	t, err := template.New("index.html").Parse(source)
-	if err != nil {
-		return nil, err
-	}
-	var output bytes.Buffer
-	if err := t.Execute(&output, page); err != nil {
-		return nil, err
-	}
-	return output.Bytes(), nil
+	return renderReactHTML(page, answered, false, "/")
 }
 
 func answeredThreads(threads []questions.Thread) []questions.Thread {
@@ -1083,17 +1042,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 	if !strings.HasPrefix(basePath, "/") || !strings.HasSuffix(basePath, "/") {
 		return nil, fmt.Errorf("viewer base path must start and end with /")
 	}
-	index, err := assets.ReadFile("index.html")
-	if err != nil {
-		return nil, err
-	}
-	source := addGuidedReviewMarkup(addReviewDriftMarkup(string(index)))
-	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`importance.css"></head>`, 1)
-	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`review-drift.css"></head>`, 1)
-	source = strings.Replace(source, "</head>", `<link rel="stylesheet" href="`+basePath+`questions.css"></head>`, 1)
-	source = strings.Replace(source, "</body>", `<script src="`+basePath+`importance.js"></script></body>`, 1)
-	source = strings.Replace(source, "</body>", `<script src="`+basePath+`questions.js"></script></body>`, 1)
-	t, err := template.New("index.html").Parse(source)
+	index, err := renderReactHTML(page, nil, questionStore != nil, basePath)
 	if err != nil {
 		return nil, err
 	}
@@ -1252,7 +1201,8 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 			http.NotFound(w, r)
 			return
 		}
-		_ = t.Execute(w, page)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(index)
 	})
 	return mux, nil
 }
