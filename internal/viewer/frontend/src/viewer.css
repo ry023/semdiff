@@ -29,6 +29,12 @@ body {
 button {
   font: inherit;
 }
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
 .app-shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
