@@ -685,7 +685,20 @@ body[data-view="split"] .diff-row.add .new-code {
 }
 .qa-thread {
   padding: 8px 0;
-  border-top: 1px solid var(--line);
+}
+.qa-thread > summary {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+.qa-thread-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .qa-turn {
   display: grid;

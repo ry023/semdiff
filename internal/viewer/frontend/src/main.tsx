@@ -516,12 +516,21 @@ function QuestionPanel({
         <details className="qa-thread" key={thread.id} open>
           <summary>
             <DisclosureIcon />
-            {list(thread.turns)[0]?.question ?? "Question"}
+            <span
+              className="qa-thread-title"
+              title={list(thread.turns)[0]?.question ?? "Question"}
+            >
+              Q. {list(thread.turns)[0]?.question ?? "Question"}
+            </span>
           </summary>
-          {list(thread.turns).map((turn) => (
+          {list(thread.turns).map((turn, index) => (
             <div className="qa-turn" key={turn.id}>
-              <strong className="qa-label qa-question">Q</strong>
-              <Markdown source={turn.question} />
+              {index > 0 && (
+                <>
+                  <strong className="qa-label qa-question">Q</strong>
+                  <Markdown source={turn.question} />
+                </>
+              )}
               {turn.answer ? (
                 <>
                   <strong className="qa-label qa-answer">A</strong>
