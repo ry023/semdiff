@@ -597,7 +597,18 @@ function buildFileTree(files: FileView[]): FileTreeNode {
     }
     parent.files.push(file);
   }
+  root.directories.forEach(compressFileTree);
   return root;
+}
+
+function compressFileTree(directory: FileTreeNode): void {
+  directory.directories.forEach(compressFileTree);
+  while (directory.files.length === 0 && directory.directories.length === 1) {
+    const child = directory.directories[0];
+    directory.name = `${directory.name}/${child.name}`;
+    directory.directories = child.directories;
+    directory.files = child.files;
+  }
 }
 
 function fileTreeCount(directory: FileTreeNode): number {
@@ -648,7 +659,7 @@ function GroupDirectory({
   return (
     <details className="nav-directory" open>
       <summary>
-        <span>▰</span>
+        <span className="nav-folder-icon" aria-hidden="true" />
         <span>{directory.name}</span>
         <small>{fileTreeCount(directory)}</small>
       </summary>

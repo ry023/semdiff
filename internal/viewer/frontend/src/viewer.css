@@ -508,6 +508,32 @@ body[data-view="split"] .diff-row.add .new-code {
   border-radius: 5px;
   cursor: pointer;
 }
+.nav-group > summary,
+.nav-directory > summary {
+  list-style: none;
+}
+.nav-group > summary::-webkit-details-marker,
+.nav-directory > summary::-webkit-details-marker {
+  display: none;
+}
+.nav-group > summary::before,
+.nav-directory > summary::before {
+  width: 12px;
+  color: var(--muted);
+  content: "▸";
+  font-size: 12px;
+  transition: transform 120ms ease;
+}
+.nav-group > summary {
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
+}
+.nav-directory > summary {
+  grid-template-columns: 12px 18px minmax(0, 1fr) auto;
+}
+.nav-group[open] > summary::before,
+.nav-directory[open] > summary::before {
+  transform: rotate(90deg);
+}
 .nav-group > summary {
   margin-top: 6px;
   border-left: 3px solid var(--accent);
@@ -517,6 +543,26 @@ body[data-view="split"] .diff-row.add .new-code {
 .nav-group-files {
   margin-left: 14px;
   border-left: 1px solid var(--line);
+}
+.nav-folder-icon {
+  position: relative;
+  display: block;
+  width: 14px;
+  height: 10px;
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  font-size: 0;
+}
+.nav-folder-icon::before {
+  position: absolute;
+  top: -4px;
+  left: 1px;
+  width: 5px;
+  height: 3px;
+  border: 1px solid var(--muted);
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+  content: "";
 }
 .nav-link {
   display: grid;
