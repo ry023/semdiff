@@ -32,6 +32,9 @@ button {
 summary {
   list-style: none;
 }
+summary::marker {
+  content: "";
+}
 summary::-webkit-details-marker {
   display: none;
 }
@@ -239,6 +242,15 @@ summary::-webkit-details-marker {
 .review-level svg {
   width: 100%;
   height: 100%;
+}
+.file-status-icon.new {
+  color: #7ee787;
+}
+.file-status-icon.updated {
+  color: var(--accent);
+}
+.file-status-icon.deleted {
+  color: #f38ba8;
 }
 .disclosure-icon {
   display: inline-block;
