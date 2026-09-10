@@ -696,6 +696,9 @@ body[data-view="split"] .diff-row.add .new-code {
 .qa-question {
   color: var(--accent);
 }
+.qa-question + .markdown {
+  color: var(--accent);
+}
 .qa-compose textarea {
   display: block;
   width: 100%;
