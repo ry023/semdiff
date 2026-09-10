@@ -178,6 +178,12 @@ func TestBuildAndHandler(t *testing.T) {
 	if bootstrap.Capabilities.Questions != "disabled" || bootstrap.Page.BaseSHA != "aaa" || bootstrap.Page.HeadSHA != "bbb" {
 		t.Fatalf("unexpected bootstrap: %+v", bootstrap)
 	}
+	if len(bootstrap.Page.Groups) != 2 || len(bootstrap.Page.Groups[0].Categories) != 1 || bootstrap.Page.Groups[0].Categories[0].Icon != "logic" {
+		t.Fatalf("category icon semantics were not preserved: %+v", bootstrap.Page.Groups)
+	}
+	if strings.Contains(w.Body.String(), "status_icon_html") || strings.Contains(w.Body.String(), "icon_html") {
+		t.Fatal("viewer bootstrap still contains rendered icon HTML")
+	}
 	if got := bootstrap.Page.Groups[0].Files[0].Fragments[0].DescriptionHTML; !strings.Contains(string(got), "Explains the &lt;safe&gt; change.") {
 		t.Fatalf("missing or unsafe fragment description: %q", got)
 	}
