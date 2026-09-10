@@ -520,11 +520,11 @@ function QuestionPanel({
           </summary>
           {list(thread.turns).map((turn) => (
             <div className="qa-turn" key={turn.id}>
-              <strong>Q</strong>
+              <strong className="qa-label qa-question">Q</strong>
               <Markdown source={turn.question} />
               {turn.answer ? (
                 <>
-                  <strong>A</strong>
+                  <strong className="qa-label qa-answer">A</strong>
                   <Markdown source={turn.answer} />
                 </>
               ) : (
