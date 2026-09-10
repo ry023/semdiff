@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Check,
@@ -152,7 +152,10 @@ interface Questions {
 function useQuestions(bootstrap: Bootstrap): Questions {
   const mode = bootstrap.capabilities.questions;
   const api = bootstrap.capabilities.api_base;
-  const [threads, setThreads] = useState(bootstrap.threads ?? []);
+  const initialThreads = bootstrap.threads ?? [];
+  const [threads, setThreads] = useState(initialThreads);
+  const threadsFingerprint = useRef(JSON.stringify(initialThreads));
+  const sessionStatus = useRef(mode === "interactive" ? "active" : "stopped");
   const [active, setActive] = useState(mode === "interactive");
   const [composer, setComposer] = useState<Anchor | null>(null);
   const [threadID, setThreadID] = useState("");
@@ -160,22 +163,43 @@ function useQuestions(bootstrap: Bootstrap): Questions {
   const [error, setError] = useState("");
   useEffect(() => {
     if (mode !== "interactive" || !api) return;
+    let refreshing = false;
+    let disposed = false;
     const refresh = async () => {
-      const [threadResponse, sessionResponse] = await Promise.all([
-        fetch(api),
-        fetch(`${api}/session`),
-      ]);
-      if (threadResponse.ok)
-        setThreads((await threadResponse.json()) as Thread[]);
-      if (sessionResponse.ok)
-        setActive(
-          ((await sessionResponse.json()) as { status: string }).status ===
-            "active",
-        );
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const [threadResponse, sessionResponse] = await Promise.all([
+          fetch(api),
+          fetch(`${api}/session`),
+        ]);
+        if (threadResponse.ok) {
+          const nextThreads = (await threadResponse.json()) as Thread[];
+          const nextFingerprint = JSON.stringify(nextThreads);
+          if (!disposed && nextFingerprint !== threadsFingerprint.current) {
+            threadsFingerprint.current = nextFingerprint;
+            setThreads(nextThreads);
+          }
+        }
+        if (sessionResponse.ok) {
+          const nextStatus = (
+            (await sessionResponse.json()) as { status: string }
+          ).status;
+          if (!disposed && nextStatus !== sessionStatus.current) {
+            sessionStatus.current = nextStatus;
+            setActive(nextStatus === "active");
+          }
+        }
+      } finally {
+        refreshing = false;
+      }
     };
     void refresh();
     const timer = window.setInterval(() => void refresh(), 2000);
-    return () => window.clearInterval(timer);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
   }, [api, mode]);
   return {
     mode,
