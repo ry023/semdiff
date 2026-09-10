@@ -23,47 +23,10 @@ import (
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-//go:embed index.html importance.css importance.js questions.css questions.js answers.js review-drift.css dist/viewer.css dist/viewer.js
+//go:embed dist/viewer.css dist/viewer.js
 var assets embed.FS
 
 const defaultContextLines = 5
-
-const reviewDriftMarkup = `{{with .Drift}}<section class="review-drift" role="status"><strong>This semantic review is {{len .Commits}} unreviewed {{if eq (len .Commits) 1}}commit{{else}}commits{{end}} behind HEAD.</strong><p>Groups cover <code>{{$.BaseSHA}}...{{$.HeadSHA}}</code>. The current range is <code>{{.CurrentBaseSHA}}...{{.CurrentHeadSHA}}</code>.</p><details><summary>Changes since this review</summary><div class="review-drift-columns"><div><h3>Commits</h3><ul>{{range .Commits}}<li><code>{{printf "%.12s" .SHA}}</code> {{.Subject}} <small>({{.FilesChanged}} files)</small></li>{{end}}</ul></div><div><h3>Files</h3><ul>{{range .Paths}}<li><code>{{.}}</code></li>{{end}}</ul></div></div></details></section>{{end}}`
-
-func addReviewDriftMarkup(source string) string {
-	const marker = `<div class="stats">{{len .Groups}} groups · {{.FileCount}} files · {{.FragmentCount}} fragments</div>`
-	return strings.Replace(source, marker, marker+reviewDriftMarkup, 1)
-}
-
-const guidedReviewMarkup = `<div class="review-mode-toolbar" role="group" aria-label="Review layout"><button class="review-mode-toggle" type="button" data-review-mode="guided" aria-pressed="true">Guided</button><button class="review-mode-toggle" type="button" data-review-mode="files" aria-pressed="false">Files</button></div><section class="guided-view">{{range .Groups}}{{$group := .}}<details id="guided-{{.AnchorID}}" class="group main-group guided-group" data-group-id="{{.ID}}" open><summary><h2>{{if .Order}}{{.Order}}. {{end}}{{.Title}}</h2><span class="count">{{len .Steps}} steps · {{.FragmentCount}} fragments</span></summary><div class="summary guided-group-summary">{{.SummaryHTML}}</div>{{range .Steps}}<details id="{{.AnchorID}}" class="review-step" data-step-id="{{.ID}}"><summary><h3>{{.Title}}</h3><div class="step-summary">{{.SummaryHTML}}</div></summary>{{range .Fragments}}<details class="guided-file main-guided-fragment" data-group-id="{{$group.ID}}" data-file-path="{{.Path}}" open><summary><span class="file-heading"><span class="file-status-icon {{.Status}}" title="{{.Status}} file" aria-label="{{.Status}} file">{{.StatusIcon}}</span><h3>{{if .Directory}}<span class="file-path">{{.Directory}}</span>{{end}}<span class="file-name">{{.Name}}</span></h3></span><span class="file-stats"><span class="stat-add">+{{.Additions}}</span><span class="stat-del">-{{.Deletions}}</span><span class="diffstat" aria-label="{{.Additions}} additions and {{.Deletions}} deletions">{{range .Diffstat}}<span class="diffstat-block {{.}}"></span>{{end}}</span></span><div class="file-fragment-description guided-fragment-description"><span class="fragment-note"><span class="fragment-note-id">{{.ID}} · {{.RangeLabel}}</span>{{if .Description}}<span class="fragment-note-description">{{.Description}}</span>{{end}}</span></div></summary><pre>{{.HeaderHTML}}{{.UpperContextHTML}}{{.HunkHTML}}{{.LowerContextHTML}}</pre></details>{{end}}</details>{{end}}</details>{{end}}</section><section class="files-view">`
-
-const guidedReviewStyle = `<style>.review-mode-toolbar{display:flex;justify-content:flex-end;margin:-16px 0 18px}.review-mode-toggle{padding:6px 12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer}.review-mode-toggle:first-child{border-radius:6px 0 0 6px}.review-mode-toggle:last-child{border-radius:0 6px 6px 0}.review-mode-toggle[aria-pressed=true]{background:#1f4675;color:#fff;border-color:#3977b9}.files-view{display:none}.guided-view .group{margin-top:0}.guided-group>summary{padding:14px 18px!important;background:#202b38!important;border-bottom:1px solid #36516f!important;border-left:4px solid var(--accent)!important;color:#f0f6fc!important;box-shadow:0 3px 10px rgba(0,0,0,.28)!important}.guided-group>summary h2{color:#f0f6fc}.guided-group>summary .count{color:#b6c5d6}.guided-group-summary{margin:12px 18px 2px;padding:10px 12px;border:1px solid #284560;border-left:3px solid #3977b9;border-radius:6px;background:#172638;color:#d7e5f4;line-height:1.5}.guided-group-summary p{margin:0 0 8px}.guided-group-summary p:last-child{margin-bottom:0}.guided-group-summary code{color:#b7d8ff}.review-step{border-top:1px solid var(--line);padding:14px 16px;overflow-anchor:none}.review-step>summary,.guided-file>summary{cursor:pointer;list-style:none}.review-step>summary::-webkit-details-marker,.guided-file>summary::-webkit-details-marker{display:none}.review-step>summary:before,.guided-file>summary:before{content:'▶';display:inline-block;margin-right:8px;font-size:10px}.review-step[open]>summary:before,.guided-file[open]>summary:before{transform:rotate(90deg)}.guided-group .review-step[open]>summary{position:sticky;top:var(--group-header-height,0px);z-index:11;margin:-8px -8px 8px;padding:8px;background:#202733;border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,.3)}.guided-group .review-step[open] .guided-file[open]>summary{position:sticky;top:calc(var(--group-header-height,0px) + var(--step-header-height,0px));z-index:10;margin:-4px -4px 8px;padding:7px;background:#202733;border:1px solid var(--line);border-radius:6px;box-shadow:0 3px 8px rgba(0,0,0,.25)}.review-step h3{display:inline;font-size:15px}.step-summary{margin:7px 0 0 19px;color:var(--muted);line-height:1.45}.step-summary p{margin:0}.guided-file{margin:14px 0 22px;border:1px solid var(--line);border-radius:6px;padding:10px;background:#111821;overflow-anchor:none}.guided-file .file-heading{max-width:none}.guided-file .file-heading h3{font:400 14px ui-monospace,monospace;margin:0;color:var(--text)}.guided-fragment-description{margin:6px 0 0 19px}.guided-file .fragment-note{border:0;border-radius:0;background:transparent;padding:0}.guided-file .fragment-note .ask-button{margin-left:8px}@media(max-width:850px){.review-mode-toolbar{margin-top:0}}</style><script>(function(){function start(){function setMode(mode){document.body.dataset.reviewMode=mode;document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.reviewMode===mode))});document.querySelector('.guided-view').style.display=mode==='guided'?'block':'none';document.querySelector('.files-view').style.display=mode==='files'?'block':'none'}function updateStepHeaderHeight(step){var summary=step.querySelector(':scope > summary');if(summary)step.style.setProperty('--step-header-height',summary.offsetHeight+'px')}var observer=typeof ResizeObserver==='function'?new ResizeObserver(function(entries){entries.forEach(function(entry){var step=entry.target.closest('.review-step');if(step)updateStepHeaderHeight(step)})}):null;var closingTops=new WeakMap();document.addEventListener('click',function(event){var summary=event.target.closest('.guided-file>summary,.review-step>summary');if(!summary)return;var details=summary.parentElement;if(details.open)closingTops.set(details,summary.getBoundingClientRect().top)},true);document.addEventListener('toggle',function(event){var details=event.target;if(!(details instanceof HTMLDetailsElement)||details.open)return;var top=closingTops.get(details);if(top===undefined)return;closingTops.delete(details);requestAnimationFrame(function(){window.scrollBy(0,details.querySelector(':scope > summary').getBoundingClientRect().top-top)})},true);document.querySelectorAll('.review-step').forEach(function(step){var summary=step.querySelector(':scope > summary');updateStepHeaderHeight(step);if(observer&&summary)observer.observe(summary)});window.addEventListener('resize',function(){document.querySelectorAll('.review-step').forEach(updateStepHeaderHeight)});document.querySelectorAll('.review-mode-toggle').forEach(function(button){button.addEventListener('click',function(){setMode(button.dataset.reviewMode)})});setMode('guided')}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start()})();</script>`
-
-const summaryListStyle = `<style>.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}.summary li,.step-summary li{margin:4px 0!important;white-space:normal}.summary li>p,.step-summary li>p{margin:0!important}.summary ul ul,.summary ul ol,.summary ol ul,.summary ol ol,.step-summary ul ul,.step-summary ul ol,.step-summary ol ul,.step-summary ol ol{margin:4px 0 0!important;padding-left:20px!important}.diff-row,pre{font-family:"SFMono-Regular","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-variant-ligatures:none;letter-spacing:.005em}.diff-row{font-size:12.5px;line-height:1.45}.diff-row.add,.diff-row.del{color:var(--text)}body[data-view=split] .diff-row.del .old-number,body[data-view=split] .diff-row.del .old-code,body[data-view=split] .diff-row.add .new-number,body[data-view=split] .diff-row.add .new-code{color:var(--text)}.diff-row.other-change{background:#1b222b;color:#aeb8c4}.diff-row.other-change .line-number{border-right-color:#3a4654;color:#8d99a8}.syntax-keyword{color:#ff7b72}.syntax-function{color:#d2a8ff}.syntax-type{color:#79c0ff}.syntax-string{color:#a5d6ff}.syntax-number{color:#79c0ff}.syntax-comment{color:#8b949e;font-style:italic}.syntax-operator{color:#ff7b72}</style>`
-
-const colorTuningStyle = `<style>:root{--bg:#11111b;--panel:#1e1e2e;--line:#313244;--text:#cdd6f4;--muted:#a6adc8;--accent:#89b4fa;--add:#1f382b;--del:#422634}.group,.sidebar{background:#1e1e2e!important;border-color:#313244!important}.group>summary,.guided-group>summary,.guided-group .review-step[open]>summary,.guided-group .review-step[open] .guided-file[open]>summary{background:#313244!important;border-color:#45475a!important;color:#cdd6f4!important}.guided-group>summary{border-left-color:#cba6f7!important}.guided-group>summary h2{color:#cdd6f4!important}.guided-group-summary{background:#181825!important;border-color:#45475a!important;border-left-color:#89b4fa!important;color:#bac2de!important}.guided-group-summary code{color:#89dceb!important}.guided-file{background:#181825!important;border-color:#313244!important}pre{background:#181825!important;border-color:#313244!important}.expand-lines{background:#313244!important;border-color:#45475a!important;color:#89b4fa!important}.expand-lines:hover{background:#45475a!important;color:#cdd6f4!important}.view-toggle,.review-mode-toggle,.group-action,.category-action,.file-review-toggle,.qa-submit,.qa-cancel,.qa-follow-up{background:#313244!important;border-color:#45475a!important;color:#bac2de!important}.view-toggle[aria-pressed=true],.review-mode-toggle[aria-pressed=true]{background:#45475a!important;border-color:#89b4fa!important;color:#cdd6f4!important}.nav-group>summary{background:#313244!important;border-color:#45475a!important;border-left-color:#cba6f7!important;color:#cdd6f4!important}.nav-group>summary:hover,.nav-group>summary.is-active,.nav-group-file.is-active,.nav-occurrence-link.is-active,.nav-file-row.is-active{background:#45475a!important;box-shadow:inset 3px 0 #89b4fa!important;color:#cdd6f4!important}.nav-group-file.is-active code,.nav-occurrence-link.is-active span,.nav-file-row.is-active .nav-file-name{color:#cdd6f4!important}.diff-row.other-change{background:#27273a!important;color:#bac2de!important}.diff-row.other-change .line-number{border-right-color:#45475a!important;color:#a6adc8!important}.syntax-keyword,.syntax-operator{color:#cba6f7!important}.syntax-function{color:#89b4fa!important}.syntax-type,.syntax-number{color:#f9e2af!important}.syntax-string{color:#a6e3a1!important}.syntax-comment{color:#6c7086!important}</style>`
-
-const reviewParityStyle = `<style>
-.main-group>summary{display:flex!important;align-items:center;gap:8px;min-height:38px;padding:7px 12px!important;border-bottom:1px solid #45475a!important;border-left:4px solid #cba6f7!important;background:#313244!important;color:var(--text)!important;box-shadow:0 2px 7px rgba(0,0,0,.24)!important}
-.main-group>summary:before{margin-right:4px}.main-group>summary h2{min-width:0;font-size:16px}.main-group>summary .count{order:2;float:none;margin-left:auto;white-space:nowrap;font-size:12px}.main-group>summary .group-actions{position:static!important;order:3;flex:none;float:none;margin:0!important}.main-group>summary .group-action{padding:3px 7px;font-size:10px}
-.files-view .guided-group-summary{margin:12px 18px 2px}.fragment-note-description code,.file-fragment-description code{padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:#1f2630;color:#89dceb;font:0.9em ui-monospace,SFMono-Regular,Consolas,monospace}.guided-file .file-heading{max-width:calc(100% - 210px)}.guided-file .file-stats{margin-right:0}.guided-file.is-reviewed h3{text-decoration:line-through;color:var(--muted)}.guided-file.is-reviewed>pre,.guided-file.is-reviewed .file-fragment-description{opacity:.45}.guided-file.is-reviewed>summary{background:#171c23!important;color:var(--muted)}
-@media(max-width:700px){.main-group>summary{align-items:flex-start;flex-wrap:wrap}.main-group>summary .count{margin-left:0}.main-group>summary .group-actions{width:100%;padding-left:21px}.guided-file .file-heading{max-width:calc(100% - 34px)}.guided-file .file-stats{float:none;margin:7px 0 0 19px}}
-</style><script>(function(){function start(){document.querySelectorAll('.guided-file').forEach(function(file){var summary=file.querySelector(':scope > summary');var stats=summary.querySelector('.file-stats');var button=document.createElement('button');button.type='button';button.className='file-review-toggle';button.setAttribute('aria-pressed','false');button.setAttribute('aria-label','Mark fragment as reviewed');button.title='Mark fragment as reviewed';button.textContent='✓';if(stats)summary.insertBefore(button,stats);else summary.append(button);button.addEventListener('click',function(event){event.preventDefault();event.stopPropagation();var reviewed=!file.classList.contains('is-reviewed');file.classList.toggle('is-reviewed',reviewed);button.setAttribute('aria-pressed',String(reviewed));button.setAttribute('aria-label',reviewed?'Mark fragment as unreviewed':'Mark fragment as reviewed');button.title=button.getAttribute('aria-label');if(reviewed)file.open=false})});document.querySelectorAll('.guided-group .group-actions').forEach(function(actions){actions.addEventListener('click',function(event){var button=event.target.closest('[data-group-action]');if(!button)return;var group=actions.closest('.guided-group');var open=button.dataset.groupAction==='open';group.querySelectorAll('.review-step,.guided-file').forEach(function(details){details.open=open})})})}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start()})();</script>`
-
-func addGuidedReviewMarkup(source string) string {
-	const groupStart = `</div>{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`
-	if !strings.Contains(source, groupStart) {
-		return source
-	}
-	source = strings.Replace(source, groupStart, `</div>`+guidedReviewMarkup+`{{range .Groups}}{{$group := .}}<details id="{{.AnchorID}}" class="group main-group"`, 1)
-	source = strings.Replace(source, `<div class="summary">{{.SummaryHTML}}</div></summary>{{range .Categories}}`, `</summary><div class="summary guided-group-summary">{{.SummaryHTML}}</div>{{range .Categories}}`, 1)
-	source = strings.ReplaceAll(source, `<span>{{.Description}}</span>`, `<span>{{.DescriptionHTML}}</span>`)
-	source = strings.ReplaceAll(source, `<span class="fragment-note-description">{{.Description}}</span>`, `<span class="fragment-note-description">{{.DescriptionHTML}}</span>`)
-	source = strings.ReplaceAll(source, `{{if .Order}}{{.Order}}. {{end}}{{.Title}}`, `{{.Title}}`)
-	source = strings.Replace(source, `<summary><h3>{{.Title}}</h3>`, `<summary><h3>{{.Number}}. {{.Title}}</h3>`, 1)
-	source = strings.Replace(source, `</main>`, `</section></main>`, 1)
-	return strings.Replace(source, `</head>`, summaryListStyle+guidedReviewStyle+colorTuningStyle+reviewParityStyle+`</head>`, 1)
-}
 
 type FragmentView struct {
 	model.MaterializedFragment
@@ -1019,25 +982,6 @@ func answeredThreads(threads []questions.Thread) []questions.Thread {
 	return result
 }
 
-func buildImportanceData(page Page) struct {
-	Groups    map[string]model.Importance  `json:"groups"`
-	Fragments map[string]model.ReviewLevel `json:"fragments"`
-} {
-	data := struct {
-		Groups    map[string]model.Importance  `json:"groups"`
-		Fragments map[string]model.ReviewLevel `json:"fragments"`
-	}{Groups: map[string]model.Importance{}, Fragments: map[string]model.ReviewLevel{}}
-	for _, group := range page.Groups {
-		data.Groups[group.ID] = group.Importance
-		for _, file := range group.Files {
-			for _, fragment := range file.Fragments {
-				data.Fragments[fragment.ID] = fragment.ReviewLevel
-			}
-		}
-	}
-	return data
-}
-
 func handlerAt(page Page, questionStore *questions.Store, basePath string) (http.Handler, error) {
 	if !strings.HasPrefix(basePath, "/") || !strings.HasSuffix(basePath, "/") {
 		return nil, fmt.Errorf("viewer base path must start and end with /")
@@ -1046,41 +990,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 	if err != nil {
 		return nil, err
 	}
-	importanceData := buildImportanceData(page)
-	importanceJSON, err := json.Marshal(importanceData)
-	if err != nil {
-		return nil, err
-	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/importance.css", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		content, _ := assets.ReadFile("importance.css")
-		_, _ = w.Write(content)
-	})
-	mux.HandleFunc("/review-drift.css", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		content, _ := assets.ReadFile("review-drift.css")
-		_, _ = w.Write(content)
-	})
-	mux.HandleFunc("/importance.js", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		content, _ := assets.ReadFile("importance.js")
-		_, _ = w.Write([]byte(strings.ReplaceAll(string(content), "'/importance.json'", "'"+basePath+"importance.json'")))
-	})
-	mux.HandleFunc("/questions.css", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		content, _ := assets.ReadFile("questions.css")
-		_, _ = w.Write(content)
-	})
-	mux.HandleFunc("/questions.js", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		content, _ := assets.ReadFile("questions.js")
-		_, _ = w.Write([]byte(strings.ReplaceAll(string(content), "'/api/questions'", "'"+basePath+"api/questions'")))
-	})
-	mux.HandleFunc("/importance.json", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(importanceJSON)
-	})
 	if questionStore != nil {
 		sessionStore := questionStore.Sessions()
 		validGroups := map[string]bool{}
@@ -1106,7 +1016,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
-				_ = json.NewEncoder(w).Encode(items)
+				_ = json.NewEncoder(w).Encode(buildViewerThreads(items))
 			case http.MethodPost:
 				active, err := sessionStore.IsActive()
 				if err != nil {
@@ -1161,7 +1071,7 @@ func handlerAt(page Page, questionStore *questions.Store, basePath string) (http
 					return
 				}
 				w.WriteHeader(http.StatusCreated)
-				_ = json.NewEncoder(w).Encode(item)
+				_ = json.NewEncoder(w).Encode(buildViewerThread(item))
 			default:
 				w.Header().Set("Allow", "GET, POST")
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

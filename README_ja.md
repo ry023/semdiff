@@ -241,4 +241,18 @@ Group の `importance` は PR 全体における位置づけを `core`、`suppor
 
 validation は、指定された range と現在の `base_sha..head_sha` の diff を比較します。追加行、削除行、ファイル metadata の各変更は、必ずちょうど1つの Fragment に選択されなければなりません。range に未変更行が含まれていても構いません。未変更行は coverage に影響しません。
 
+## Viewer の開発
+
+Viewer のソースは `internal/viewer/frontend` にある Vite、React、TypeScript アプリケーションです。ビルド済みの JavaScript と CSS は `internal/viewer/dist` に commitし、Go バイナリへ埋め込みます。そのため、`semdiff` のビルドやインストールに Node.js は必要なく、HTML export も自己完結します。
+
+Viewer のソースを変更したら、commit対象のassetを再生成して差分を確認します。
+
+```sh
+cd internal/viewer/frontend
+npm ci
+npm run check
+```
+
+フロントエンド開発時は同じdirectoryで `npm run dev` を使用します。Go viewerはreview data、highlight済みdiffとMarkdown断片、質問の永続化、質問APIを担当します。Reactはdocumentの描画とbrowser上の操作を担当し、`react_render.go` が両者のbootstrap境界です。
+
 Draft の operation 形式と各 CLI command の詳細は [CLI リファレンス](CLI_REFERENCE_ja.md) を参照してください。

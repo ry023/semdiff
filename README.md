@@ -239,3 +239,17 @@ Line numbers are one-based and `lines` must be positive. Omit `old` for a pure a
 Every Group has an `importance` of `core`, `supporting`, or `side`, describing its place in the PR as a whole. `core` is why the PR exists, `supporting` completes the core change, and `side` is a separately meaningful change bundled into the same PR. Every authored Fragment has a `review_level` of `careful`, `normal`, or `skim`, telling the reviewer how closely to read that local change. Omitted Fragment review levels default to `normal` while drafting and are written explicitly to the final file.
 
 Validation compares the ranges with the current `base_sha..head_sha` diff. Every added line, deleted line, and file metadata change must be selected exactly once. Unchanged lines may fall inside a range and do not affect coverage.
+
+## Viewer development
+
+The viewer source is a Vite, React, and TypeScript application under `internal/viewer/frontend`. Its compiled JavaScript and CSS are committed under `internal/viewer/dist` and embedded in the Go binary. Building or installing `semdiff` therefore does not require Node.js, and HTML exports remain self-contained.
+
+After changing the viewer source, rebuild and verify the committed assets:
+
+```sh
+cd internal/viewer/frontend
+npm ci
+npm run check
+```
+
+Run `npm run dev` in the same directory for frontend development. The Go viewer owns review data, highlighted diff and Markdown fragments, question persistence, and the question API. React owns the rendered document and browser interaction. `react_render.go` is the bootstrap boundary between them.

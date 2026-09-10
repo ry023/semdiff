@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"html/template"
 	"strings"
 
 	"github.com/ry023/semdiff/internal/questions"
@@ -18,7 +19,38 @@ type viewerCapabilities struct {
 type viewerBootstrap struct {
 	Page         Page               `json:"page"`
 	Capabilities viewerCapabilities `json:"capabilities"`
-	Threads      []questions.Thread `json:"threads,omitempty"`
+	Threads      []viewerThread     `json:"threads,omitempty"`
+}
+
+type viewerThread struct {
+	questions.Thread
+	Turns []viewerTurn `json:"turns"`
+}
+
+type viewerTurn struct {
+	questions.Turn
+	QuestionHTML template.HTML `json:"question_html"`
+	AnswerHTML   template.HTML `json:"answer_html,omitempty"`
+}
+
+func buildViewerThread(thread questions.Thread) viewerThread {
+	view := viewerThread{Thread: thread}
+	for _, turn := range thread.Turns {
+		view.Turns = append(view.Turns, viewerTurn{
+			Turn:         turn,
+			QuestionHTML: renderMarkdown(turn.Question),
+			AnswerHTML:   renderMarkdown(turn.Answer),
+		})
+	}
+	return view
+}
+
+func buildViewerThreads(threads []questions.Thread) []viewerThread {
+	views := make([]viewerThread, 0, len(threads))
+	for _, thread := range threads {
+		views = append(views, buildViewerThread(thread))
+	}
+	return views
 }
 
 func renderReactHTML(page Page, threads []questions.Thread, interactive bool, basePath string) ([]byte, error) {
@@ -39,7 +71,7 @@ func renderReactHTML(page Page, threads []questions.Thread, interactive bool, ba
 	data, err := json.Marshal(viewerBootstrap{
 		Page:         page,
 		Capabilities: capabilities,
-		Threads:      threads,
+		Threads:      buildViewerThreads(threads),
 	})
 	if err != nil {
 		return nil, err

@@ -71,7 +71,7 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/questions", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"question":"Why?"`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"question":"Why?"`) || !strings.Contains(response.Body.String(), `"answer_html":"\u003cp\u003eBecause.`) {
 		t.Fatalf("unexpected GET response: %d %s", response.Code, response.Body.String())
 	}
 
@@ -91,45 +91,6 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/questions", bytes.NewBufferString(`{"anchor":{"type":"group","group_id":"group"},"question":"Too late?"}`)))
 	if response.Code != http.StatusConflict {
 		t.Fatalf("inactive answer mode accepted a question: %d %s", response.Code, response.Body.String())
-	}
-}
-
-func TestQuestionUIUsesCollapsibleThreadsAndSharedGroupActions(t *testing.T) {
-	page := Page{Groups: []GroupView{{ID: "group"}}}
-	store := questions.Store{Path: filepath.Join(t.TempDir(), "questions.json")}
-	handler, err := HandlerWithQuestions(page, store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for path, want := range map[string]string{
-		"/questions.js":  "End answer mode",
-		"/questions.css": ".guided-group-summary .group-ask,.review-step>summary .step-ask",
-	} {
-		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), want) {
-			t.Fatalf("%s does not contain %q: %s", path, want, response.Body.String())
-		}
-	}
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/questions.js", nil))
-	for _, want := range []string{
-		`class="qa-button-icon"`,
-		`var botOffIcon=`,
-		`threadBody.append(form)`,
-		`if(target.panel.querySelector('.qa-compose')){target.panel.hidden=false;return}`,
-		`composers.set(form.dataset.composeThread,form)`,
-		`file?file.querySelector(':scope > summary')`,
-		`className='qa-markdown'`,
-		`.replace(/\\n/g,'\n')`,
-		`if(parent.tagName==='DETAILS')parent.open=true`,
-		`var groupSummary=group.querySelector(':scope > .guided-group-summary')`,
-		`class="qa-loader"`,
-		`.qa-mode-bar[hidden],.ask-button[hidden]{display:none!important}`,
-	} {
-		if !strings.Contains(response.Body.String(), want) {
-			t.Errorf("questions.js does not contain %q", want)
-		}
 	}
 }
 
