@@ -17,7 +17,6 @@ export interface FragmentView {
   id: string;
   path: string;
   description: string;
-  description_html: string;
   review_level: ReviewLevel;
   range_label: string;
   directory: string;
@@ -48,7 +47,6 @@ export interface ReviewStepView {
   id: string;
   title: string;
   summary: string;
-  summary_html: string;
   anchor_id: string;
   number: number;
   fragments: FragmentView[] | null;
@@ -66,7 +64,6 @@ export interface GroupView {
   id: string;
   title: string;
   summary: string;
-  summary_html: string;
   importance: Importance;
   anchor_id: string;
   order?: number;
@@ -126,8 +123,6 @@ export interface Turn {
   question: string;
   status: string;
   answer?: string;
-  question_html: string;
-  answer_html?: string;
 }
 export interface Thread {
   id: string;

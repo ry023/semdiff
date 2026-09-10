@@ -1,12 +1,10 @@
 package viewer
 
 import (
-	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	pathpkg "path"
@@ -17,31 +15,28 @@ import (
 	categorydraft "github.com/ry023/semdiff/internal/categories"
 	"github.com/ry023/semdiff/internal/model"
 	"github.com/ry023/semdiff/internal/questions"
-	"github.com/yuin/goldmark"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 )
 
-//go:embed dist/viewer.css dist/viewer.js
+//go:embed dist/viewer.css dist/viewer.js frontend/shell.html
 var assets embed.FS
 
 const defaultContextLines = 5
 
 type FragmentView struct {
 	model.MaterializedFragment
-	Description     string            `json:"description"`
-	DescriptionHTML template.HTML     `json:"description_html"`
-	ReviewLevel     model.ReviewLevel `json:"review_level"`
-	RangeLabel      string            `json:"range_label"`
-	Directory       string            `json:"directory"`
-	Name            string            `json:"name"`
-	Status          string            `json:"status"`
-	Additions       int               `json:"additions"`
-	Deletions       int               `json:"deletions"`
-	Diffstat        []string          `json:"diffstat"`
-	Header          []DiffItem        `json:"header"`
-	Hunk            []DiffItem        `json:"hunk"`
-	UpperContext    []DiffItem        `json:"upper_context"`
-	LowerContext    []DiffItem        `json:"lower_context"`
+	Description  string            `json:"description"`
+	ReviewLevel  model.ReviewLevel `json:"review_level"`
+	RangeLabel   string            `json:"range_label"`
+	Directory    string            `json:"directory"`
+	Name         string            `json:"name"`
+	Status       string            `json:"status"`
+	Additions    int               `json:"additions"`
+	Deletions    int               `json:"deletions"`
+	Diffstat     []string          `json:"diffstat"`
+	Header       []DiffItem        `json:"header"`
+	Hunk         []DiffItem        `json:"hunk"`
+	UpperContext []DiffItem        `json:"upper_context"`
+	LowerContext []DiffItem        `json:"lower_context"`
 }
 
 type DiffItem struct {
@@ -75,7 +70,6 @@ type GroupView struct {
 	Summary       string           `json:"summary"`
 	Importance    model.Importance `json:"importance"`
 	AnchorID      string           `json:"anchor_id"`
-	SummaryHTML   template.HTML    `json:"summary_html"`
 	Order         *int             `json:"order,omitempty"`
 	Files         []FileView       `json:"files"`
 	Categories    []CategoryView   `json:"categories"`
@@ -84,13 +78,12 @@ type GroupView struct {
 }
 
 type ReviewStepView struct {
-	ID          string         `json:"id"`
-	Title       string         `json:"title"`
-	Summary     string         `json:"summary"`
-	SummaryHTML template.HTML  `json:"summary_html"`
-	AnchorID    string         `json:"anchor_id"`
-	Number      int            `json:"number"`
-	Fragments   []FragmentView `json:"fragments"`
+	ID        string         `json:"id"`
+	Title     string         `json:"title"`
+	Summary   string         `json:"summary"`
+	AnchorID  string         `json:"anchor_id"`
+	Number    int            `json:"number"`
+	Fragments []FragmentView `json:"fragments"`
 }
 type CategoryView struct {
 	Name     string     `json:"name"`
@@ -162,7 +155,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 	p := Page{BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 	allFiles := map[string]bool{}
 	for groupIndex, group := range g.Groups {
-		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, Importance: group.Importance, SummaryHTML: renderMarkdown(group.Summary), Order: group.Order, AnchorID: fmt.Sprintf("group-%d", groupIndex)}
+		gv := GroupView{ID: group.ID, Title: group.Title, Summary: group.Summary, Importance: group.Importance, Order: group.Order, AnchorID: fmt.Sprintf("group-%d", groupIndex)}
 		fileMap := map[string][]model.MaterializedFragment{}
 		descriptions := map[string]string{}
 		rangeLabels := map[string]string{}
@@ -187,7 +180,6 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			file.AnchorID = fmt.Sprintf("file-%d-%d", groupIndex, fileIndex)
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
-				file.Fragments[i].DescriptionHTML = renderInlineMarkdown(file.Fragments[i].Description)
 				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
 				file.Fragments[i].ReviewLevel = reviewLevels[file.Fragments[i].ID]
 				file.ReviewLevel = strongerReviewLevel(file.ReviewLevel, file.Fragments[i].ReviewLevel)
@@ -195,13 +187,12 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			gv.Files = append(gv.Files, file)
 		}
 		for stepIndex, step := range group.ReviewSteps {
-			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, SummaryHTML: renderMarkdown(step.Summary), AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex), Number: stepIndex + 1}
+			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex), Number: stepIndex + 1}
 			for _, id := range step.FragmentIDs {
 				fragment := byID[id]
 				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path])
 				file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, fileContents[fragment.Path], byPath[fragment.Path])
 				view.Description = descriptions[id]
-				view.DescriptionHTML = renderInlineMarkdown(view.Description)
 				view.RangeLabel = rangeLabels[id]
 				view.ReviewLevel = reviewLevels[id]
 				view.Directory = file.Directory
@@ -422,25 +413,6 @@ func categoryIconName(name string) (string, bool) {
 	default:
 		return "custom", false
 	}
-}
-
-func renderMarkdown(source string) template.HTML {
-	var rendered bytes.Buffer
-	markdown := goldmark.New(goldmark.WithRendererOptions(goldmarkhtml.WithHardWraps()))
-	if err := markdown.Convert([]byte(source), &rendered); err != nil {
-		return template.HTML(template.HTMLEscapeString(source))
-	}
-	return template.HTML(rendered.String())
-}
-
-func renderInlineMarkdown(source string) template.HTML {
-	// Fragment descriptions are inline prose. Escape raw HTML before parsing so
-	// angle-bracketed identifiers remain visible instead of becoming HTML nodes.
-	rendered := string(renderMarkdown(template.HTMLEscapeString(source)))
-	if strings.HasPrefix(rendered, "<p>") && strings.HasSuffix(rendered, "</p>\n") {
-		rendered = strings.TrimSuffix(strings.TrimPrefix(rendered, "<p>"), "</p>\n")
-	}
-	return template.HTML(rendered)
 }
 
 func fragmentStart(f model.MaterializedFragment) int {

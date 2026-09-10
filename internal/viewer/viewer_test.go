@@ -106,7 +106,7 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/questions", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"question":"Why?"`) || !strings.Contains(response.Body.String(), `"answer_html":"\u003cp\u003eBecause.`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"question":"Why?"`) || !strings.Contains(response.Body.String(), `"answer":"Because."`) || strings.Contains(response.Body.String(), "_html") {
 		t.Fatalf("unexpected GET response: %d %s", response.Code, response.Body.String())
 	}
 
@@ -144,7 +144,7 @@ func TestExportHTMLIsSelfContainedAndOptionallyIncludesAnsweredTurns(t *testing.
 		t.Fatal(err)
 	}
 	plain := string(withoutAnswers)
-	if !strings.HasPrefix(plain, "<!doctype html>") || !strings.Contains(plain, `</script><script>`) {
+	if !strings.HasPrefix(plain, "<!doctype html>") || !strings.Contains(plain, `</script>`) || !strings.Contains(plain, `<script>`) {
 		t.Fatalf("export contains an external asset or data request")
 	}
 	plainBootstrap := bootstrapFromHTML(t, withoutAnswers)
@@ -219,11 +219,11 @@ func TestBuildAndHandler(t *testing.T) {
 	if strings.Contains(w.Body.String(), "status_icon_html") || strings.Contains(w.Body.String(), "icon_html") {
 		t.Fatal("viewer bootstrap still contains rendered icon HTML")
 	}
-	if strings.Contains(w.Body.String(), "hunk_html") || !strings.Contains(w.Body.String(), `"hunk"`) {
+	if strings.Contains(w.Body.String(), "hunk_html") || strings.Contains(w.Body.String(), "description_html") || strings.Contains(w.Body.String(), "summary_html") || !strings.Contains(w.Body.String(), `"hunk"`) {
 		t.Fatal("viewer bootstrap should carry structured diff items instead of rendered hunk HTML")
 	}
-	if got := bootstrap.Page.Groups[0].Files[0].Fragments[0].DescriptionHTML; !strings.Contains(string(got), "Explains the &lt;safe&gt; change.") {
-		t.Fatalf("missing or unsafe fragment description: %q", got)
+	if got := bootstrap.Page.Groups[0].Files[0].Fragments[0].Description; got != "Explains the <safe> change." {
+		t.Fatalf("missing or altered raw fragment description: %q", got)
 	}
 }
 
@@ -399,28 +399,6 @@ func TestDiffItemsDoNotAddBlankRows(t *testing.T) {
 	}
 	if got := diffItemsText(items); got != "+one+two" {
 		t.Fatalf("diff items changed patch text: %q", got)
-	}
-}
-
-func TestRenderMarkdown(t *testing.T) {
-	html := string(renderMarkdown("# Heading\n\n**important** and `foobar`\n\n- first\n- second\n\n<script>alert(1)</script>"))
-	for _, want := range []string{"<h1>Heading</h1>", "<strong>important</strong>", "<code>foobar</code>", "<li>first</li>", "<li>second</li>"} {
-		if !strings.Contains(html, want) {
-			t.Errorf("rendered markdown is missing %q: %s", want, html)
-		}
-	}
-	if strings.Contains(html, "<script>") {
-		t.Fatalf("raw HTML must not be executable: %s", html)
-	}
-}
-
-func TestRenderInlineMarkdownDecoratesCodeWithoutParagraphWrapper(t *testing.T) {
-	html := string(renderInlineMarkdown("Calls `foobar` safely."))
-	if html != "Calls <code>foobar</code> safely." {
-		t.Fatalf("renderInlineMarkdown() = %q", html)
-	}
-	if strings.Contains(html, "<p>") {
-		t.Fatalf("inline markdown contains a paragraph wrapper: %q", html)
 	}
 }
 

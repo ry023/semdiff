@@ -48,6 +48,7 @@ import type {
   ReviewLevel,
   Thread,
 } from "./types";
+import { Markdown } from "./markdown";
 import "./viewer.css";
 
 for (const [name, language] of Object.entries({
@@ -520,13 +521,11 @@ function QuestionPanel({
           {list(thread.turns).map((turn) => (
             <div className="qa-turn" key={turn.id}>
               <strong>Q</strong>
-              <div dangerouslySetInnerHTML={markup(turn.question_html)} />
+              <Markdown source={turn.question} />
               {turn.answer ? (
                 <>
                   <strong>A</strong>
-                  <div
-                    dangerouslySetInnerHTML={markup(turn.answer_html ?? "")}
-                  />
+                  <Markdown source={turn.answer} />
                 </>
               ) : (
                 <>
@@ -584,9 +583,7 @@ function FragmentDescription({
       <strong>
         {fragment.id} · {fragment.range_label}
       </strong>
-      {fragment.description_html && (
-        <span dangerouslySetInnerHTML={markup(fragment.description_html)} />
-      )}
+      <Markdown inline source={fragment.description} />
       <Ask anchor={anchor} questions={questions} />
     </div>
   );
@@ -671,10 +668,9 @@ function GuidedGroup({
         </span>
         <DisclosureActions selector=".review-step,.guided-file" />
       </summary>
-      <div
-        className="summary group-summary"
-        dangerouslySetInnerHTML={markup(group.summary_html)}
-      />
+      <div className="summary group-summary">
+        <Markdown source={group.summary} />
+      </div>
       <Ask anchor={groupAnchor} questions={questions} />
       <QuestionPanel anchor={groupAnchor} questions={questions} />
       {list(group.steps).map((step) => {
@@ -695,10 +691,9 @@ function GuidedGroup({
               <h3>
                 {step.number}. {step.title}
               </h3>
-              <div
-                className="step-summary"
-                dangerouslySetInnerHTML={markup(step.summary_html)}
-              />
+              <div className="step-summary">
+                <Markdown source={step.summary} />
+              </div>
               <Ask anchor={anchor} questions={questions} />
             </summary>
             <QuestionPanel anchor={anchor} questions={questions} />
@@ -840,10 +835,9 @@ function FilesGroup({
         </span>
         <DisclosureActions selector=".category,.file" />
       </summary>
-      <div
-        className="summary group-summary"
-        dangerouslySetInnerHTML={markup(group.summary_html)}
-      />
+      <div className="summary group-summary">
+        <Markdown source={group.summary} />
+      </div>
       {list(group.categories).map((category) => (
         <Category
           category={category}

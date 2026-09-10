@@ -1,11 +1,8 @@
 package viewer
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 	"html"
-	"html/template"
 	"strings"
 
 	"github.com/ry023/semdiff/internal/questions"
@@ -29,18 +26,12 @@ type viewerThread struct {
 
 type viewerTurn struct {
 	questions.Turn
-	QuestionHTML template.HTML `json:"question_html"`
-	AnswerHTML   template.HTML `json:"answer_html,omitempty"`
 }
 
 func buildViewerThread(thread questions.Thread) viewerThread {
 	view := viewerThread{Thread: thread}
 	for _, turn := range thread.Turns {
-		view.Turns = append(view.Turns, viewerTurn{
-			Turn:         turn,
-			QuestionHTML: renderMarkdown(turn.Question),
-			AnswerHTML:   renderMarkdown(turn.Answer),
-		})
+		view.Turns = append(view.Turns, viewerTurn{Turn: turn})
 	}
 	return view
 }
@@ -54,6 +45,10 @@ func buildViewerThreads(threads []questions.Thread) []viewerThread {
 }
 
 func renderReactHTML(page Page, threads []questions.Thread, interactive bool, basePath string) ([]byte, error) {
+	shell, err := assets.ReadFile("frontend/shell.html")
+	if err != nil {
+		return nil, err
+	}
 	css, err := assets.ReadFile("dist/viewer.css")
 	if err != nil {
 		return nil, err
@@ -81,9 +76,12 @@ func renderReactHTML(page Page, threads []questions.Thread, interactive bool, ba
 	// end tags inert as an additional guard when embedded assets change.
 	script := strings.ReplaceAll(string(js), "</script", `<\/script`)
 	style := strings.ReplaceAll(string(css), "</style", `<\/style`)
-	var output bytes.Buffer
-	fmt.Fprintf(&output, "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Semantic Changes</title><style>%s</style></head><body><div id=\"root\"></div><script id=\"semdiff-data\" type=\"application/json\">%s</script><script>%s</script></body></html>", style, data, script)
-	return output.Bytes(), nil
+	document := strings.NewReplacer(
+		"__SEMDIFF_STYLE__", style,
+		"__SEMDIFF_DATA__", string(data),
+		"__SEMDIFF_SCRIPT__", script,
+	).Replace(string(shell))
+	return []byte(document), nil
 }
 
 func renderReactError(message string) []byte {
