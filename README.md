@@ -252,4 +252,4 @@ npm ci
 npm run check
 ```
 
-Run `npm run dev` in the same directory for frontend development. The Go viewer owns review data, highlighted diff and Markdown fragments, question persistence, and the question API. React owns the rendered document, browser interaction, and Lucide icons. `react_render.go` is the bootstrap boundary between them; Go passes icon semantics such as file status and category name rather than rendered SVG.
+Run `npm run dev` in the same directory for frontend development. The Go viewer owns review data, raw diff items, Markdown fragments, question persistence, and the question API. React owns the rendered document, browser interaction, syntax highlighting, and Lucide icons. `react_render.go` is the bootstrap boundary between them; Go passes icon semantics such as file status and category name rather than rendered SVG.

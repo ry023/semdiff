@@ -435,6 +435,33 @@ body[data-view="split"] .diff-row.add .new-code {
   color: #6c7086;
   font-style: italic;
 }
+.hljs-keyword,
+.hljs-operator,
+.hljs-selector-tag,
+.hljs-literal {
+  color: #cba6f7;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-variable.language_ {
+  color: #89b4fa;
+}
+.hljs-type,
+.hljs-title.class_,
+.hljs-built_in,
+.hljs-number {
+  color: #f9e2af;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-attribute {
+  color: #a6e3a1;
+}
+.hljs-comment,
+.hljs-doctag {
+  color: #6c7086;
+  font-style: italic;
+}
 .category {
   border-top: 1px solid var(--line);
 }

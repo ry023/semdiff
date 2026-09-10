@@ -1,6 +1,18 @@
 export type ReviewLevel = "careful" | "normal" | "skim" | "";
 export type Importance = "core" | "supporting" | "side" | "";
 
+export interface DiffItem {
+  kind: "line" | "expand";
+  text?: string;
+  class?: string;
+  old_number?: string;
+  new_number?: string;
+  hidden?: boolean;
+  direction?: "up" | "down";
+  count?: number;
+  context?: "up" | "down" | "gap";
+}
+
 export interface FragmentView {
   id: string;
   path: string;
@@ -14,10 +26,10 @@ export interface FragmentView {
   additions: number;
   deletions: number;
   diffstat: string[] | null;
-  header_html: string;
-  hunk_html: string;
-  upper_context_html: string;
-  lower_context_html: string;
+  header: DiffItem[] | null;
+  hunk: DiffItem[] | null;
+  upper_context: DiffItem[] | null;
+  lower_context: DiffItem[] | null;
 }
 export interface FileView {
   path: string;
@@ -28,7 +40,7 @@ export interface FileView {
   additions: number;
   deletions: number;
   diffstat: string[] | null;
-  header_html: string;
+  header: DiffItem[] | null;
   fragments: FragmentView[] | null;
   review_level: ReviewLevel;
 }

@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/alecthomas/chroma/v2"
-	"github.com/alecthomas/chroma/v2/lexers"
 	categorydraft "github.com/ry023/semdiff/internal/categories"
 	"github.com/ry023/semdiff/internal/model"
 	"github.com/ry023/semdiff/internal/questions"
@@ -30,26 +28,34 @@ const defaultContextLines = 5
 
 type FragmentView struct {
 	model.MaterializedFragment
-	Description      string            `json:"description"`
-	DescriptionHTML  template.HTML     `json:"description_html"`
-	ReviewLevel      model.ReviewLevel `json:"review_level"`
-	RangeLabel       string            `json:"range_label"`
-	Directory        string            `json:"directory"`
-	Name             string            `json:"name"`
-	Status           string            `json:"status"`
-	Additions        int               `json:"additions"`
-	Deletions        int               `json:"deletions"`
-	Diffstat         []string          `json:"diffstat"`
-	HeaderHTML       template.HTML     `json:"header_html"`
-	HunkHTML         template.HTML     `json:"hunk_html"`
-	UpperContextHTML template.HTML     `json:"upper_context_html"`
-	LowerContextHTML template.HTML     `json:"lower_context_html"`
+	Description     string            `json:"description"`
+	DescriptionHTML template.HTML     `json:"description_html"`
+	ReviewLevel     model.ReviewLevel `json:"review_level"`
+	RangeLabel      string            `json:"range_label"`
+	Directory       string            `json:"directory"`
+	Name            string            `json:"name"`
+	Status          string            `json:"status"`
+	Additions       int               `json:"additions"`
+	Deletions       int               `json:"deletions"`
+	Diffstat        []string          `json:"diffstat"`
+	Header          []DiffItem        `json:"header"`
+	Hunk            []DiffItem        `json:"hunk"`
+	UpperContext    []DiffItem        `json:"upper_context"`
+	LowerContext    []DiffItem        `json:"lower_context"`
 }
 
-type syntaxHighlighter struct {
-	lexer chroma.Lexer
-	lines map[int]template.HTML
+type DiffItem struct {
+	Kind      string `json:"kind"`
+	Text      string `json:"text,omitempty"`
+	Class     string `json:"class,omitempty"`
+	OldNumber string `json:"old_number,omitempty"`
+	NewNumber string `json:"new_number,omitempty"`
+	Hidden    bool   `json:"hidden,omitempty"`
+	Direction string `json:"direction,omitempty"`
+	Count     int    `json:"count,omitempty"`
+	Context   string `json:"context,omitempty"`
 }
+
 type FileView struct {
 	Path        string            `json:"path"`
 	AnchorID    string            `json:"anchor_id"`
@@ -59,7 +65,7 @@ type FileView struct {
 	Additions   int               `json:"additions"`
 	Deletions   int               `json:"deletions"`
 	Diffstat    []string          `json:"diffstat"`
-	HeaderHTML  template.HTML     `json:"header_html"`
+	Header      []DiffItem        `json:"header"`
 	Fragments   []FragmentView    `json:"fragments"`
 	ReviewLevel model.ReviewLevel `json:"review_level"`
 }
@@ -153,15 +159,6 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			return fragmentStart(byPath[path][i]) < fragmentStart(byPath[path][j])
 		})
 	}
-	highlighters := map[string]*syntaxHighlighter{}
-	highlighterFor := func(path string) *syntaxHighlighter {
-		if highlighter, ok := highlighters[path]; ok {
-			return highlighter
-		}
-		highlighter := newSyntaxHighlighter(path, fileContents[path])
-		highlighters[path] = highlighter
-		return highlighter
-	}
 	p := Page{BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
 	allFiles := map[string]bool{}
 	for groupIndex, group := range g.Groups {
@@ -186,7 +183,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 		}
 		sort.Strings(paths)
 		for fileIndex, path := range paths {
-			file := buildFileView(path, fileMap[path], fileContents[path], byPath[path], highlighterFor(path))
+			file := buildFileView(path, fileMap[path], fileContents[path], byPath[path])
 			file.AnchorID = fmt.Sprintf("file-%d-%d", groupIndex, fileIndex)
 			for i := range file.Fragments {
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
@@ -201,8 +198,8 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, SummaryHTML: renderMarkdown(step.Summary), AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex), Number: stepIndex + 1}
 			for _, id := range step.FragmentIDs {
 				fragment := byID[id]
-				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path], highlighterFor(fragment.Path))
-				file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, fileContents[fragment.Path], byPath[fragment.Path], highlighterFor(fragment.Path))
+				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path])
+				file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, fileContents[fragment.Path], byPath[fragment.Path])
 				view.Description = descriptions[id]
 				view.DescriptionHTML = renderInlineMarkdown(view.Description)
 				view.RangeLabel = rangeLabels[id]
@@ -481,10 +478,10 @@ func sourceLines(content string) []string {
 	return lines
 }
 
-func buildFragmentView(f model.MaterializedFragment, content string, boundaries, highlights []model.MaterializedFragment, highlighter *syntaxHighlighter) FragmentView {
+func buildFragmentView(f model.MaterializedFragment, content string, boundaries, highlights []model.MaterializedFragment) FragmentView {
 	header, hunk := splitPatch(f.Patch)
 	lines := sourceLines(content)
-	view := FragmentView{MaterializedFragment: f, HeaderHTML: colorPatch(header, highlighter), HunkHTML: colorPatchWithContext(hunk, lines, highlighter)}
+	view := FragmentView{MaterializedFragment: f, Header: diffItems(header), Hunk: diffItemsWithContext(hunk, lines)}
 	start := fragmentStart(f) - 1
 	if start < 0 || start > len(lines) {
 		return view
@@ -514,21 +511,21 @@ func buildFragmentView(f model.MaterializedFragment, content string, boundaries,
 		upperOldFirst = max(1, first.oldStart-(start-upperStart)+1)
 		lowerOldFirst = last.oldEnd + 1
 	}
-	view.UpperContextHTML = expandableContext(lines[upperStart:start], upperOldFirst, upperStart+1, "up", highlights, highlighter)
-	view.LowerContextHTML = expandableContext(lines[end:lowerEnd], lowerOldFirst, end+1, "down", highlights, highlighter)
+	view.UpperContext = expandableContext(lines[upperStart:start], upperOldFirst, upperStart+1, "up", highlights)
+	view.LowerContext = expandableContext(lines[end:lowerEnd], lowerOldFirst, end+1, "down", highlights)
 	return view
 }
 
-// colorPatchWithContext keeps each materialized hunk as an independently
+// diffItemsWithContext keeps each materialized hunk as an independently
 // expandable range. A multi-range fragment has one outer set of controls, but
 // without controls between its hunks the source lines in those gaps can never
 // be revealed.
-func colorPatchWithContext(patch string, lines []string, highlighter *syntaxHighlighter) template.HTML {
+func diffItemsWithContext(patch string, lines []string) []DiffItem {
 	blocks := splitHunkBlocks(patch)
 	if len(blocks) < 2 || len(lines) == 0 {
-		return colorPatch(patch, highlighter)
+		return diffItems(patch)
 	}
-	var out strings.Builder
+	var out []DiffItem
 	for i, block := range blocks {
 		if i > 0 {
 			previous := parseHunkBounds(blocks[i-1])
@@ -539,11 +536,11 @@ func colorPatchWithContext(patch string, lines []string, highlighter *syntaxHigh
 			currentStart = max(previousEnd, min(currentStart, len(lines)))
 			gapLines := lines[previousEnd:currentStart]
 			oldFirst := max(1, current.oldStart-len(gapLines)+1)
-			out.WriteString(string(expandableGap(gapLines, oldFirst, previousEnd+1, nil, highlighter)))
+			out = append(out, expandableGap(gapLines, oldFirst, previousEnd+1, nil)...)
 		}
-		out.WriteString(string(colorPatch(block, highlighter)))
+		out = append(out, diffItems(block)...)
 	}
-	return template.HTML(out.String())
+	return out
 }
 
 func splitHunkBlocks(patch string) []string {
@@ -597,7 +594,7 @@ func rangeBounds(field string) (int, int) {
 	return start, count
 }
 
-func buildFileView(path string, fragments []model.MaterializedFragment, content string, siblings []model.MaterializedFragment, highlighter *syntaxHighlighter) FileView {
+func buildFileView(path string, fragments []model.MaterializedFragment, content string, siblings []model.MaterializedFragment) FileView {
 	sort.SliceStable(fragments, func(i, j int) bool {
 		return fragmentStart(fragments[i]) < fragmentStart(fragments[j])
 	})
@@ -626,14 +623,14 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 	}
 	file.Diffstat = diffstatBlocks(file.Additions, file.Deletions)
 	for _, fragment := range fragments {
-		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, fragments, siblings, highlighter))
+		file.Fragments = append(file.Fragments, buildFragmentView(fragment, content, fragments, siblings))
 	}
 	if len(file.Fragments) == 0 {
 		return file
 	}
-	file.HeaderHTML = file.Fragments[0].HeaderHTML
+	file.Header = file.Fragments[0].Header
 	for i := range file.Fragments {
-		file.Fragments[i].HeaderHTML = ""
+		file.Fragments[i].Header = nil
 	}
 	lines := sourceLines(content)
 	for i := 1; i < len(file.Fragments); i++ {
@@ -651,8 +648,8 @@ func buildFileView(path string, fragments []model.MaterializedFragment, content 
 			bounds := parseHunkBounds(currentBlocks[0])
 			oldFirst = max(1, bounds.oldStart-len(gapLines)+1)
 		}
-		previous.LowerContextHTML = expandableGap(gapLines, oldFirst, start+1, siblings, highlighter)
-		current.UpperContextHTML = ""
+		previous.LowerContext = expandableGap(gapLines, oldFirst, start+1, siblings)
+		current.UpperContext = nil
 	}
 	return file
 }
@@ -681,128 +678,9 @@ func diffstatBlocks(additions, deletions int) []string {
 	return blocks
 }
 
-func appendDiffRow(out *strings.Builder, line, class, oldNumber, newNumber string, hidden bool, highlighter *syntaxHighlighter) {
-	out.WriteString(`<span class="diff-row ` + class)
-	if hidden {
-		out.WriteString(` context-hidden" hidden>`)
-	} else {
-		out.WriteString(`">`)
-	}
-	unifiedNumber := newNumber
-	if unifiedNumber == "" {
-		unifiedNumber = oldNumber
-	}
-	escaped := highlighter.highlight(line, class, newNumber)
-	out.WriteString(`<span class="line-number unified-cell">` + unifiedNumber + `</span><span class="line-code unified-cell">`)
-	out.WriteString(string(escaped))
-	out.WriteString(`</span>`)
-	if oldNumber == "" && newNumber == "" {
-		out.WriteString(`<span class="split-wide">` + string(escaped) + `</span>`)
-	} else {
-		oldCode, newCode := template.HTML(""), template.HTML("")
-		switch class {
-		case "add":
-			newCode = escaped
-		case "del":
-			oldCode = escaped
-		default:
-			oldCode, newCode = escaped, escaped
-		}
-		out.WriteString(`<span class="line-number split-cell old-number">` + oldNumber + `</span><span class="line-code split-cell old-code">` + string(oldCode) + `</span>`)
-		out.WriteString(`<span class="line-number split-cell new-number">` + newNumber + `</span><span class="line-code split-cell new-code">` + string(newCode) + `</span>`)
-	}
-	out.WriteString(`</span>`)
-}
-
-func newSyntaxHighlighter(path, source string) *syntaxHighlighter {
-	highlighter := &syntaxHighlighter{lexer: lexers.Match(path), lines: map[int]template.HTML{}}
-	if highlighter.lexer == nil || source == "" {
-		return highlighter
-	}
-	iterator, err := highlighter.lexer.Tokenise(nil, source)
-	if err != nil {
-		return highlighter
-	}
-	line := 1
-	var out strings.Builder
-	for token := iterator(); token != chroma.EOF; token = iterator() {
-		for i, part := range strings.Split(token.Value, "\n") {
-			if i > 0 {
-				highlighter.lines[line] = template.HTML(out.String())
-				out.Reset()
-				line++
-			}
-			out.WriteString(highlightedToken(token.Type, part))
-		}
-	}
-	if out.Len() > 0 {
-		highlighter.lines[line] = template.HTML(out.String())
-	}
-	return highlighter
-}
-
-func (highlighter *syntaxHighlighter) highlight(line, class, newNumber string) template.HTML {
-	if highlighter == nil || class == "meta" {
-		return template.HTML(template.HTMLEscapeString(line))
-	}
-	prefix, source := "", line
-	if (class == "add" || class == "del" || strings.HasPrefix(class, "ctx")) && len(source) > 0 {
-		prefix, source = source[:1], source[1:]
-	}
-	if class != "del" {
-		if number, err := strconv.Atoi(newNumber); err == nil {
-			if highlighted, ok := highlighter.lines[number]; ok {
-				return template.HTML(template.HTMLEscapeString(prefix) + string(highlighted))
-			}
-		}
-	}
-	if highlighter.lexer == nil {
-		return template.HTML(template.HTMLEscapeString(line))
-	}
-	iterator, err := highlighter.lexer.Tokenise(nil, source)
-	if err != nil {
-		return template.HTML(template.HTMLEscapeString(line))
-	}
-	var out strings.Builder
-	out.WriteString(template.HTMLEscapeString(prefix))
-	for token := iterator(); token != chroma.EOF; token = iterator() {
-		out.WriteString(highlightedToken(token.Type, token.Value))
-	}
-	return template.HTML(out.String())
-}
-
-func highlightedToken(token chroma.TokenType, value string) string {
-	escaped := template.HTMLEscapeString(value)
-	if class := syntaxClass(token); class != "" {
-		return `<span class="` + class + `">` + escaped + `</span>`
-	}
-	return escaped
-}
-
-func syntaxClass(token chroma.TokenType) string {
-	switch {
-	case token >= chroma.Keyword && token < chroma.Name:
-		return "syntax-keyword"
-	case token == chroma.NameFunction || token == chroma.NameFunctionMagic:
-		return "syntax-function"
-	case token == chroma.NameClass || token == chroma.NameBuiltin || token == chroma.NameBuiltinPseudo:
-		return "syntax-type"
-	case token >= chroma.LiteralString && token < chroma.LiteralNumber:
-		return "syntax-string"
-	case token >= chroma.LiteralNumber && token < chroma.Operator:
-		return "syntax-number"
-	case token >= chroma.Comment && token < chroma.Generic:
-		return "syntax-comment"
-	case token >= chroma.Operator && token < chroma.Punctuation:
-		return "syntax-operator"
-	default:
-		return ""
-	}
-}
-
-func expandableContext(lines []string, firstOldLine, firstNewLine int, direction string, highlights []model.MaterializedFragment, highlighter *syntaxHighlighter) template.HTML {
+func expandableContext(lines []string, firstOldLine, firstNewLine int, direction string, highlights []model.MaterializedFragment) []DiffItem {
 	if len(lines) == 0 {
-		return ""
+		return nil
 	}
 	hiddenStart, hiddenEnd := 0, len(lines)
 	if direction == "up" {
@@ -811,49 +689,41 @@ func expandableContext(lines []string, firstOldLine, firstNewLine int, direction
 		hiddenStart = min(defaultContextLines, len(lines))
 	}
 	hiddenCount := hiddenEnd - hiddenStart
-	arrow := "↑"
-	if direction == "down" {
-		arrow = "↓"
-	}
-	var out strings.Builder
-	out.WriteString(`<span class="context-expand context-` + direction + `">`)
+	var out []DiffItem
 	for i, line := range lines {
 		if direction == "down" && i == hiddenStart && hiddenCount > 0 {
-			out.WriteString(`<button class="expand-lines" type="button" data-direction="down">` + arrow + ` Show ` + strconv.Itoa(hiddenCount) + ` lines below</button>`)
+			out = append(out, DiffItem{Kind: "expand", Direction: "down", Count: hiddenCount, Context: direction})
 		}
 		if direction == "up" && i == hiddenEnd && hiddenCount > 0 {
-			out.WriteString(`<button class="expand-lines" type="button" data-direction="up">` + arrow + ` Show ` + strconv.Itoa(hiddenCount) + ` lines above</button>`)
+			out = append(out, DiffItem{Kind: "expand", Direction: "up", Count: hiddenCount, Context: direction})
 		}
 		oldNumber := strconv.Itoa(firstOldLine + i)
 		newNumber := strconv.Itoa(firstNewLine + i)
-		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd, highlighter)
+		out = append(out, DiffItem{Kind: "line", Text: " " + line, Class: contextRowClass(firstNewLine+i, highlights), OldNumber: oldNumber, NewNumber: newNumber, Hidden: i >= hiddenStart && i < hiddenEnd, Context: direction})
 	}
-	out.WriteString(`</span>`)
-	return template.HTML(out.String())
+	return out
 }
 
-func expandableGap(lines []string, firstOldLine, firstNewLine int, highlights []model.MaterializedFragment, highlighter *syntaxHighlighter) template.HTML {
+func expandableGap(lines []string, firstOldLine, firstNewLine int, highlights []model.MaterializedFragment) []DiffItem {
 	if len(lines) == 0 {
-		return ""
+		return nil
 	}
 	hiddenStart := min(defaultContextLines, len(lines))
 	hiddenEnd := max(hiddenStart, len(lines)-defaultContextLines)
 	hiddenCount := hiddenEnd - hiddenStart
-	var out strings.Builder
-	out.WriteString(`<span class="context-expand context-gap">`)
+	var out []DiffItem
 	for i, line := range lines {
 		if i == hiddenStart && hiddenCount > 0 {
-			out.WriteString(`<button class="expand-lines" type="button" data-direction="down">↓ Show ` + strconv.Itoa(hiddenCount) + ` lines below</button>`)
+			out = append(out, DiffItem{Kind: "expand", Direction: "down", Count: hiddenCount, Context: "gap"})
 		}
 		if i == hiddenEnd && hiddenCount > 0 {
-			out.WriteString(`<button class="expand-lines" type="button" data-direction="up">↑ Show ` + strconv.Itoa(hiddenCount) + ` lines above</button>`)
+			out = append(out, DiffItem{Kind: "expand", Direction: "up", Count: hiddenCount, Context: "gap"})
 		}
 		oldNumber := strconv.Itoa(firstOldLine + i)
 		newNumber := strconv.Itoa(firstNewLine + i)
-		appendDiffRow(&out, " "+line, contextRowClass(firstNewLine+i, highlights), oldNumber, newNumber, i >= hiddenStart && i < hiddenEnd, highlighter)
+		out = append(out, DiffItem{Kind: "line", Text: " " + line, Class: contextRowClass(firstNewLine+i, highlights), OldNumber: oldNumber, NewNumber: newNumber, Hidden: i >= hiddenStart && i < hiddenEnd, Context: "gap"})
 	}
-	out.WriteString(`</span>`)
-	return template.HTML(out.String())
+	return out
 }
 
 func contextRowClass(line int, fragments []model.MaterializedFragment) string {
@@ -866,12 +736,12 @@ func contextRowClass(line int, fragments []model.MaterializedFragment) string {
 	return "ctx"
 }
 
-func colorPatch(patch string, highlighter *syntaxHighlighter) template.HTML {
+func diffItems(patch string) []DiffItem {
 	patch = strings.TrimSuffix(patch, "\n")
 	if patch == "" {
-		return ""
+		return nil
 	}
-	var out strings.Builder
+	var out []DiffItem
 	oldLine, newLine, inHunk := 0, 0, false
 	for _, line := range strings.Split(patch, "\n") {
 		class, oldNumber, newNumber := "ctx", "", ""
@@ -893,9 +763,9 @@ func colorPatch(patch string, highlighter *syntaxHighlighter) template.HTML {
 			oldLine++
 			newLine++
 		}
-		appendDiffRow(&out, line, class, oldNumber, newNumber, false, highlighter)
+		out = append(out, DiffItem{Kind: "line", Text: line, Class: class, OldNumber: oldNumber, NewNumber: newNumber})
 	}
-	return template.HTML(out.String())
+	return out
 }
 
 func hunkStarts(header string) (int, int) {

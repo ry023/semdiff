@@ -1,5 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import hljs from "highlight.js/lib/core";
+import bash from "highlight.js/lib/languages/bash";
+import cpp from "highlight.js/lib/languages/cpp";
+import csharp from "highlight.js/lib/languages/csharp";
+import css from "highlight.js/lib/languages/css";
+import go from "highlight.js/lib/languages/go";
+import java from "highlight.js/lib/languages/java";
+import javascript from "highlight.js/lib/languages/javascript";
+import json from "highlight.js/lib/languages/json";
+import kotlin from "highlight.js/lib/languages/kotlin";
+import python from "highlight.js/lib/languages/python";
+import ruby from "highlight.js/lib/languages/ruby";
+import rust from "highlight.js/lib/languages/rust";
+import scss from "highlight.js/lib/languages/scss";
+import sql from "highlight.js/lib/languages/sql";
+import typescript from "highlight.js/lib/languages/typescript";
+import xml from "highlight.js/lib/languages/xml";
 import {
   Check,
   ChevronRight,
@@ -24,6 +41,7 @@ import type {
   Anchor,
   Bootstrap,
   CategoryView,
+  DiffItem,
   FileView,
   FragmentView,
   GroupView,
@@ -31,6 +49,27 @@ import type {
   Thread,
 } from "./types";
 import "./viewer.css";
+
+for (const [name, language] of Object.entries({
+  bash,
+  cpp,
+  csharp,
+  css,
+  go,
+  java,
+  javascript,
+  json,
+  kotlin,
+  python,
+  ruby,
+  rust,
+  scss,
+  sql,
+  typescript,
+  xml,
+})) {
+  hljs.registerLanguage(name, language);
+}
 
 const markup = (value: string) => ({ __html: value });
 const list = <T,>(value: T[] | null | undefined): T[] => value ?? [];
@@ -125,6 +164,177 @@ function FileHeader({ file }: { file: FileLike }) {
           ))}
         </span>
       </span>
+    </>
+  );
+}
+
+const languageByExtension: Record<string, string> = {
+  bash: "bash",
+  c: "cpp",
+  cc: "cpp",
+  cpp: "cpp",
+  cs: "csharp",
+  css: "css",
+  go: "go",
+  h: "cpp",
+  hpp: "cpp",
+  htm: "xml",
+  html: "xml",
+  java: "java",
+  js: "javascript",
+  json: "json",
+  jsx: "javascript",
+  kt: "kotlin",
+  mjs: "javascript",
+  py: "python",
+  rb: "ruby",
+  rs: "rust",
+  scss: "scss",
+  sh: "bash",
+  sql: "sql",
+  ts: "typescript",
+  tsx: "typescript",
+  vue: "xml",
+  xml: "xml",
+  zsh: "bash",
+};
+
+function languageForPath(path: string): string | undefined {
+  const name = path.split("/").pop() ?? path;
+  const extension = name.includes(".") ? name.split(".").pop() : undefined;
+  return extension ? languageByExtension[extension.toLowerCase()] : undefined;
+}
+
+const escapeHTML = (value: string) =>
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ] ?? character,
+  );
+
+function highlightDiffText(item: DiffItem, path: string): string {
+  const line = item.text ?? "";
+  if (item.class === "meta") return escapeHTML(line);
+  let prefix = "";
+  let source = line;
+  if (
+    (item.class === "add" ||
+      item.class === "del" ||
+      item.class?.startsWith("ctx")) &&
+    source.length > 0
+  ) {
+    prefix = source[0];
+    source = source.slice(1);
+  }
+  const language = languageForPath(path);
+  let highlighted = escapeHTML(source);
+  if (language && hljs.getLanguage(language)) {
+    try {
+      highlighted = hljs.highlight(source, { language }).value;
+    } catch {
+      // An unknown or malformed source line should remain safely visible.
+    }
+  }
+  return escapeHTML(prefix) + highlighted;
+}
+
+function DiffItems({
+  items,
+  path,
+}: {
+  items: DiffItem[] | null;
+  path: string;
+}) {
+  const renderItem = (item: DiffItem, index: number) => {
+    if (item.kind === "expand") {
+      const direction = item.direction === "up" ? "up" : "down";
+      return (
+        <button
+          className="expand-lines"
+          type="button"
+          data-direction={direction}
+          key={`expand-${index}`}
+        >
+          {direction === "up" ? "↑" : "↓"} Show {item.count ?? 0} lines{" "}
+          {direction === "up" ? "above" : "below"}
+        </button>
+      );
+    }
+    const rowClass = item.class ?? "ctx";
+    const highlighted = highlightDiffText(item, path);
+    const oldNumber = item.old_number ?? "";
+    const newNumber = item.new_number ?? "";
+    const unifiedNumber = newNumber || oldNumber;
+    const splitCode = (side: "old" | "new") => {
+      if (rowClass === "add") return side === "new" ? highlighted : "";
+      if (rowClass === "del") return side === "old" ? highlighted : "";
+      return highlighted;
+    };
+    return (
+      <span
+        className={`diff-row ${rowClass}${item.hidden ? " context-hidden" : ""}`}
+        hidden={item.hidden || undefined}
+        key={`line-${index}`}
+      >
+        <span className="line-number unified-cell">{unifiedNumber}</span>
+        <span
+          className="line-code unified-cell"
+          dangerouslySetInnerHTML={markup(highlighted)}
+        />
+        {oldNumber === "" && newNumber === "" ? (
+          <span
+            className="split-wide"
+            dangerouslySetInnerHTML={markup(highlighted)}
+          />
+        ) : (
+          <>
+            <span className="line-number split-cell old-number">
+              {oldNumber}
+            </span>
+            <span
+              className="line-code split-cell old-code"
+              dangerouslySetInnerHTML={markup(splitCode("old"))}
+            />
+            <span className="line-number split-cell new-number">
+              {newNumber}
+            </span>
+            <span
+              className="line-code split-cell new-code"
+              dangerouslySetInnerHTML={markup(splitCode("new"))}
+            />
+          </>
+        )}
+      </span>
+    );
+  };
+  const groups: Array<{ context: DiffItem["context"]; items: DiffItem[] }> = [];
+  for (const item of list(items)) {
+    const previous = groups[groups.length - 1];
+    if (previous && previous.context === item.context) {
+      previous.items.push(item);
+    } else {
+      groups.push({ context: item.context, items: [item] });
+    }
+  }
+  return (
+    <>
+      {groups.map((group, groupIndex) => {
+        const content = group.items.map((item, index) =>
+          renderItem(item, index),
+        );
+        return group.context ? (
+          <span
+            className={`context-expand context-${group.context}`}
+            key={`context-${groupIndex}`}
+          >
+            {content}
+          </span>
+        ) : (
+          <React.Fragment key={`items-${groupIndex}`}>{content}</React.Fragment>
+        );
+      })}
     </>
   );
 }
@@ -397,11 +607,12 @@ function GuidedFragment({
     fragment_id: fragment.id,
   };
   const [reviewed, setReviewed] = useState(false);
-  const diff =
-    fragment.header_html +
-    fragment.upper_context_html +
-    fragment.hunk_html +
-    fragment.lower_context_html;
+  const diff = [
+    ...list(fragment.header),
+    ...list(fragment.upper_context),
+    ...list(fragment.hunk),
+    ...list(fragment.lower_context),
+  ];
   return (
     <details
       className={`guided-file ${reviewed ? "is-reviewed" : ""}`}
@@ -429,7 +640,9 @@ function GuidedFragment({
           questions={questions}
         />
       </summary>
-      <pre dangerouslySetInnerHTML={markup(diff)} />
+      <pre>
+        <DiffItems items={diff} path={fragment.path} />
+      </pre>
       <QuestionPanel anchor={anchor} questions={questions} />
     </details>
   );
@@ -514,16 +727,14 @@ function FileDetails({
   questions: Questions;
 }) {
   const [reviewed, setReviewed] = useState(false);
-  const body =
-    file.header_html +
-    list(file.fragments)
-      .map(
-        (fragment) =>
-          fragment.upper_context_html +
-          fragment.hunk_html +
-          fragment.lower_context_html,
-      )
-      .join("");
+  const body = [
+    ...list(file.header),
+    ...list(file.fragments).flatMap((fragment) => [
+      ...list(fragment.upper_context),
+      ...list(fragment.hunk),
+      ...list(fragment.lower_context),
+    ]),
+  ];
   return (
     <details
       id={file.anchor_id}
@@ -559,7 +770,9 @@ function FileDetails({
           />
         ))}
       </summary>
-      <pre dangerouslySetInnerHTML={markup(body)} />
+      <pre>
+        <DiffItems items={body} path={file.path} />
+      </pre>
       {list(file.fragments).map((fragment) => (
         <QuestionPanel
           anchor={{
