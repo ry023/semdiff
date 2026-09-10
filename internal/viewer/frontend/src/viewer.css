@@ -153,6 +153,32 @@ summary::-webkit-details-marker {
 .markdown > :last-child {
   margin-bottom: 0;
 }
+.markdown :not(pre) > code {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+  color: #f9e2af;
+  font:
+    0.9em ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.markdown pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  background: #111820;
+}
+.markdown pre code {
+  color: var(--text);
+  font:
+    12.5px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
 .group-summary {
   margin: 12px 18px;
   padding: 10px 12px;
