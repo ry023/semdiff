@@ -253,6 +253,6 @@ npm ci
 npm run check
 ```
 
-フロントエンド開発時は同じdirectoryで `npm run dev` を使用します。Go viewerはreview data、highlight済みdiffとMarkdown断片、質問の永続化、質問APIを担当します。Reactはdocumentの描画とbrowser上の操作を担当し、`react_render.go` が両者のbootstrap境界です。
+フロントエンド開発時は同じdirectoryで `npm run dev` を使用します。Go viewerはreview data、highlight済みdiffとMarkdown断片、質問の永続化、質問APIを担当します。Reactはdocumentの描画、browser上の操作、Lucide iconを担当します。`react_render.go` が両者のbootstrap境界であり、Goからは描画済みSVGではなくfile statusやcategory nameなどのicon semanticsを渡します。
 
 Draft の operation 形式と各 CLI command の詳細は [CLI リファレンス](CLI_REFERENCE_ja.md) を参照してください。
