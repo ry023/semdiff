@@ -2,7 +2,6 @@ package viewer
 
 import (
 	"encoding/json"
-	"html"
 	"strings"
 
 	"github.com/ry023/semdiff/internal/questions"
@@ -82,8 +81,4 @@ func renderReactHTML(page Page, threads []questions.Thread, interactive bool, ba
 		"__SEMDIFF_SCRIPT__", script,
 	).Replace(string(shell))
 	return []byte(document), nil
-}
-
-func renderReactError(message string) []byte {
-	return []byte("<!doctype html><title>Semantic Changes</title><p>" + html.EscapeString(message) + "</p>")
 }
