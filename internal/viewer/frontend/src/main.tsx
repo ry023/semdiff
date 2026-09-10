@@ -1,5 +1,25 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  Check,
+  ChevronRight,
+  Circle,
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleHelp,
+  Code2,
+  FileCheck,
+  FileMinus,
+  FilePlus,
+  FileText,
+  Folder,
+  GitBranch,
+  PanelTop,
+  Settings,
+  Tag,
+  type LucideIcon,
+} from "lucide-react";
 import type {
   Anchor,
   Bootstrap,
@@ -23,42 +43,72 @@ function Importance({ value }: { value: string }) {
 
 function Level({ value }: { value: ReviewLevel }) {
   if (!value) return null;
+  const Icon =
+    value === "careful"
+      ? CircleAlert
+      : value === "skim"
+        ? CircleDashed
+        : Circle;
   return (
     <span
       className={`review-level review-level-${value}`}
       title={`${value} review`}
     >
-      {value === "careful" ? "!" : value === "skim" ? "·" : "•"}
+      <Icon size={16} aria-hidden="true" />
     </span>
   );
 }
 
-function StatusIcon({ html, status }: { html: string; status: string }) {
+function StatusIcon({ status }: { status: string }) {
+  const Icon =
+    status === "new" ? FilePlus : status === "deleted" ? FileMinus : FileCheck;
   return (
     <span
       className={`file-status-icon ${status}`}
       title={`${status} file`}
-      dangerouslySetInnerHTML={markup(html)}
-    />
+      aria-hidden="true"
+    >
+      <Icon size={20} />
+    </span>
+  );
+}
+
+const categoryIcons: Record<string, LucideIcon> = {
+  implementation: Code2,
+  test: CircleCheck,
+  component: PanelTop,
+  logic: GitBranch,
+  config: Settings,
+  docs: FileText,
+  unknown: CircleHelp,
+  custom: Tag,
+};
+
+function CategoryIcon({ name }: { name: string }) {
+  const Icon = categoryIcons[name] ?? Tag;
+  return (
+    <span className="category-icon" aria-hidden="true">
+      <Icon size={18} />
+    </span>
+  );
+}
+
+function DisclosureIcon() {
+  return (
+    <ChevronRight className="disclosure-icon" size={16} aria-hidden="true" />
   );
 }
 
 type FileLike = Pick<
   FileView,
-  | "directory"
-  | "name"
-  | "status"
-  | "status_icon_html"
-  | "additions"
-  | "deletions"
-  | "diffstat"
+  "directory" | "name" | "status" | "additions" | "deletions" | "diffstat"
 >;
 
 function FileHeader({ file }: { file: FileLike }) {
   return (
     <>
       <span className="file-heading">
-        <StatusIcon html={file.status_icon_html} status={file.status} />
+        <StatusIcon status={file.status} />
         <h3>
           {file.directory && (
             <span className="file-path">{file.directory}</span>
@@ -229,7 +279,10 @@ function QuestionPanel({
     <div className="qa-panel">
       {threads.map((thread) => (
         <details className="qa-thread" key={thread.id} open>
-          <summary>{list(thread.turns)[0]?.question ?? "Question"}</summary>
+          <summary>
+            <DisclosureIcon />
+            {list(thread.turns)[0]?.question ?? "Question"}
+          </summary>
           {list(thread.turns).map((turn) => (
             <div className="qa-turn" key={turn.id}>
               <strong>Q</strong>
@@ -333,6 +386,7 @@ function GuidedFragment({
       open={!reviewed}
     >
       <summary>
+        <DisclosureIcon />
         <FileHeader file={fragment} />
         <button
           className="file-review-toggle"
@@ -343,7 +397,7 @@ function GuidedFragment({
             setReviewed(!reviewed);
           }}
         >
-          ✓
+          <Check size={16} aria-hidden="true" />
         </button>
         <FragmentDescription
           fragment={fragment}
@@ -372,6 +426,7 @@ function GuidedGroup({
       open
     >
       <summary>
+        <DisclosureIcon />
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
         <span className="count">
@@ -399,6 +454,7 @@ function GuidedGroup({
             open
           >
             <summary>
+              <DisclosureIcon />
               <h3>
                 {step.number}. {step.title}
               </h3>
@@ -453,6 +509,7 @@ function FileDetails({
       open
     >
       <summary>
+        <DisclosureIcon />
         <FileHeader file={file} />
         <button
           className="file-review-toggle"
@@ -463,7 +520,7 @@ function FileDetails({
             setReviewed(!reviewed);
           }}
         >
-          ✓
+          <Check size={16} aria-hidden="true" />
         </button>
         {list(file.fragments).map((fragment) => (
           <FragmentDescription
@@ -506,10 +563,8 @@ function Category({
   return (
     <details className="category" open>
       <summary>
-        <span
-          className={`category-icon ${category.icon_class}`}
-          dangerouslySetInnerHTML={markup(category.icon_html)}
-        />
+        <DisclosureIcon />
+        <CategoryIcon name={category.icon} />
         <strong>{category.name}</strong>
         <span className="category-stats">
           {category.added ? `${category.added} added ` : ""}
@@ -540,6 +595,7 @@ function FilesGroup({
   return (
     <details id={group.anchor_id} className="group files-group" open>
       <summary>
+        <DisclosureIcon />
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
         <span className="count">
@@ -637,7 +693,7 @@ function GroupFileLink({
       onClick={() => navigate(file.anchor_id)}
       key={file.anchor_id}
     >
-      <StatusIcon html={file.status_icon_html} status={file.status} />
+      <StatusIcon status={file.status} />
       <span className="nav-file-name">{file.name}</span>
       <small>
         <span className="stat-add">+{file.additions}</span>{" "}
@@ -659,7 +715,8 @@ function GroupDirectory({
   return (
     <details className="nav-directory" open>
       <summary>
-        <span className="nav-folder-icon" aria-hidden="true" />
+        <DisclosureIcon />
+        <Folder size={16} aria-hidden="true" />
         <span>{directory.name}</span>
         <small>{fileTreeCount(directory)}</small>
       </summary>
@@ -727,6 +784,7 @@ function Sidebar({
           return (
             <details className="nav-group" key={group.id} open>
               <summary>
+                <DisclosureIcon />
                 <span>{group.title}</span>
                 <Importance value={group.importance} />
                 <small>{list(group.files).length}</small>
@@ -785,7 +843,10 @@ function Drift({ bootstrap }: { bootstrap: Bootstrap }) {
         .
       </p>
       <details>
-        <summary>Changes since this review</summary>
+        <summary>
+          <DisclosureIcon />
+          Changes since this review
+        </summary>
         <div className="drift-columns">
           <ul>
             {list(drift.commits).map((commit) => (

@@ -236,22 +236,19 @@ func TestDiffstatBlocks(t *testing.T) {
 
 func TestFileStatusAndLineCounts(t *testing.T) {
 	tests := []struct {
-		name, patch, status, iconFragment string
-		additions, deletions              int
+		name, patch, status  string
+		additions, deletions int
 	}{
-		{"new", "diff --git a/new.go b/new.go\nnew file mode 100644\n--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,2 @@\n+one\n+two\n", "new", "M12 18v-6", 2, 0},
-		{"updated", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "updated", "m10.4 12.6", 1, 1},
-		{"deleted", "diff --git a/old.go b/old.go\ndeleted file mode 100644\n--- a/old.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", "deleted", "M9 15h6", 0, 2},
+		{"new", "diff --git a/new.go b/new.go\nnew file mode 100644\n--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,2 @@\n+one\n+two\n", "new", 2, 0},
+		{"updated", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "updated", 1, 1},
+		{"deleted", "diff --git a/old.go b/old.go\ndeleted file mode 100644\n--- a/old.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", "deleted", 0, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fragment := model.MaterializedFragment{ID: "F1", Path: "a.go", Patch: tt.patch}
 			file := buildFileView("a.go", []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment}, nil)
-			if file.Status != tt.status || !strings.Contains(string(file.StatusIcon), tt.iconFragment) || file.Additions != tt.additions || file.Deletions != tt.deletions {
+			if file.Status != tt.status || file.Additions != tt.additions || file.Deletions != tt.deletions {
 				t.Fatalf("unexpected file metadata: %+v", file)
-			}
-			if !strings.Contains(string(file.StatusIcon), `<svg viewBox="0 0 24 24"`) {
-				t.Fatalf("status icon is not an inline SVG: %s", file.StatusIcon)
 			}
 		})
 	}
@@ -405,7 +402,7 @@ func TestCategoryViewsUseRequestedOrder(t *testing.T) {
 			t.Errorf("category %d = %q, want %q", i, category.Name, want[i])
 		}
 	}
-	if !views[5].Standard || views[5].IconClass != "docs" || views[5].Icon == "" {
+	if !views[5].Standard || views[5].Icon != "docs" {
 		t.Errorf("docs category should have a standard icon: %+v", views[5])
 	}
 }

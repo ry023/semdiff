@@ -11,7 +11,6 @@ export interface FragmentView {
   directory: string;
   name: string;
   status: string;
-  status_icon_html: string;
   additions: number;
   deletions: number;
   diffstat: string[] | null;
@@ -26,7 +25,6 @@ export interface FileView {
   directory: string;
   name: string;
   status: string;
-  status_icon_html: string;
   additions: number;
   deletions: number;
   diffstat: string[] | null;
@@ -45,8 +43,7 @@ export interface ReviewStepView {
 }
 export interface CategoryView {
   name: string;
-  icon_html: string;
-  icon_class: string;
+  icon: string;
   standard: boolean;
   files: FileView[] | null;
   added: number;
@@ -76,7 +73,7 @@ export interface SidebarOccurrence {
 export interface SidebarFile {
   path: string;
   name: string;
-  status_icon_html: string;
+  status: string;
   review_level: ReviewLevel;
   occurrences: SidebarOccurrence[] | null;
 }
