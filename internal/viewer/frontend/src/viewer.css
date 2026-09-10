@@ -247,7 +247,7 @@ summary::-webkit-details-marker {
   color: #7ee787;
 }
 .file-status-icon.updated {
-  color: var(--accent);
+  color: #f9e2af;
 }
 .file-status-icon.deleted {
   color: #f38ba8;
