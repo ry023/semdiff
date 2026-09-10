@@ -8,8 +8,6 @@ import type {
   FragmentView,
   GroupView,
   ReviewLevel,
-  SidebarDirectory,
-  SidebarFile,
   Thread,
 } from "./types";
 import "./viewer.css";
@@ -578,43 +576,98 @@ function navigate(anchorID: string) {
   target.scrollIntoView({ block: "start" });
 }
 
-function SidebarFileNode({ file }: { file: SidebarFile }) {
+interface FileTreeNode {
+  name: string;
+  directories: FileTreeNode[];
+  files: FileView[];
+}
+
+function buildFileTree(files: FileView[]): FileTreeNode {
+  const root: FileTreeNode = { name: "", directories: [], files: [] };
+  for (const file of files) {
+    const parts = file.path.split("/");
+    let parent = root;
+    for (const part of parts.slice(0, -1)) {
+      let directory = parent.directories.find((item) => item.name === part);
+      if (!directory) {
+        directory = { name: part, directories: [], files: [] };
+        parent.directories.push(directory);
+      }
+      parent = directory;
+    }
+    parent.files.push(file);
+  }
+  return root;
+}
+
+function fileTreeCount(directory: FileTreeNode): number {
   return (
-    <details className="nav-file-node" open>
-      <summary>
-        <span dangerouslySetInnerHTML={markup(file.status_icon_html)} />
-        <span>{file.name}</span>
-        <Level value={file.review_level} />
-      </summary>
-      {list(file.occurrences).map((occurrence) => (
-        <button
-          className="nav-link occurrence"
-          type="button"
-          onClick={() => navigate(occurrence.file_anchor_id)}
-          key={`${occurrence.group_id}-${occurrence.file_anchor_id}`}
-        >
-          {occurrence.group_title}
-          <small>{occurrence.fragment_count} fragments</small>
-        </button>
-      ))}
-    </details>
+    directory.files.length +
+    directory.directories.reduce(
+      (count, child) => count + fileTreeCount(child),
+      0,
+    )
   );
 }
 
-function Directory({ directory }: { directory: SidebarDirectory }) {
+function GroupFileLink({
+  file,
+  groupID,
+  activeKey,
+}: {
+  file: FileView;
+  groupID: string;
+  activeKey: string;
+}) {
+  return (
+    <button
+      className={`nav-link nav-group-file ${activeKey === `${groupID}\0${file.path}` ? "is-active" : ""}`}
+      type="button"
+      onClick={() => navigate(file.anchor_id)}
+      key={file.anchor_id}
+    >
+      <StatusIcon html={file.status_icon_html} status={file.status} />
+      <span className="nav-file-name">{file.name}</span>
+      <small>
+        <span className="stat-add">+{file.additions}</span>{" "}
+        <span className="stat-del">−{file.deletions}</span>
+      </small>
+    </button>
+  );
+}
+
+function GroupDirectory({
+  directory,
+  groupID,
+  activeKey,
+}: {
+  directory: FileTreeNode;
+  groupID: string;
+  activeKey: string;
+}) {
   return (
     <details className="nav-directory" open>
       <summary>
         <span>▰</span>
         <span>{directory.name}</span>
-        <small>{directory.file_count}</small>
+        <small>{fileTreeCount(directory)}</small>
       </summary>
       <div className="nav-children">
-        {list(directory.directories).map((child) => (
-          <Directory directory={child} key={child.name} />
+        {directory.directories.map((child) => (
+          <GroupDirectory
+            directory={child}
+            groupID={groupID}
+            activeKey={activeKey}
+            key={child.name}
+          />
         ))}
-        {list(directory.files).map((file) => (
-          <SidebarFileNode file={file} key={file.path} />
+        {directory.files.map((file) => (
+          <GroupFileLink
+            file={file}
+            groupID={groupID}
+            activeKey={activeKey}
+            key={file.path}
+          />
         ))}
       </div>
     </details>
@@ -628,7 +681,6 @@ function Sidebar({
   bootstrap: Bootstrap;
   activeKey: string;
 }) {
-  const [tab, setTab] = useState<"groups" | "files">("groups");
   const [width, setWidth] = useState(() => {
     try {
       return Number(localStorage.getItem("semdiff-sidebar-width")) || 360;
@@ -658,52 +710,37 @@ function Sidebar({
   }, [resizing, width]);
   return (
     <aside className="sidebar" style={{ width }}>
-      <div className="sidebar-tabs">
-        <button
-          aria-selected={tab === "groups"}
-          onClick={() => setTab("groups")}
-        >
-          Groups
-        </button>
-        <button aria-selected={tab === "files"} onClick={() => setTab("files")}>
-          Files
-        </button>
-      </div>
       <nav className="sidebar-pane">
-        {tab === "groups" ? (
-          list(bootstrap.page.groups).map((group) => (
+        {list(bootstrap.page.groups).map((group) => {
+          const tree = buildFileTree(list(group.files));
+          return (
             <details className="nav-group" key={group.id} open>
               <summary>
                 <span>{group.title}</span>
                 <Importance value={group.importance} />
                 <small>{list(group.files).length}</small>
               </summary>
-              {list(group.files).map((file) => (
-                <button
-                  className={`nav-link ${activeKey === `${group.id}\0${file.path}` ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => navigate(file.anchor_id)}
-                  key={file.anchor_id}
-                >
-                  {file.path}
-                  <small>
-                    <span className="stat-add">+{file.additions}</span>{" "}
-                    <span className="stat-del">−{file.deletions}</span>
-                  </small>
-                </button>
-              ))}
+              <div className="nav-group-files">
+                {tree.directories.map((directory) => (
+                  <GroupDirectory
+                    directory={directory}
+                    groupID={group.id}
+                    activeKey={activeKey}
+                    key={directory.name}
+                  />
+                ))}
+                {tree.files.map((file) => (
+                  <GroupFileLink
+                    file={file}
+                    groupID={group.id}
+                    activeKey={activeKey}
+                    key={file.path}
+                  />
+                ))}
+              </div>
             </details>
-          ))
-        ) : (
-          <>
-            {list(bootstrap.page.sidebar_directories).map((directory) => (
-              <Directory directory={directory} key={directory.name} />
-            ))}
-            {list(bootstrap.page.sidebar_files).map((file) => (
-              <SidebarFileNode file={file} key={file.path} />
-            ))}
-          </>
-        )}
+          );
+        })}
       </nav>
       <div
         className="sidebar-resize-handle"

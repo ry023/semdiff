@@ -487,27 +487,8 @@ body[data-view="split"] .diff-row.add .new-code {
   width: 10px;
   cursor: col-resize;
 }
-.sidebar-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 8px 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-.sidebar-tabs button {
-  padding: 9px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.sidebar-tabs button[aria-selected="true"] {
-  border-color: var(--accent);
-  color: var(--text);
-}
 .sidebar-pane {
-  height: calc(100vh - 48px);
+  height: 100vh;
   overflow: auto;
   padding: 12px 10px;
 }
@@ -533,6 +514,10 @@ body[data-view="split"] .diff-row.add .new-code {
   background: var(--raised);
   font-weight: 700;
 }
+.nav-group-files {
+  margin-left: 14px;
+  border-left: 1px solid var(--line);
+}
 .nav-link {
   display: grid;
   width: calc(100% - 18px);
@@ -547,6 +532,19 @@ body[data-view="split"] .diff-row.add .new-code {
   text-align: left;
   cursor: pointer;
 }
+.nav-group-file {
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+}
+.nav-group-file .file-status-icon {
+  width: 20px;
+  height: 20px;
+}
+.nav-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .nav-link:hover,
 .nav-link.is-active,
 .nav-directory > summary:hover,
@@ -559,9 +557,6 @@ body[data-view="split"] .diff-row.add .new-code {
 .nav-children {
   margin-left: 14px;
   border-left: 1px solid var(--line);
-}
-.occurrence {
-  font-size: 12px;
 }
 .review-drift {
   margin: 14px 0;
