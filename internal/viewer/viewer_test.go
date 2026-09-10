@@ -7,12 +7,65 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/ry023/semdiff/internal/model"
 	"github.com/ry023/semdiff/internal/questions"
 )
+
+func diffItemsText(items []DiffItem) string {
+	var out strings.Builder
+	for _, item := range items {
+		if item.Kind == "expand" {
+			direction := "below"
+			if item.Direction == "up" {
+				direction = "above"
+			}
+			out.WriteString("Show " + strconv.Itoa(item.Count) + " lines " + direction)
+			continue
+		}
+		out.WriteString(item.Text)
+	}
+	return out.String()
+}
+
+func diffItemsClassText(items []DiffItem) string {
+	var out strings.Builder
+	for _, item := range items {
+		out.WriteString(item.Class)
+	}
+	return out.String()
+}
+
+func diffItemsCount(items []DiffItem, kind string) int {
+	count := 0
+	for _, item := range items {
+		if item.Kind == kind {
+			count++
+		}
+	}
+	return count
+}
+
+func bootstrapFromHTML(t *testing.T, document []byte) viewerBootstrap {
+	t.Helper()
+	const start = `<script id="semdiff-data" type="application/json">`
+	before, data, found := bytes.Cut(document, []byte(start))
+	if !found || !bytes.Contains(before, []byte(`<div id="root"></div>`)) {
+		t.Fatal("viewer shell or bootstrap data is missing")
+	}
+	data, _, found = bytes.Cut(data, []byte(`</script>`))
+	if !found {
+		t.Fatal("bootstrap script is not closed")
+	}
+	var bootstrap viewerBootstrap
+	if err := json.Unmarshal(data, &bootstrap); err != nil {
+		t.Fatalf("decode bootstrap data: %v", err)
+	}
+	return bootstrap
+}
 
 func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 	page := Page{BaseSHA: "base", HeadSHA: "head", Groups: []GroupView{{
@@ -53,7 +106,7 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/questions", nil))
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"question":"Why?"`) {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"question":"Why?"`) || !strings.Contains(response.Body.String(), `"answer":"Because."`) || strings.Contains(response.Body.String(), "_html") {
 		t.Fatalf("unexpected GET response: %d %s", response.Code, response.Body.String())
 	}
 
@@ -76,45 +129,6 @@ func TestQuestionAPIValidatesAnchorsAndReturnsAnswers(t *testing.T) {
 	}
 }
 
-func TestQuestionUIUsesCollapsibleThreadsAndSharedGroupActions(t *testing.T) {
-	page := Page{Groups: []GroupView{{ID: "group"}}}
-	store := questions.Store{Path: filepath.Join(t.TempDir(), "questions.json")}
-	handler, err := HandlerWithQuestions(page, store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for path, want := range map[string]string{
-		"/questions.js":  "End answer mode",
-		"/questions.css": ".guided-group-summary .group-ask,.review-step>summary .step-ask",
-	} {
-		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), want) {
-			t.Fatalf("%s does not contain %q: %s", path, want, response.Body.String())
-		}
-	}
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/questions.js", nil))
-	for _, want := range []string{
-		`class="qa-button-icon"`,
-		`var botOffIcon=`,
-		`threadBody.append(form)`,
-		`if(target.panel.querySelector('.qa-compose')){target.panel.hidden=false;return}`,
-		`composers.set(form.dataset.composeThread,form)`,
-		`file?file.querySelector(':scope > summary')`,
-		`className='qa-markdown'`,
-		`.replace(/\\n/g,'\n')`,
-		`if(parent.tagName==='DETAILS')parent.open=true`,
-		`var groupSummary=group.querySelector(':scope > .guided-group-summary')`,
-		`class="qa-loader"`,
-		`.qa-mode-bar[hidden],.ask-button[hidden]{display:none!important}`,
-	} {
-		if !strings.Contains(response.Body.String(), want) {
-			t.Errorf("questions.js does not contain %q", want)
-		}
-	}
-}
-
 func TestExportHTMLIsSelfContainedAndOptionallyIncludesAnsweredTurns(t *testing.T) {
 	page := Page{Groups: []GroupView{{ID: "group", Importance: model.ImportanceCore, Files: []FileView{{Fragments: []FragmentView{{MaterializedFragment: model.MaterializedFragment{ID: "fragment"}, ReviewLevel: model.ReviewLevelCareful}}}}}}}
 	threads := []questions.Thread{{
@@ -130,10 +144,11 @@ func TestExportHTMLIsSelfContainedAndOptionallyIncludesAnsweredTurns(t *testing.
 		t.Fatal(err)
 	}
 	plain := string(withoutAnswers)
-	if strings.Contains(plain, "<script src=") || strings.Contains(plain, "<link rel=\"stylesheet\"") || strings.Contains(plain, "fetch('/importance.json')") {
+	if !strings.HasPrefix(plain, "<!doctype html>") || !strings.Contains(plain, `</script>`) || !strings.Contains(plain, `<script>`) {
 		t.Fatalf("export contains an external asset or data request")
 	}
-	if strings.Contains(plain, "Why?") {
+	plainBootstrap := bootstrapFromHTML(t, withoutAnswers)
+	if plainBootstrap.Capabilities.Questions != "disabled" || len(plainBootstrap.Threads) != 0 {
 		t.Fatal("answers were included without requesting them")
 	}
 
@@ -141,12 +156,31 @@ func TestExportHTMLIsSelfContainedAndOptionallyIncludesAnsweredTurns(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	answered := string(withAnswers)
-	if !strings.Contains(answered, `"question":"Why?"`) || !strings.Contains(answered, `"answer":"Because."`) {
+	answered := bootstrapFromHTML(t, withAnswers)
+	if answered.Capabilities.Questions != "readonly" || len(answered.Threads) != 1 || len(answered.Threads[0].Turns) != 1 || answered.Threads[0].Turns[0].Answer != "Because." {
 		t.Fatal("answered turn is missing from export")
 	}
-	if strings.Contains(answered, "Anything else?") || strings.Contains(answered, "Ask follow-up") || strings.Contains(answered, "End answer mode") {
+	if answered.Threads[0].Turns[0].Question == "Anything else?" {
 		t.Fatal("export contains pending or interactive answer-mode content")
+	}
+}
+
+func TestReactBootstrapEscapesRawTextBoundariesAndUsesBasePath(t *testing.T) {
+	page := Page{BaseSHA: `</script><script>alert("x")</script>`, HeadSHA: "head"}
+	document, err := renderReactHTML(page, nil, true, "/reviews/example/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrap := bootstrapFromHTML(t, document)
+	if bootstrap.Page.BaseSHA != page.BaseSHA {
+		t.Fatalf("base SHA changed during embedding: %q", bootstrap.Page.BaseSHA)
+	}
+	if bootstrap.Capabilities.APIBase != "/reviews/example/api/questions" {
+		t.Fatalf("API base = %q", bootstrap.Capabilities.APIBase)
+	}
+	prefix, _, _ := bytes.Cut(document, []byte(`</script>`))
+	if bytes.Contains(prefix, []byte(`<script>alert`)) {
+		t.Fatal("bootstrap data escaped its script element")
 	}
 }
 
@@ -161,111 +195,35 @@ func TestBuildAndHandler(t *testing.T) {
 	if len(p.Groups[0].Categories) != 1 || p.Groups[0].Categories[0].Name != "logic" || len(p.Groups[0].Categories[0].Files) != 1 {
 		t.Fatalf("unexpected group categories: %+v", p.Groups[0].Categories)
 	}
+	fragment := p.Groups[0].Files[0].Fragments[0]
+	upper, lower := diffItemsText(fragment.UpperContext), diffItemsText(fragment.LowerContext)
+	if strings.Contains(upper, "Show ") || !strings.Contains(lower, "Show 8 lines below") {
+		t.Fatalf("missing directional context controls: upper=%q lower=%q", upper, lower)
+	}
+	if !strings.Contains(diffItemsText(fragment.Hunk), "unsafe <tag>") {
+		t.Fatal("patch text was not preserved for browser escaping")
+	}
 	h, err := Handler(p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
-	body := w.Body.String()
-	if !strings.Contains(body, "Semantic Changes") || !strings.Contains(body, "Start here") {
-		t.Fatal("missing viewer content")
+	bootstrap := bootstrapFromHTML(t, w.Body.Bytes())
+	if bootstrap.Capabilities.Questions != "disabled" || bootstrap.Page.BaseSHA != "aaa" || bootstrap.Page.HeadSHA != "bbb" {
+		t.Fatalf("unexpected bootstrap: %+v", bootstrap)
 	}
-	if !strings.Contains(body, "Start here<br") || !strings.Contains(body, "More context.") {
-		t.Fatal("group summary line break was not rendered")
+	if len(bootstrap.Page.Groups) != 2 || len(bootstrap.Page.Groups[0].Categories) != 1 || bootstrap.Page.Groups[0].Categories[0].Icon != "logic" {
+		t.Fatalf("category icon semantics were not preserved: %+v", bootstrap.Page.Groups)
 	}
-	if !strings.Contains(body, ".summary{color:var(--muted);margin:8px 0 0 24px;white-space:pre-line}") {
-		t.Fatal("group summary line breaks are not preserved in the viewer")
+	if strings.Contains(w.Body.String(), "status_icon_html") || strings.Contains(w.Body.String(), "icon_html") {
+		t.Fatal("viewer bootstrap still contains rendered icon HTML")
 	}
-	if !strings.Contains(body, ".summary code{padding:2px 5px;border:1px solid var(--line)") {
-		t.Fatal("inline Markdown code has no visual styling")
+	if strings.Contains(w.Body.String(), "hunk_html") || strings.Contains(w.Body.String(), "description_html") || strings.Contains(w.Body.String(), "summary_html") || !strings.Contains(w.Body.String(), `"hunk"`) {
+		t.Fatal("viewer bootstrap should carry structured diff items instead of rendered hunk HTML")
 	}
-	if !strings.Contains(body, ".summary code{padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:#1f2630;color:#8b949e;") {
-		t.Fatal("inline Markdown code should use a neutral gray color")
-	}
-	if !strings.Contains(body, `<details class="category">`) || strings.Contains(body, `<details class="category" open>`) || !strings.Contains(body, `class="category-icon logic"`) || !strings.Contains(body, `<svg viewBox="0 0 24 24"`) {
-		t.Fatal("categorized file sections are not rendered collapsed with a standard icon")
-	}
-	if !strings.Contains(body, ".category-icon{display:inline-flex;width:18px;height:18px;margin-right:7px;vertical-align:-4px;color:#8b949e}") {
-		t.Fatal("category icons should use a shared neutral color")
-	}
-	if !strings.Contains(body, ".category-stats{display:inline-flex;gap:10px;margin-left:10px;font-size:12px}.category-stat.added{color:#3fb950}.category-stat.updated{color:#d29922}.category-stat.deleted{color:#f85149}") {
-		t.Fatal("category file status counts should be styled by status")
-	}
-	if !strings.Contains(body, ".file-status-icon.updated{color:#d29922}") {
-		t.Fatal("updated file icons should use the update yellow")
-	}
-	if !strings.Contains(body, `<span class="category-stat updated">1 files updated</span>`) || strings.Contains(body, `class="category-stat added"`) || strings.Contains(body, `class="category-stat deleted"`) {
-		t.Fatal("category file status counts should omit zero statuses")
-	}
-	if !strings.Contains(body, ".file h3{display:inline;font:400 14px ui-monospace,monospace;margin:0;color:var(--text)}.file-path{font-weight:400}.file-name{font-weight:700}") {
-		t.Fatal("file paths should be regular white text with bold file names")
-	}
-	if !strings.Contains(body, "Explains the &lt;safe&gt; change.") {
-		t.Fatal("missing or unsafe fragment description")
-	}
-	fileHeading := strings.Index(body, "<h3><span class=\"file-name\">a.go</span></h3>")
-	if fileHeading < 0 {
-		t.Fatal("missing file heading")
-	}
-	summaryStart := strings.LastIndex(body[:fileHeading], "<summary>")
-	descriptionAt := strings.Index(body, "Explains the &lt;safe&gt; change.")
-	if summaryStart < 0 {
-		t.Fatal("missing file summary")
-	}
-	summaryEnd := strings.Index(body[summaryStart:], "</summary>")
-	if summaryEnd < 0 || descriptionAt < summaryStart || descriptionAt >= summaryStart+summaryEnd {
-		t.Fatal("fragment description is not visible in the collapsed file summary")
-	}
-	if strings.Count(body, "Explains the &lt;safe&gt; change.") != 2 {
-		t.Fatal("fragment description should appear in both the file summary and expanded diff")
-	}
-	if !strings.Contains(body, `class="file-status-icon updated"`) || !strings.Contains(body, `class="stat-add">+1`) || !strings.Contains(body, `class="stat-del">-1`) {
-		t.Fatal("missing file status or line-change statistics")
-	}
-	if strings.Count(body, `class="diffstat-block `) != 10 {
-		t.Fatal("each file should render a five-block diffstat")
-	}
-	if !strings.Contains(body, `data-view="unified"`) || !strings.Contains(body, `data-view="split"`) || !strings.Contains(body, "semdiff-view") {
-		t.Fatal("missing page-wide unified/split view controls")
-	}
-	fragment := p.Groups[0].Files[0].Fragments[0]
-	upper, lower := string(fragment.UpperContextHTML), string(fragment.LowerContextHTML)
-	if strings.Contains(upper, "Show ") || !strings.Contains(lower, "Show 8 lines below") {
-		t.Fatalf("missing directional context controls: upper=%q lower=%q", upper, lower)
-	}
-	if strings.Contains(upper, "context-hidden") {
-		t.Fatal("fewer than five upper context lines should all be initially visible")
-	}
-	if strings.Index(lower, `class="expand-lines"`) > strings.Index(lower, "context-hidden") {
-		t.Fatal("lower expansion rows must be after their button")
-	}
-	if !strings.Contains(body, ".context-hidden[hidden]{display:none!important}") {
-		t.Fatal("hidden context rows are not explicitly hidden by CSS")
-	}
-	if !strings.Contains(body, ".file[open]>summary{position:sticky;top:0") {
-		t.Fatal("open file heading is not sticky")
-	}
-	if !strings.Contains(body, ".group{border:1px solid var(--line);border-radius:8px;background:var(--panel);margin:14px 0;overflow:clip}") {
-		t.Fatal("group clipping prevents sticky file headings")
-	}
-	if !strings.Contains(body, "batch[0].before(button)") || !strings.Contains(body, "batch[batch.length-1].after(button)") {
-		t.Fatal("context controls do not move to the expanded range boundary")
-	}
-	if strings.Contains(body, "@@ -5,3 +5,3 @@") {
-		t.Fatal("hunk headers should not be rendered")
-	}
-	if !strings.Contains(body, `<details id="group-1" class="group main-group" data-group-id="first" open>`) {
-		t.Fatal("groups should be open by default")
-	}
-	if strings.Contains(body, `<details class="category" open>`) {
-		t.Fatal("categories should be collapsed by default")
-	}
-	if strings.Contains(body, `<details class="file" open>`) {
-		t.Fatal("files should be collapsed by default")
-	}
-	if strings.Contains(body, "unsafe <tag>") || !strings.Contains(body, "unsafe &lt;tag&gt;") {
-		t.Fatal("patch was not safely escaped")
+	if got := bootstrap.Page.Groups[0].Files[0].Fragments[0].Description; got != "Explains the <safe> change." {
+		t.Fatalf("missing or altered raw fragment description: %q", got)
 	}
 }
 
@@ -286,19 +244,10 @@ func TestHandlerShowsReviewDriftSeparatelyFromSemanticGroups(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
-	body := w.Body.String()
-	for _, want := range []string{
-		"This semantic review is 1 unreviewed commit behind HEAD.",
-		"review-base...review-head",
-		"review-base...current-head",
-		"1234567890ab",
-		"follow-up",
-		"docs/readme.md",
-		`href="/review-drift.css"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("viewer is missing drift content %q", want)
-		}
+	bootstrap := bootstrapFromHTML(t, w.Body.Bytes())
+	drift := bootstrap.Page.Drift
+	if drift == nil || drift.CurrentHeadSHA != "current-head" || len(drift.Commits) != 1 || drift.Commits[0].Subject != "follow-up" || len(drift.Paths) != 2 {
+		t.Fatalf("unexpected drift bootstrap: %+v", drift)
 	}
 }
 
@@ -331,22 +280,19 @@ func TestDiffstatBlocks(t *testing.T) {
 
 func TestFileStatusAndLineCounts(t *testing.T) {
 	tests := []struct {
-		name, patch, status, iconFragment string
-		additions, deletions              int
+		name, patch, status  string
+		additions, deletions int
 	}{
-		{"new", "diff --git a/new.go b/new.go\nnew file mode 100644\n--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,2 @@\n+one\n+two\n", "new", "M12 18v-6", 2, 0},
-		{"updated", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "updated", "m10.4 12.6", 1, 1},
-		{"deleted", "diff --git a/old.go b/old.go\ndeleted file mode 100644\n--- a/old.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", "deleted", "M9 15h6", 0, 2},
+		{"new", "diff --git a/new.go b/new.go\nnew file mode 100644\n--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,2 @@\n+one\n+two\n", "new", 2, 0},
+		{"updated", "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n", "updated", 1, 1},
+		{"deleted", "diff --git a/old.go b/old.go\ndeleted file mode 100644\n--- a/old.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n", "deleted", 0, 2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fragment := model.MaterializedFragment{ID: "F1", Path: "a.go", Patch: tt.patch}
-			file := buildFileView("a.go", []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment}, nil)
-			if file.Status != tt.status || !strings.Contains(string(file.StatusIcon), tt.iconFragment) || file.Additions != tt.additions || file.Deletions != tt.deletions {
+			file := buildFileView("a.go", []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment})
+			if file.Status != tt.status || file.Additions != tt.additions || file.Deletions != tt.deletions {
 				t.Fatalf("unexpected file metadata: %+v", file)
-			}
-			if !strings.Contains(string(file.StatusIcon), `<svg viewBox="0 0 24 24"`) {
-				t.Fatalf("status icon is not an inline SVG: %s", file.StatusIcon)
 			}
 		})
 	}
@@ -354,19 +300,9 @@ func TestFileStatusAndLineCounts(t *testing.T) {
 
 func TestFileViewSplitsDirectoryAndName(t *testing.T) {
 	fragment := model.MaterializedFragment{ID: "F1", Path: "web/src/Button.tsx", Patch: "diff --git a/web/src/Button.tsx b/web/src/Button.tsx\n"}
-	file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment}, nil)
+	file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, "", []model.MaterializedFragment{fragment})
 	if file.Directory != "web/src/" || file.Name != "Button.tsx" {
 		t.Fatalf("unexpected path split: directory=%q name=%q", file.Directory, file.Name)
-	}
-	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{ID: "g", Title: "Group", Fragments: []model.Fragment{{ID: "F1", Path: fragment.Path}}}}}, model.FragmentSet{Fragments: []model.MaterializedFragment{fragment}})
-	handler, err := Handler(page)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
-	if !strings.Contains(response.Body.String(), `<h3><span class="file-path">web/src/</span><span class="file-name">Button.tsx</span></h3>`) {
-		t.Fatal("nested file heading did not render separate path and name spans")
 	}
 }
 
@@ -396,59 +332,6 @@ func TestSidebarBuildsGroupAndFileCentricNavigation(t *testing.T) {
 	if len(page.SidebarFiles) != 1 || page.SidebarFiles[0].Path != "root.go" {
 		t.Fatalf("root-level file missing from sidebar: %+v", page.SidebarFiles)
 	}
-	handler, err := Handler(page)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
-	body := response.Body.String()
-	for _, want := range []string{
-		`<aside class="sidebar" aria-label="Change navigation">`,
-		`class="sidebar-pane sidebar-groups"`,
-		`class="sidebar-pane sidebar-files"`,
-		`if(sidebarPanes.files)sidebarPanes.files.remove()`,
-		`data-group-id="cleanup" data-file-path="docs/design/a.go"`,
-		`var mainFiles=Array.from(document.querySelectorAll('.main-file,.main-guided-fragment'))`,
-		`.summary ul,.summary ol,.step-summary ul,.step-summary ol{margin:0!important;padding-left:20px!important;white-space:normal}`,
-		`.summary li>p,.step-summary li>p{margin:0!important}`,
-		`.diff-row,pre{font-family:"SFMono-Regular","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-variant-ligatures:none;letter-spacing:.005em}`,
-		`.diff-row{font-size:12.5px;line-height:1.45}`,
-		`:root{--bg:#11111b;--panel:#1e1e2e;--line:#313244;--text:#cdd6f4;--muted:#a6adc8;--accent:#89b4fa;--add:#1f382b;--del:#422634}`,
-		`.guided-group>summary{border-left-color:#cba6f7!important}`,
-		`.syntax-string{color:#a6e3a1!important}`,
-		`.diff-row.add,.diff-row.del{color:var(--text)}`,
-		`body[data-view=split] .diff-row.del .old-number,body[data-view=split] .diff-row.del .old-code,body[data-view=split] .diff-row.add .new-number,body[data-view=split] .diff-row.add .new-code{color:var(--text)}`,
-		`function buildGroupTrees()`,
-		`directory.className='nav-directory nav-group-directory'`,
-		`function compressGroupDirectories(root)`,
-		`parent.dataset.userCollapsed!=='true'`,
-		`.nav-folder-icon{display:none}`,
-		`diff.className='nav-file-diff'`,
-		`.main-group>summary{position:sticky`,
-		`--group-header-height`,
-		`--category-header-height`,
-		`.category[open]>summary{position:sticky`,
-		`data-category-action="open"`,
-		`data-category-action="close"`,
-		`data-group-action="open"`,
-		`data-group-action="close"`,
-		`file-review-toggle`,
-		`if(file)file.open=false`,
-		`function updateCategoryReview(category)`,
-		`ResizeObserver`,
-		`--sidebar-width:360px`,
-		`semdiff-sidebar-width`,
-		`sidebar.setPointerCapture(event.pointerId)`,
-		`syncSidebar(fileAtViewport(),false)`,
-		`openAncestors(activeGroupFile)`,
-		`focusInPane(fileTarget,filePane)`,
-		`var current=Array.isArray(mainFiles)?fileAtViewport():null`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("rendered sidebar is missing %q", want)
-		}
-	}
 }
 
 func TestFileReviewLevelUsesMostCarefulFragment(t *testing.T) {
@@ -467,7 +350,7 @@ func TestFileReviewLevelUsesMostCarefulFragment(t *testing.T) {
 	}
 }
 
-func TestHandlerServesImportanceUIAssetsAndData(t *testing.T) {
+func TestHandlerEmbedsViewerAssetsAndData(t *testing.T) {
 	page := Build(model.GroupsFile{Groups: []model.SemanticGroup{{
 		ID: "behavior", Title: "Behavior", Importance: model.ImportanceCore,
 		Fragments: []model.Fragment{{ID: "F1", Path: "a.go", Description: "Adapts the caller.", ReviewLevel: model.ReviewLevelCareful}},
@@ -476,17 +359,15 @@ func TestHandlerServesImportanceUIAssetsAndData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for path, want := range map[string]string{
-		"/":                `<script src="/importance.js"></script>`,
-		"/importance.css":  ".review-level svg",
-		"/importance.js":   "function reviewIcon(value)",
-		"/importance.json": `"F1":"careful"`,
-	} {
-		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, httptest.NewRequest("GET", path, nil))
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), want) {
-			t.Errorf("%s: status=%d body does not contain %q", path, response.Code, want)
-		}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `<style>`) || !strings.Contains(response.Body.String(), `<script>`) {
+		t.Fatalf("viewer assets are not inline: status=%d", response.Code)
+	}
+	bootstrap := bootstrapFromHTML(t, response.Body.Bytes())
+	fragment := bootstrap.Page.Groups[0].Files[0].Fragments[0]
+	if bootstrap.Page.Groups[0].Importance != model.ImportanceCore || fragment.ReviewLevel != model.ReviewLevelCareful {
+		t.Fatalf("importance data is missing: %+v", bootstrap.Page.Groups[0])
 	}
 }
 
@@ -511,35 +392,13 @@ func TestSidebarKeepsDirectoryBranchesWhileCompressingSingleChains(t *testing.T)
 	}
 }
 
-func TestColorPatchDoesNotAddBlankRows(t *testing.T) {
-	html := string(colorPatch("+one\n+two\n", nil))
-	if strings.Contains(html, "</span>\n") {
-		t.Fatalf("colorPatch added a newline after a block: %q", html)
+func TestDiffItemsDoNotAddBlankRows(t *testing.T) {
+	items := diffItems("+one\n+two\n")
+	if len(items) != 2 {
+		t.Fatalf("got %d diff items, want 2: %+v", len(items), items)
 	}
-	if strings.Count(html, `<span class="diff-row`) != 2 {
-		t.Fatalf("got unexpected rendered rows: %q", html)
-	}
-}
-
-func TestRenderMarkdown(t *testing.T) {
-	html := string(renderMarkdown("# Heading\n\n**important** and `foobar`\n\n- first\n- second\n\n<script>alert(1)</script>"))
-	for _, want := range []string{"<h1>Heading</h1>", "<strong>important</strong>", "<code>foobar</code>", "<li>first</li>", "<li>second</li>"} {
-		if !strings.Contains(html, want) {
-			t.Errorf("rendered markdown is missing %q: %s", want, html)
-		}
-	}
-	if strings.Contains(html, "<script>") {
-		t.Fatalf("raw HTML must not be executable: %s", html)
-	}
-}
-
-func TestRenderInlineMarkdownDecoratesCodeWithoutParagraphWrapper(t *testing.T) {
-	html := string(renderInlineMarkdown("Calls `foobar` safely."))
-	if html != "Calls <code>foobar</code> safely." {
-		t.Fatalf("renderInlineMarkdown() = %q", html)
-	}
-	if strings.Contains(html, "<p>") {
-		t.Fatalf("inline markdown contains a paragraph wrapper: %q", html)
+	if got := diffItemsText(items); got != "+one+two" {
+		t.Fatalf("diff items changed patch text: %q", got)
 	}
 }
 
@@ -565,7 +424,7 @@ func TestCategoryViewsUseRequestedOrder(t *testing.T) {
 			t.Errorf("category %d = %q, want %q", i, category.Name, want[i])
 		}
 	}
-	if !views[5].Standard || views[5].IconClass != "docs" || views[5].Icon == "" {
+	if !views[5].Standard || views[5].Icon != "docs" {
 		t.Errorf("docs category should have a standard icon: %+v", views[5])
 	}
 }
@@ -583,19 +442,13 @@ func TestCategoryViewsCountFileStatuses(t *testing.T) {
 	}
 }
 
-func TestColorPatchLineNumbers(t *testing.T) {
-	html := string(colorPatch("@@ -7,2 +7,2 @@\n-old\n+new\n context\n", nil))
-	if strings.Contains(html, "@@ -7,2 +7,2 @@") || strings.Contains(html, `class="diff-row hunk"`) {
-		t.Fatalf("hunk header should only drive line numbering, not be rendered: %q", html)
+func TestDiffItemsLineNumbers(t *testing.T) {
+	items := diffItems("@@ -7,2 +7,2 @@\n-old\n+new\n context\n")
+	if strings.Contains(diffItemsText(items), "@@ -7,2 +7,2 @@") {
+		t.Fatalf("hunk header should only drive line numbering, not be rendered: %+v", items)
 	}
-	if strings.Count(html, `<span class="line-number unified-cell">7</span>`) != 2 {
-		t.Fatalf("deletion and addition should use line 7: %q", html)
-	}
-	if !strings.Contains(html, `<span class="line-number unified-cell">8</span>`) {
-		t.Fatalf("context line should advance to line 8: %q", html)
-	}
-	if !strings.Contains(html, `<span class="line-number split-cell old-number">7</span>`) || !strings.Contains(html, `<span class="line-number split-cell new-number">7</span>`) {
-		t.Fatalf("split view should contain old and new line numbers: %q", html)
+	if len(items) != 3 || items[0].OldNumber != "7" || items[1].NewNumber != "7" || items[2].OldNumber != "8" || items[2].NewNumber != "8" {
+		t.Fatalf("unexpected line numbering: %+v", items)
 	}
 }
 
@@ -608,21 +461,12 @@ func TestMultipleFragmentsHaveIndependentContext(t *testing.T) {
 	if len(fragments) != 2 {
 		t.Fatalf("got %d fragments, want 2", len(fragments))
 	}
-	gap := string(fragments[0].LowerContextHTML)
+	gap := diffItemsText(fragments[0].LowerContext)
 	if !strings.Contains(gap, "Show 5 lines below") || !strings.Contains(gap, "Show 5 lines above") {
 		t.Fatalf("fragments do not share a bidirectional context gap: %q", gap)
 	}
-	if fragments[1].UpperContextHTML != "" {
-		t.Fatalf("second fragment duplicated the shared context gap: %q", fragments[1].UpperContextHTML)
-	}
-	handler, err := Handler(page)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
-	if got := strings.Count(response.Body.String(), "<pre>"); got != 1 {
-		t.Fatalf("same-file fragments rendered in %d diff views, want 1", got)
+	if len(fragments[1].UpperContext) != 0 {
+		t.Fatalf("second fragment duplicated the shared context gap: %+v", fragments[1].UpperContext)
 	}
 }
 
@@ -631,18 +475,18 @@ func TestContextExpansionShowsOtherFragments(t *testing.T) {
 	other := model.MaterializedFragment{ID: "F2", Path: "a.go", NewStart: 12, NewLines: 2, Patch: "@@ -12,2 +12,2 @@\n-old\n+other\n"}
 	last := model.MaterializedFragment{ID: "F3", Path: "a.go", NewStart: 20, NewLines: 1, Patch: "@@ -20,1 +20,1 @@\n-old\n+last\n"}
 	content := strings.Repeat("line\n", 30)
-	file := buildFileView("a.go", []model.MaterializedFragment{first, last}, content, []model.MaterializedFragment{first, other, last}, nil)
-	between := string(file.Fragments[0].LowerContextHTML)
-	if !strings.Contains(between, `diff-row ctx other-change`) {
-		t.Fatalf("context should mark other fragment lines: %q", between)
+	file := buildFileView("a.go", []model.MaterializedFragment{first, last}, content, []model.MaterializedFragment{first, other, last})
+	between := file.Fragments[0].LowerContext
+	if !strings.Contains(diffItemsClassText(between), "ctx other-change") {
+		t.Fatalf("context should mark other fragment lines: %+v", between)
 	}
-	if !strings.Contains(between, "Show 4 lines below") {
-		t.Fatalf("context should remain expandable across other fragment lines: %q", between)
+	if !strings.Contains(diffItemsText(between), "Show 4 lines below") {
+		t.Fatalf("context should remain expandable across other fragment lines: %q", diffItemsText(between))
 	}
 
-	guided := buildFragmentView(first, content, nil, []model.MaterializedFragment{first, other, last}, nil)
-	if !strings.Contains(string(guided.LowerContextHTML), `diff-row ctx other-change`) {
-		t.Fatalf("guided context should extend through other fragments: %q", guided.LowerContextHTML)
+	guided := buildFragmentView(first, content, nil, []model.MaterializedFragment{first, other, last})
+	if !strings.Contains(diffItemsClassText(guided.LowerContext), "ctx other-change") {
+		t.Fatalf("guided context should extend through other fragments: %+v", guided.LowerContext)
 	}
 }
 
@@ -663,42 +507,6 @@ func TestBuildPreservesReviewStepFragmentOrderAcrossFiles(t *testing.T) {
 	if page.Groups[0].Files[0].Path != "a.go" || page.Groups[0].Files[1].Path != "b.go" {
 		t.Fatalf("files are no longer file ordered: %+v", page.Groups[0].Files)
 	}
-	handler, err := Handler(page)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest("GET", "/", nil))
-	body := response.Body.String()
-	if !strings.Contains(body, `<h2>Guided</h2>`) || strings.Contains(body, `<h2>1. Guided</h2>`) {
-		t.Fatal("group title should not include its order")
-	}
-	if !strings.Contains(body, `<h3>1. Start</h3>`) {
-		t.Fatal("step title should include its review order")
-	}
-	for _, want := range []string{
-		`class="guided-file main-guided-fragment"`,
-		`class="file-status-icon updated"`,
-		`class="file-stats"`,
-		`Mark fragment as reviewed`,
-		`.main-group>summary{display:flex!important`,
-		`group.querySelectorAll('.review-step,.guided-file')`,
-		`</summary><div class="summary guided-group-summary">`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("guided/files visual parity is missing %q", want)
-		}
-	}
-}
-
-func TestHighlightedLineKeepsDiffMarkerAndEscapesCode(t *testing.T) {
-	highlighter := newSyntaxHighlighter("example.go", "func main() { // <note>\n")
-	html := string(highlighter.highlight(`+func main() { // <note>`, "add", "1"))
-	for _, want := range []string{`+<span class="syntax-keyword">func</span>`, `syntax-function`, `syntax-comment`, `&lt;note&gt;`} {
-		if !strings.Contains(html, want) {
-			t.Fatalf("highlighted line is missing %q: %s", want, html)
-		}
-	}
 }
 
 func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
@@ -716,38 +524,59 @@ func TestMultipleRangesHaveExpandableContextBetweenHunks(t *testing.T) {
 	}}}
 	page := Build(group, model.FragmentSet{Fragments: []model.MaterializedFragment{fragment}}, map[string]string{"a.go": strings.Repeat("line\n", 40)})
 	view := page.Groups[0].Files[0].Fragments[0]
-	between := string(view.HunkHTML)
-	if !strings.Contains(between, "Show 9 lines below") || !strings.Contains(between, "Show 9 lines above") {
-		t.Fatalf("multi-range fragment has no bidirectional expansion between ranges: %q", between)
+	between := view.Hunk
+	if !strings.Contains(diffItemsText(between), "Show 9 lines below") || !strings.Contains(diffItemsText(between), "Show 9 lines above") {
+		t.Fatalf("multi-range fragment has no bidirectional expansion between ranges: %+v", between)
 	}
-	if strings.Count(between, `class="context-expand context-gap"`) != 1 {
-		t.Fatalf("got unexpected number of internal range gaps: %q", between)
+	if diffItemsCount(between, "expand") != 2 {
+		t.Fatalf("got unexpected number of internal range controls: %+v", between)
 	}
-	if !strings.Contains(string(view.UpperContextHTML), "Show 4 lines above") || !strings.Contains(string(view.LowerContextHTML), "Show 5 lines below") {
-		t.Fatalf("outer fragment context changed: upper=%q lower=%q", view.UpperContextHTML, view.LowerContextHTML)
+	if !strings.Contains(diffItemsText(view.UpperContext), "Show 4 lines above") || !strings.Contains(diffItemsText(view.LowerContext), "Show 5 lines below") {
+		t.Fatalf("outer fragment context changed: upper=%q lower=%q", diffItemsText(view.UpperContext), diffItemsText(view.LowerContext))
 	}
 }
 
 func TestShortRangeGapIsInitiallyVisibleWithoutExpandControls(t *testing.T) {
-	html := string(expandableGap(strings.Split("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine", "\n"), 11, 11, nil, nil))
-	if strings.Contains(html, "expand-lines") || strings.Contains(html, "context-hidden") {
-		t.Fatalf("a gap covered by five lines of context on each side should be fully visible: %q", html)
+	items := expandableGap(strings.Split("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine", "\n"), 11, 11, nil)
+	if diffItemsCount(items, "expand") != 0 || hasHiddenDiffItem(items) {
+		t.Fatalf("a gap covered by five lines of context on each side should be fully visible: %+v", items)
 	}
-	if strings.Count(html, `class="diff-row ctx"`) != 9 {
-		t.Fatalf("got unexpected visible context rows: %q", html)
+	if len(items) != 9 {
+		t.Fatalf("got unexpected visible context rows: %+v", items)
 	}
 }
 
 func TestRangeGapUsesIndependentOldAndNewLineNumbers(t *testing.T) {
 	patch := "@@ -128,0 +129,4 @@\n+one\n+two\n+three\n+four\n@@ -138,1 +142,1 @@\n-old\n+new\n"
-	html := string(colorPatchWithContext(patch, sourceLines(strings.Repeat("line\n", 160)), nil))
-	oldContext := `<span class="line-number split-cell old-number">137</span>`
-	newContext := `<span class="line-number split-cell new-number">141</span>`
-	oldChange := `<span class="line-number split-cell old-number">138</span>`
-	if !strings.Contains(html, oldContext) || !strings.Contains(html, newContext) {
-		t.Fatalf("context did not preserve independent split-view line numbers: %q", html)
+	items := diffItemsWithContext(patch, sourceLines(strings.Repeat("line\n", 160)))
+	oldContext, newContext := false, false
+	for _, item := range items {
+		if item.OldNumber == "137" && item.NewNumber == "141" {
+			oldContext, newContext = true, true
+		}
 	}
-	if strings.Index(html, oldContext) > strings.Index(html, oldChange) {
-		t.Fatalf("old-side context line numbers run backward at the next range: %q", html)
+	if !oldContext || !newContext {
+		t.Fatalf("context did not preserve independent split-view line numbers: %+v", items)
 	}
+	contextIndex, changeIndex := -1, -1
+	for index, item := range items {
+		if item.OldNumber == "137" {
+			contextIndex = index
+		}
+		if item.OldNumber == "138" {
+			changeIndex = index
+		}
+	}
+	if contextIndex > changeIndex {
+		t.Fatalf("old-side context line numbers run backward at the next range: %+v", items)
+	}
+}
+
+func hasHiddenDiffItem(items []DiffItem) bool {
+	for _, item := range items {
+		if item.Hidden {
+			return true
+		}
+	}
+	return false
 }

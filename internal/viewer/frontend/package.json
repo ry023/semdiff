@@ -1,0 +1,30 @@
+{
+  "name": "semdiff-viewer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b && vite build",
+    "check": "prettier --check . && npm run build && git diff --exit-code -- ../dist",
+    "dev": "vite",
+    "format": "prettier --write .",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "highlight.js": "^11.12.0",
+    "lucide-react": "^1.43.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "prettier": "^3.9.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}
