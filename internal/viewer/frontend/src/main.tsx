@@ -687,7 +687,8 @@ function Sidebar({
                 >
                   {file.path}
                   <small>
-                    +{file.additions} −{file.deletions}
+                    <span className="stat-add">+{file.additions}</span>{" "}
+                    <span className="stat-del">−{file.deletions}</span>
                   </small>
                 </button>
               ))}

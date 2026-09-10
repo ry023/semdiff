@@ -268,10 +268,10 @@ button {
   height: 14px;
   background: var(--line);
 }
-.diffstat-block.add {
+.diffstat-block.added {
   background: #3fb950;
 }
-.diffstat-block.del {
+.diffstat-block.deleted {
   background: #f85149;
 }
 .fragment-description {
