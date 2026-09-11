@@ -1,14 +1,83 @@
 package groups
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
 
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/ry023/semdiff/internal/versioning"
 )
+
+const (
+	Format               = "semdiff.groups"
+	WriteVersion         = "1.0.0"
+	ReadMinimumVersion   = "1.0.0"
+	ReadMaximumExclusive = "1.1.0"
+)
+
+var supportedRange = versioning.Range{
+	Min:          versioning.MustParse(ReadMinimumVersion),
+	MaxExclusive: versioning.MustParse(ReadMaximumExclusive),
+}
+
+type CompatibilityErrorKind string
+
+const (
+	CompatibilityLegacy         CompatibilityErrorKind = "legacy"
+	CompatibilityMissingFormat  CompatibilityErrorKind = "missing_format"
+	CompatibilityUnknownFormat  CompatibilityErrorKind = "unknown_format"
+	CompatibilityMissingVersion CompatibilityErrorKind = "missing_version"
+	CompatibilityInvalidVersion CompatibilityErrorKind = "invalid_version"
+	CompatibilityTooOld         CompatibilityErrorKind = "too_old"
+	CompatibilityTooNew         CompatibilityErrorKind = "too_new"
+)
+
+type CompatibilityError struct {
+	Kind    CompatibilityErrorKind
+	Format  string
+	Version string
+	Legacy  string
+}
+
+func (e *CompatibilityError) Error() string {
+	supported := fmt.Sprintf(">=%s, <%s", ReadMinimumVersion, ReadMaximumExclusive)
+	switch e.Kind {
+	case CompatibilityLegacy:
+		return fmt.Sprintf("legacy groups schema version %s is unsupported; regenerate the review with a current semdiff", e.Legacy)
+	case CompatibilityMissingFormat:
+		return fmt.Sprintf("groups file is missing format (expected %q)", Format)
+	case CompatibilityUnknownFormat:
+		return fmt.Sprintf("unsupported groups format %q (expected %q)", e.Format, Format)
+	case CompatibilityMissingVersion:
+		return "groups file is missing format_version"
+	case CompatibilityInvalidVersion:
+		return fmt.Sprintf("invalid groups format_version %q: expected MAJOR.MINOR.PATCH", e.Version)
+	case CompatibilityTooOld:
+		return fmt.Sprintf("groups schema %s %s is older than this semdiff supports (%s); regenerate the review or use a compatible semdiff", Format, e.Version, supported)
+	case CompatibilityTooNew:
+		return fmt.Sprintf("groups schema %s %s is newer than this semdiff supports (%s); upgrade semdiff", Format, e.Version, supported)
+	default:
+		return "unsupported groups schema"
+	}
+}
+
+type SchemaRange struct {
+	Min          string `json:"min"`
+	MaxExclusive string `json:"max_exclusive"`
+}
+
+func ReadRanges() []SchemaRange {
+	return []SchemaRange{{Min: ReadMinimumVersion, MaxExclusive: ReadMaximumExclusive}}
+}
+
+func NewFile(baseSHA, headSHA string, semanticGroups []model.SemanticGroup) model.GroupsFile {
+	return model.GroupsFile{Format: Format, FormatVersion: WriteVersion, BaseSHA: baseSHA, HeadSHA: headSHA, Groups: semanticGroups}
+}
 
 func Load(path string) (model.GroupsFile, error) {
 	b, err := os.ReadFile(path)
@@ -19,10 +88,20 @@ func Load(path string) (model.GroupsFile, error) {
 }
 
 func Parse(b []byte) (model.GroupsFile, error) {
+	if err := checkEnvelope(b); err != nil {
+		return model.GroupsFile{}, err
+	}
 	var result model.GroupsFile
-	decoder := json.NewDecoder(strings.NewReader(string(b)))
+	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
+		return result, fmt.Errorf("decode groups file: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return result, fmt.Errorf("decode groups file: multiple JSON values")
+		}
 		return result, fmt.Errorf("decode groups file: %w", err)
 	}
 	for groupIndex := range result.Groups {
@@ -34,6 +113,53 @@ func Parse(b []byte) (model.GroupsFile, error) {
 		}
 	}
 	return result, nil
+}
+
+func checkEnvelope(b []byte) error {
+	var header struct {
+		Format        string          `json:"format"`
+		FormatVersion string          `json:"format_version"`
+		LegacyVersion json.RawMessage `json:"version"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(b))
+	if err := decoder.Decode(&header); err != nil {
+		return fmt.Errorf("decode groups file header: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("decode groups file header: multiple JSON values")
+		}
+		return fmt.Errorf("decode groups file header: %w", err)
+	}
+	if len(header.LegacyVersion) > 0 {
+		return &CompatibilityError{Kind: CompatibilityLegacy, Legacy: string(header.LegacyVersion)}
+	}
+	return CheckCompatibility(header.Format, header.FormatVersion)
+}
+
+func CheckCompatibility(format, version string) error {
+	if format == "" {
+		return &CompatibilityError{Kind: CompatibilityMissingFormat}
+	}
+	if format != Format {
+		return &CompatibilityError{Kind: CompatibilityUnknownFormat, Format: format}
+	}
+	if version == "" {
+		return &CompatibilityError{Kind: CompatibilityMissingVersion, Format: format}
+	}
+	parsed, err := versioning.Parse(version)
+	if err != nil {
+		return &CompatibilityError{Kind: CompatibilityInvalidVersion, Format: format, Version: version}
+	}
+	if supportedRange.Contains(parsed) {
+		return nil
+	}
+	kind := CompatibilityTooNew
+	if versioning.Compare(parsed, supportedRange.Min) < 0 {
+		kind = CompatibilityTooOld
+	}
+	return &CompatibilityError{Kind: kind, Format: format, Version: version}
 }
 
 type ValidationReport struct{ Errors, Warnings []string }
@@ -59,8 +185,8 @@ type lineKey struct {
 func ValidateReport(g model.GroupsFile, changes model.ChangeMap) ValidationReport {
 	var report ValidationReport
 	add := func(format string, args ...any) { report.Errors = append(report.Errors, fmt.Sprintf(format, args...)) }
-	if g.Version != 3 {
-		add("version must be 3 (got %d)", g.Version)
+	if err := CheckCompatibility(g.Format, g.FormatVersion); err != nil {
+		add("%v", err)
 	}
 	if g.BaseSHA != changes.BaseSHA {
 		add("base_sha mismatch: groups=%s changes=%s", g.BaseSHA, changes.BaseSHA)

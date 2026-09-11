@@ -4,6 +4,16 @@
 
 人間および AI Agent 向けの workflow、インストール方法、レビュー共有については [README](README_ja.md) を参照してください。
 
+## バージョン互換性を確認する
+
+```sh
+semdiff --version
+semdiff version
+semdiff version --json
+```
+
+`--version` はCLIの製品バージョンを1行で表示します。`version` は、このCLIが読み書きする `groups.json` schema versionも表示します。JSON形式ではpluginやscript向けに、製品の `version` と、`format`、`read_ranges`、`write` を含む `groups_schema` objectを返します。semdiffは未検証のschema versionをGit状態の読み取り前に拒否します。互換表は[バージョン管理](docs/versioning_ja.md)を参照してください。
+
 ## Draft workflow の全体像
 
 `semantic-grouping` skill が内部で行う基本的な workflow は次の通りです。

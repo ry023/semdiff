@@ -16,11 +16,12 @@ Git zero-context hunks are stored as draft suggestions, but they never populate 
 
 ## Data model
 
-The only supported `groups.json` schema is version 3:
+The finalized artifact uses format `semdiff.groups`. This CLI writes format version `1.0.0` and accepts versions `>=1.0.0, <1.1.0`:
 
 ```json
 {
-  "version": 3,
+  "format": "semdiff.groups",
+  "format_version": "1.0.0",
   "base_sha": "<full SHA>",
   "head_sha": "<full SHA>",
   "groups": [
@@ -147,7 +148,7 @@ reviews resolve [range]             report the exact or nearest compatible local
 
 ## Draft model
 
-Draft schema version 3 separates suggestions from authored fragments and stores Fragment review levels independently from Group importance. Older drafts must be recreated; the final `groups.json` schema is version 2. The draft contains:
+Draft schema version 4 separates suggestions from authored fragments and stores Fragment review levels independently from Group importance. Older drafts must be recreated; finalized `groups.json` uses format `semdiff.groups` version `1.0.0`. The draft contains:
 
 - resolved base/head SHAs;
 - a lightweight mechanical change map without patches;

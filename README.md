@@ -27,6 +27,8 @@ Install the CLI:
 go install github.com/ry023/semdiff@latest
 ```
 
+Run `semdiff --version` to confirm the installed release. The bundled plugin uses the same product version as the CLI; see [Versioning](docs/versioning.md) for compatibility and release policy.
+
 For GitHub Copilot CLI, install the bundled skills as a plugin directly from this repository:
 
 ```sh
@@ -189,13 +191,14 @@ Use `semdiff view --html review.html` to export a self-contained, read-only view
 
 `classify` suggests the standard categories `logic`, `component`, `config`, `implementation`, `test`, `docs`, and `unknown` from paths. Documentation extensions such as Markdown and reStructuredText, conventional documentation filenames such as `README` and `CHANGELOG`, and files under documentation directories such as `docs/` and `guides/` are classified as `docs`.
 
-This workflow uses draft schema version 4 and final `groups.json` schema version 3. Re-run `grouping init --force` to replace an older draft.
+This workflow uses draft schema version 4 and final `groups.json` format `semdiff.groups` version `1.0.0`. Re-run `grouping init --force` to replace an older draft. Legacy finalized files with a numeric `version` field must also be regenerated.
 
 `groups.json` is the source of truth. Every fragment contains its path, one or more old/new ranges, and its semantic description:
 
 ```json
 {
-  "version": 3,
+  "format": "semdiff.groups",
+  "format_version": "1.0.0",
   "base_sha": "<full base SHA>",
   "head_sha": "<full head SHA>",
   "groups": [

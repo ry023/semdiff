@@ -30,6 +30,18 @@ func TestParseInterspersedKeepsStdinMarker(t *testing.T) {
 	}
 }
 
+func TestLoadAndValidateRejectsSchemaBeforeReadingGit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "groups.json")
+	if err := os.WriteFile(path, []byte(`{"version":3}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err := loadAndValidate(context.Background(), gitdiff.Runner{Dir: filepath.Join(t.TempDir(), "missing")}, path)
+	var compatibilityError *groups.CompatibilityError
+	if !errors.As(err, &compatibilityError) || compatibilityError.Kind != groups.CompatibilityLegacy {
+		t.Fatalf("error = %v, want legacy compatibility error", err)
+	}
+}
+
 func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	repo := t.TempDir()
 	runGit := func(args ...string) {
@@ -133,7 +145,7 @@ func TestGroupingApplyAndFinalizeCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Groups) != 1 || len(result.Groups[0].Fragments) != len(inv.Changes) || result.Groups[0].Fragments[0].Description == "" {
+	if result.Format != groups.Format || result.FormatVersion != groups.WriteVersion || len(result.Groups) != 1 || len(result.Groups[0].Fragments) != len(inv.Changes) || result.Groups[0].Fragments[0].Description == "" {
 		t.Fatalf("unexpected finalized groups: %+v", result)
 	}
 	if err := run(context.Background(), []string{"validate", "--json"}); err != nil {
@@ -170,7 +182,7 @@ func TestResolveViewForRangePrefersExactThenNearestFirstParentReview(t *testing.
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(path, []byte(`{"version":2,"base_sha":"`+base+`","head_sha":"`+head+`","groups":[]}`), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(`{"format":"semdiff.groups","format_version":"1.0.0","base_sha":"`+base+`","head_sha":"`+head+`","groups":[]}`), 0644); err != nil {
 			t.Fatal(err)
 		}
 		return path
@@ -204,6 +216,13 @@ func TestResolveViewForRangePrefersExactThenNearestFirstParentReview(t *testing.
 	if !resolution.Found || resolution.Exact || resolution.GroupsPath != reviewedPath || resolution.ReviewHeadSHA != reviewedHead || resolution.CommitsBehind != 1 {
 		t.Fatalf("unexpected review resolution: %+v", resolution)
 	}
+	if err := os.WriteFile(reviewedPath, []byte(`{"version":3}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveViewForRange(context.Background(), runner, base+".."+currentHead, false); err == nil || !strings.Contains(err.Error(), "legacy groups schema version 3") {
+		t.Fatalf("incompatible nearest review should stop resolution: %v", err)
+	}
+	writeReview(base, reviewedHead)
 
 	exactPath := writeReview(base, currentHead)
 	selection, err = resolveViewForRange(context.Background(), runner, base+".."+currentHead, false)
@@ -263,10 +282,10 @@ func TestViewWithoutDraftFallsBackToAncestorReviewAndShowsDrift(t *testing.T) {
 	for _, fragment := range fragments {
 		fragmentIDs = append(fragmentIDs, fragment.ID)
 	}
-	groupsFile := model.GroupsFile{Version: 3, BaseSHA: base, HeadSHA: reviewedHead, Groups: []model.SemanticGroup{{
+	groupsFile := groups.NewFile(base, reviewedHead, []model.SemanticGroup{{
 		ID: "reviewed", Title: "Reviewed", Summary: "The reviewed snapshot.", Importance: model.ImportanceCore,
 		FileCategories: []model.FileCategory{{Path: "app.txt", Category: "logic"}}, ReviewSteps: []model.ReviewStep{{ID: "reviewed", Title: "Review the snapshot", Summary: "Read the reviewed change before later follow-ups.", FragmentIDs: fragmentIDs}}, Fragments: fragments,
-	}}}
+	}})
 	groupsPath := filepath.Join(repo, reviews.LocalPath(base, reviewedHead))
 	if err := saveJSONAtomic(groupsPath, groupsFile); err != nil {
 		t.Fatal(err)

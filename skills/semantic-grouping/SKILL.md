@@ -7,6 +7,10 @@ description: semdiff CLI を使って Git のコミット範囲をレビュー�
 
 `groups.json` を、レビューのために導出されるレイヤーとして作成します。コミットとリポジトリの履歴は保持します。事実の抽出・保存・検証は CLI に任せ、グループ化、タイトル、要約、説明、レビュー順だけに意味的な判断を使います。最終 JSON を直接書かず、再開可能な grouping draft を作って結果を構築します。
 
+## 互換性の事前確認
+
+他の `semdiff` commandより先に `semdiff version --json` を実行します。このplugin 0.3.xには、versionが `>=0.3.0, <0.4.0` のCLIが必要です。commandが見つからない、JSONを解析できない、またはversionが範囲外の場合は作業を開始せず、READMEの手順でCLIをインストールまたは更新するよう報告します。
+
 ## 成果物の構造
 
 `groups.json` は、レビュー判断を表す Group、理解する順序を表す Step、具体的な変更を表す Fragment で構成します。構造上、Step と Fragment は Group の配下にあり、Step は `fragment_ids` で Fragment を参照します。
@@ -360,7 +364,7 @@ Grouping draft は、最終化前のグループ化作業を保持する中間�
 
 `semdiff grouping init` は、デフォルトで `.semdiff/grouping-draft.json` にスキーマバージョン 4 の draft を作成します。
 
-`grouping init --from <groups-file>` は、互換性のある過去の最終化済みレビューを引き継ぎながら、現在の範囲の新しい draft を作成します。古い draft を作り直す場合は `grouping init --force` を使います。schema と authored Fragment のフィールドが変わっているため、古い draft をそのまま続けないでください。draft が作業状態であり、finalized v3 の `groups.json` は誤って commit されないよう、デフォルトでは `.semdiff/reviews/` の下に書き込まれます。適用操作は繰り返し実行でき、判断の追加、修正、移動、削除が可能です。複数の draft を管理する場合は `--draft <path>` を使います。
+`grouping init --from <groups-file>` は、互換性のある過去の最終化済みレビューを引き継ぎながら、現在の範囲の新しい draft を作成します。古い draft を作り直す場合は `grouping init --force` を使います。schema と authored Fragment のフィールドが変わっているため、古い draft をそのまま続けないでください。draft が作業状態であり、finalized `semdiff.groups` 1.0.x の `groups.json` は誤って commit されないよう、デフォルトでは `.semdiff/reviews/` の下に書き込まれます。適用操作は繰り返し実行でき、判断の追加、修正、移動、削除が可能です。複数の draft を管理する場合は `--draft <path>` を使います。
 
 `merge_fragments` は、同じパスの suggestion または authored-fragment ID を 1 つ以上受け取ります。path を導出し、range を連結し、file metadata の ownership を引き継ぎ、authored source を削除し、共有されている Group assignment を保持します。導出された union が意図した選択範囲ではない場合だけ、結果の `fragment` に明示的な range を指定します。
 
@@ -429,11 +433,11 @@ apply request は operation の batch を含みます。例:
 
 #### 位置付け
 
-最終成果物は、レビュー対象のコミット範囲と Group・Step・Fragment を記録した version 3 の `groups.json` です。
+最終成果物は、レビュー対象のコミット範囲と Group・Step・Fragment を記録した `semdiff.groups` format version `1.0.0` の `groups.json` です。
 
 #### 必須条件
 
-最終成果物は version 3 の `groups.json` です。draft を CLI で最終化して作成します。
+最終成果物は `semdiff.groups` format version `1.0.0` の `groups.json` です。draft を CLI で最終化して作成します。
 
 すべての Group に `importance` として `core`、`supporting`、`side` のいずれかを設定します。すべての Fragment に `review_level` として `careful`、`normal`、`skim` のいずれかを設定します。draft で省略された値は `normal` が既定値になります。すべての Fragment には `id`、`path`、少なくとも 1 つの `ranges` entry（または `file_metadata: true`）、空でない `description` が必要です。すべての Group には 1 つ以上の `review_steps` が必要で、Group の各 Fragment は順序付き `fragment_ids` の中にちょうど 1 回だけ現れる必要があります。変更されたすべての old/new line とファイルのメタデータ変更は、ちょうど 1 回選択する必要があります。Group が参照するすべてのファイルは、その Group の `file_categories` にちょうど 1 回現れる必要があります。
 
@@ -442,7 +446,7 @@ apply request は operation の batch を含みます。例:
 必須の形は次のとおりです。以下は、更新前の照合に取得メソッドが不足していることをコードで確認できた場合の例です。呼び出し元の更新処理の実装まで完了したとは主張しません。
 
 ```json
-{"version":3,"base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- Why: 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には取得メソッドがない。\n- What: 新規メソッド `FindByID` を追加し、ID による取得処理を実装する。\n- So what: 呼び出し元で、保存済みの値に基づく更新可否の判断を組み立てられる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"normal"}]}]}
+{"format":"semdiff.groups","format_version":"1.0.0","base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- Why: 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には取得メソッドがない。\n- What: 新規メソッド `FindByID` を追加し、ID による取得処理を実装する。\n- So what: 呼び出し元で、保存済みの値に基づく更新可否の判断を組み立てられる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"normal"}]}]}
 ```
 
 ## 最終確認

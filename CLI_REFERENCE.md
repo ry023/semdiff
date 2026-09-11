@@ -4,6 +4,16 @@ This is the deterministic CLI layer used by the bundled skills. Use it directly 
 
 See the [README](README.md) for the human and AI-agent workflow, installation, and review sharing.
 
+## Inspect version compatibility
+
+```sh
+semdiff --version
+semdiff version
+semdiff version --json
+```
+
+`--version` prints the CLI product version on one line. `version` also prints the `groups.json` schema versions this CLI reads and writes. Its JSON form exposes the product `version` and a `groups_schema` object containing `format`, `read_ranges`, and `write` for plugins and scripts. semdiff rejects an untested schema version before reading Git state; see [Versioning](docs/versioning.md) for the compatibility table.
+
 ## End-to-end draft workflow
 
 The primitive workflow behind `semantic-grouping` is:
