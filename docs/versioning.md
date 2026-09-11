@@ -10,6 +10,14 @@ While the product is below `1.0.0`, patch releases contain compatible fixes and 
 
 The plugin and CLI use the same version at release time. A plugin may use any CLI patch release in the same minor line; plugin `0.3.x` therefore accepts CLI versions `>=0.3.0, <0.4.0`.
 
+## Automated product releases
+
+The release workflow on `main` uses [tagpr](https://github.com/Songmu/tagpr) to keep a release pull request open for unreleased changes. `.tagpr` lists `VERSION` and all three plugin manifests as version files, so the release pull request keeps the CLI and bundled plugins synchronized. Pull request labels can select a minor or major bump; otherwise tagpr proposes a patch release.
+
+Merging the release pull request creates the `v<VERSION>` tag and a draft GitHub Release with tagpr's generated release notes. The same workflow passes tagpr's tag output to GoReleaser, which uses that draft, uploads the cross-platform archives and `checksums.txt`, and publishes it. Release tags should therefore be created through the tagpr release pull request so the draft Release and its notes exist before GoReleaser runs.
+
+Homebrew publishing is not configured yet and will be added separately.
+
 ## `groups.json` schema
 
 Finalized reviews declare both their format and schema version:
@@ -33,8 +41,7 @@ Draft schema version 4, question file version 2, and answer-session version 1 ar
 
 ## Release checklist
 
-1. Update `VERSION` and all three plugin version declarations to the same release-only SemVer.
-2. Update the compatibility table and the CLI's schema read/write constants when schema support changes.
-3. Update both bundled skills when their accepted CLI minor line changes.
-4. Run `gofmt`, `go test ./...`, plugin validation, and `git diff --check`.
-5. Merge the release commit, then create and push the annotated tag `v<VERSION>`. CI rejects a tag that does not match `VERSION`.
+1. Update the compatibility table and the CLI's schema read/write constants when schema support changes.
+2. Update both bundled skills when their accepted CLI minor line changes.
+3. Run `gofmt`, `go test ./...`, plugin validation, and `git diff --check`.
+4. Merge the tagpr release pull request. It updates `VERSION` and the plugin manifests, creates `v<VERSION>` and a draft Release with generated notes, then GoReleaser uploads the artifacts and publishes it.

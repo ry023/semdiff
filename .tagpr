@@ -1,0 +1,5 @@
+[tagpr]
+releaseBranch = main
+versionFile = VERSION,.claude-plugin/plugin.json,.claude-plugin/marketplace.json,.codex-plugin/plugin.json
+vPrefix = true
+release = draft

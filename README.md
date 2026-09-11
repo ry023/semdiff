@@ -29,6 +29,8 @@ go install github.com/ry023/semdiff@latest
 
 Run `semdiff --version` to confirm the installed release. The bundled plugin uses the same product version as the CLI; see [Versioning](docs/versioning.md) for compatibility and release policy.
 
+Prebuilt archives for Linux, macOS, and Windows are published on the [GitHub Releases](https://github.com/ry023/semdiff/releases) page. Releases are prepared by `tagpr`: merging its release pull request updates the version files and creates a `v<VERSION>` tag, then GoReleaser publishes the binaries and checksums. Homebrew distribution is intentionally left for a separate change.
+
 For GitHub Copilot CLI, install the bundled skills as a plugin directly from this repository:
 
 ```sh

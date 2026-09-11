@@ -31,6 +31,8 @@ go install github.com/ry023/semdiff@latest
 
 `semdiff --version` でインストールされたreleaseを確認できます。同梱pluginはCLIと同じ製品バージョンを使用します。互換性とrelease policyは[バージョン管理](docs/versioning_ja.md)を参照してください。
 
+Linux、macOS、Windows向けのビルド済みarchiveは[GitHub Releases](https://github.com/ry023/semdiff/releases)で公開されます。releaseは `tagpr` が準備します。release pull requestをmergeするとversion fileが更新されて `v<VERSION>` tagが作られ、その後GoReleaserがbinaryとchecksumを公開します。Homebrew対応は別の変更で追加する予定です。
+
 GitHub Copilot CLI では、このリポジトリから同梱スキルを plugin として直接インストールできます。
 
 ```sh
