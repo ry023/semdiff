@@ -1,0 +1,943 @@
+{
+  "format": "semdiff.groups",
+  "format_version": "1.0.0",
+  "base_sha": "50c1881e47e15d2b158ed514753093de6f516a0f",
+  "head_sha": "dbe9ed2f631efd33d01fb845c70b966ee214eb39",
+  "groups": [
+    {
+      "id": "release-contract",
+      "title": "CLI と plugin のリリース version を統一する",
+      "summary": "- Why: CLI と同梱 plugin の version が別々に管理されると、利用者や連携処理が互換性を判断できない。\n- What: `VERSION` を source of truth とし、SemVer の解析、CLI の version 表示、plugin manifest の version 同期を追加する。\n- So what: インストール済み CLI と plugin の対応関係を、利用者と script が確認できる。",
+      "importance": "core",
+      "order": 1,
+      "file_categories": [
+        {
+          "path": ".claude-plugin/marketplace.json",
+          "category": "config"
+        },
+        {
+          "path": ".claude-plugin/plugin.json",
+          "category": "config"
+        },
+        {
+          "path": ".codex-plugin/plugin.json",
+          "category": "config"
+        },
+        {
+          "path": "VERSION",
+          "category": "config"
+        },
+        {
+          "path": "internal/versioning/version.go",
+          "category": "implementation"
+        },
+        {
+          "path": "internal/versioning/version_test.go",
+          "category": "test"
+        },
+        {
+          "path": "main.go",
+          "category": "implementation"
+        },
+        {
+          "path": "version.go",
+          "category": "implementation"
+        },
+        {
+          "path": "version_test.go",
+          "category": "test"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "release-identity",
+          "title": "製品 release の version を定義する",
+          "summary": "`VERSION`、version parser、その test を確認し、release の基準を理解する。",
+          "fragment_ids": [
+            "product-version-source",
+            "release-version-parser",
+            "release-version-parser-tests"
+          ]
+        },
+        {
+          "id": "release-interface",
+          "title": "CLI と plugin から version を確認できるようにする",
+          "summary": "CLI の表示、review 選択時の検査、integration test、3つの plugin manifest の同期を確認する。",
+          "fragment_ids": [
+            "version-output",
+            "version-command-and-review-selection",
+            "version-command-tests",
+            "claude-marketplace-version",
+            "claude-plugin-version",
+            "codex-plugin-version"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "product-version-source",
+          "path": "VERSION",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 1
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "CLI と plugin が共有する製品 version `0.3.0` の source of truth を追加する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "release-version-parser",
+          "path": "internal/versioning/version.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 74
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "prerelease と build metadata を含まない `MAJOR.MINOR.PATCH` の version parser と比較、範囲判定を追加する。",
+          "review_level": "careful"
+        },
+        {
+          "id": "release-version-parser-tests",
+          "path": "internal/versioning/version_test.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 31
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "正規形の version、異常な入力、version の大小比較、互換範囲の境界を検証する test を追加する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "version-output",
+          "path": "version.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 46
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "`VERSION` を binary に埋め込み、製品 version と groups schema の read/write 範囲を返す出力を追加する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "version-command-and-review-selection",
+          "path": "main.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 32,
+                "lines": 4
+              }
+            },
+            {
+              "new": {
+                "start": 42,
+                "lines": 2
+              }
+            },
+            {
+              "new": {
+                "start": 70,
+                "lines": 10
+              }
+            },
+            {
+              "new": {
+                "start": 82,
+                "lines": 20
+              }
+            },
+            {
+              "new": {
+                "start": 490,
+                "lines": 3
+              }
+            },
+            {
+              "new": {
+                "start": 513,
+                "lines": 3
+              }
+            },
+            {
+              "new": {
+                "start": 522,
+                "lines": 7
+              }
+            }
+          ],
+          "description": "`--version` と `version` command を追加し、review 選択時に artifact の schema 互換性を確認する。",
+          "review_level": "careful"
+        },
+        {
+          "id": "version-command-tests",
+          "path": "version_test.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 108
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "製品 version の検証、CLI output、manifest の一致、非互換 review の選択拒否を検証する test を追加する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "claude-marketplace-version",
+          "path": ".claude-plugin/marketplace.json",
+          "ranges": [
+            {
+              "old": {
+                "start": 14,
+                "lines": 1
+              },
+              "new": {
+                "start": 14,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Claude marketplace entry の plugin version を `0.3.0` に同期する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "claude-plugin-version",
+          "path": ".claude-plugin/plugin.json",
+          "ranges": [
+            {
+              "old": {
+                "start": 4,
+                "lines": 1
+              },
+              "new": {
+                "start": 4,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Claude plugin manifest の version を `0.3.0` に同期する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "codex-plugin-version",
+          "path": ".codex-plugin/plugin.json",
+          "ranges": [
+            {
+              "old": {
+                "start": 3,
+                "lines": 1
+              },
+              "new": {
+                "start": 3,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Codex plugin manifest の version を `0.3.0` に同期する。",
+          "review_level": "skim"
+        }
+      ]
+    },
+    {
+      "id": "groups-schema-compatibility",
+      "title": "groups.json の schema を version 管理し、非互換な artifact を拒否する",
+      "summary": "- Why: finalized review は CLI より長く保存されるため、古い CLI が新しい groups.json を誤って解釈しない仕組みが必要になる。\n- What: 数値の legacy version を format と `format_version` に置き換え、decode や Git の読み取りより前に対応範囲を検査する。\n- So what: schema の世代が合わない review を明確なエラーとして止められる。",
+      "importance": "core",
+      "order": 2,
+      "file_categories": [
+        {
+          "path": "internal/groupingdraft/draft.go",
+          "category": "implementation"
+        },
+        {
+          "path": "internal/groupingdraft/draft_test.go",
+          "category": "test"
+        },
+        {
+          "path": "internal/groups/groups.go",
+          "category": "implementation"
+        },
+        {
+          "path": "internal/groups/groups_test.go",
+          "category": "test"
+        },
+        {
+          "path": "internal/model/model.go",
+          "category": "implementation"
+        },
+        {
+          "path": "main_test.go",
+          "category": "test"
+        },
+        {
+          "path": "reviews_commands.go",
+          "category": "implementation"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "schema-envelope",
+          "title": "groups.json の envelope と reader の互換性を定義する",
+          "summary": "model、schema reader、正常系と異常系の test を確認し、どの artifact を読めるかを理解する。",
+          "fragment_ids": [
+            "groups-envelope-model",
+            "groups-schema-reader",
+            "groups-schema-reader-tests"
+          ]
+        },
+        {
+          "id": "schema-propagation",
+          "title": "finalize と review の入口で schema 検査を使う",
+          "summary": "finalize の出力と local/remote review の入口が、定義した互換性 boundary を守ることを確認する。",
+          "fragment_ids": [
+            "finalize-versioned-groups",
+            "finalize-versioned-groups-tests",
+            "schema-integration-tests",
+            "remote-schema-conflict"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "groups-envelope-model",
+          "path": "internal/model/model.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 109,
+                "lines": 4
+              },
+              "new": {
+                "start": 109,
+                "lines": 5
+              }
+            }
+          ],
+          "description": "`GroupsFile` の numeric `version` field を、format 名と `format_version` field に置き換える。",
+          "review_level": "careful"
+        },
+        {
+          "id": "groups-schema-reader",
+          "path": "internal/groups/groups.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 4,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 7,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 13,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 16,
+                "lines": 66
+              }
+            },
+            {
+              "new": {
+                "start": 91,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 23,
+                "lines": 1
+              },
+              "new": {
+                "start": 95,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 100,
+                "lines": 7
+              }
+            },
+            {
+              "new": {
+                "start": 118,
+                "lines": 47
+              }
+            },
+            {
+              "old": {
+                "start": 62,
+                "lines": 2
+              },
+              "new": {
+                "start": 188,
+                "lines": 2
+              }
+            }
+          ],
+          "description": "`semdiff.groups` の対応範囲と互換性 error を定義し、full decode、legacy format、未知の version、trailing data を検査する。",
+          "review_level": "careful"
+        },
+        {
+          "id": "groups-schema-reader-tests",
+          "path": "internal/groups/groups_test.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 4,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 20,
+                "lines": 1
+              },
+              "new": {
+                "start": 21,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 28,
+                "lines": 1
+              },
+              "new": {
+                "start": 29,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 91,
+                "lines": 1
+              },
+              "new": {
+                "start": 92,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 95,
+                "lines": 1
+              },
+              "new": {
+                "start": 96,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 103,
+                "lines": 1
+              },
+              "new": {
+                "start": 104,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 113,
+                "lines": 1
+              },
+              "new": {
+                "start": 114,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 126,
+                "lines": 43
+              }
+            }
+          ],
+          "description": "groups schema の正常系と、format 欠落・legacy・不正 version・古すぎる version・新しすぎる version などの拒否を検証する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "finalize-versioned-groups",
+          "path": "internal/groupingdraft/draft.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 187,
+                "lines": 1
+              },
+              "new": {
+                "start": 187,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "draft の finalize が `semdiff.groups` format version `1.0.0` の groups.json を生成するよう変更する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "finalize-versioned-groups-tests",
+          "path": "internal/groupingdraft/draft_test.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 10,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 37,
+                "lines": 1
+              },
+              "new": {
+                "start": 38,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 42,
+                "lines": 1
+              },
+              "new": {
+                "start": 43,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "draft から生成する groups.json の versioned envelope と、既存 test fixture の期待値を更新する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "schema-integration-tests",
+          "path": "main_test.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 33,
+                "lines": 12
+              }
+            },
+            {
+              "old": {
+                "start": 136,
+                "lines": 1
+              },
+              "new": {
+                "start": 148,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 173,
+                "lines": 1
+              },
+              "new": {
+                "start": 185,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 219,
+                "lines": 7
+              }
+            },
+            {
+              "old": {
+                "start": 266,
+                "lines": 1
+              },
+              "new": {
+                "start": 285,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 269,
+                "lines": 1
+              },
+              "new": {
+                "start": 288,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "CLI integration test で schema header、review resolution、versioned finalized artifact の動作を検証する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "remote-schema-conflict",
+          "path": "reviews_commands.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 234,
+                "lines": 1
+              },
+              "new": {
+                "start": 234,
+                "lines": 6
+              }
+            }
+          ],
+          "description": "remote review artifact が schema 非互換の場合に HTTP 409 Conflict を返す。",
+          "review_level": "normal"
+        }
+      ]
+    },
+    {
+      "id": "release-policy",
+      "title": "version 管理の運用方法を文書化し CI で検証する",
+      "summary": "- Why: version の source of truth と schema の対応範囲を、release のたびに手作業で覚えておくのは難しい。\n- What: CLI reference、README、設計文書、skill に運用ルールを記載し、CI で release tag と `VERSION` の一致を検証する。\n- So what: 次の release でも CLI、plugin、schema 対応範囲を一貫して維持できる。",
+      "importance": "supporting",
+      "order": 3,
+      "file_categories": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "category": "config"
+        },
+        {
+          "path": "CLI_REFERENCE.md",
+          "category": "docs"
+        },
+        {
+          "path": "CLI_REFERENCE_ja.md",
+          "category": "docs"
+        },
+        {
+          "path": "README.md",
+          "category": "docs"
+        },
+        {
+          "path": "README_ja.md",
+          "category": "docs"
+        },
+        {
+          "path": "docs/design.md",
+          "category": "docs"
+        },
+        {
+          "path": "docs/versioning.md",
+          "category": "docs"
+        },
+        {
+          "path": "docs/versioning_ja.md",
+          "category": "docs"
+        },
+        {
+          "path": "skills/answer-semdiff/SKILL.md",
+          "category": "docs"
+        },
+        {
+          "path": "skills/semantic-grouping/SKILL.md",
+          "category": "docs"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "release-automation",
+          "title": "release の整合性を CI で確認する",
+          "summary": "まず CI が tag と `VERSION` の一致を検証する流れを確認する。",
+          "fragment_ids": [
+            "release-ci"
+          ]
+        },
+        {
+          "id": "release-guidance",
+          "title": "version 管理の使い方を利用者と skill に伝える",
+          "summary": "CLI reference、README、設計文書、versioning 文書、2つの skill の事前確認を順に確認する。",
+          "fragment_ids": [
+            "cli-version-reference-en",
+            "cli-version-reference-ja",
+            "readme-versioning-en",
+            "readme-versioning-ja",
+            "design-schema-contract",
+            "versioning-policy-en",
+            "versioning-policy-ja",
+            "answer-skill-version-preflight",
+            "grouping-skill-version-preflight"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "release-ci",
+          "path": ".github/workflows/ci.yml",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 27
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "format、test、whitespace、および release tag と `VERSION` の一致を CI で検証する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "cli-version-reference-en",
+          "path": "CLI_REFERENCE.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 7,
+                "lines": 10
+              }
+            }
+          ],
+          "description": "英語の CLI reference に version 確認 command と schema compatibility output を記載する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "cli-version-reference-ja",
+          "path": "CLI_REFERENCE_ja.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 7,
+                "lines": 10
+              }
+            }
+          ],
+          "description": "日本語の CLI reference に version 確認 command と schema compatibility output を記載する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "readme-versioning-en",
+          "path": "README.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 30,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 192,
+                "lines": 1
+              },
+              "new": {
+                "start": 194,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 198,
+                "lines": 1
+              },
+              "new": {
+                "start": 200,
+                "lines": 2
+              }
+            }
+          ],
+          "description": "英語 README の install 手順と groups.json 例に、CLI/plugin version と schema version の運用を反映する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "readme-versioning-ja",
+          "path": "README_ja.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 32,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 193,
+                "lines": 1
+              },
+              "new": {
+                "start": 195,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 199,
+                "lines": 1
+              },
+              "new": {
+                "start": 201,
+                "lines": 2
+              }
+            }
+          ],
+          "description": "日本語 README の install 手順と groups.json 例に、CLI/plugin version と schema version の運用を反映する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "design-schema-contract",
+          "path": "docs/design.md",
+          "ranges": [
+            {
+              "old": {
+                "start": 19,
+                "lines": 1
+              },
+              "new": {
+                "start": 19,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 23,
+                "lines": 1
+              },
+              "new": {
+                "start": 23,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 150,
+                "lines": 1
+              },
+              "new": {
+                "start": 151,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "設計文書に groups schema の envelope、coverage validation、互換性検査の仕様を反映する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "versioning-policy-en",
+          "path": "docs/versioning.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 40
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "英語の versioning 文書に製品 release、schema compatibility table、release checklist を追加する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "versioning-policy-ja",
+          "path": "docs/versioning_ja.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 40
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "日本語の versioning 文書に製品 release、schema compatibility table、release checklist を追加する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "answer-skill-version-preflight",
+          "path": "skills/answer-semdiff/SKILL.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 10,
+                "lines": 2
+              }
+            }
+          ],
+          "description": "answer skill が他の command より先に、plugin が要求する CLI version 範囲を確認するようにする。",
+          "review_level": "normal"
+        },
+        {
+          "id": "grouping-skill-version-preflight",
+          "path": "skills/semantic-grouping/SKILL.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 10,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 363,
+                "lines": 1
+              },
+              "new": {
+                "start": 367,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 432,
+                "lines": 1
+              },
+              "new": {
+                "start": 436,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 436,
+                "lines": 1
+              },
+              "new": {
+                "start": 440,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 445,
+                "lines": 1
+              },
+              "new": {
+                "start": 449,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "semantic-grouping skill に CLI version の事前確認を追加し、versioned groups.json の用語と例を更新する。",
+          "review_level": "normal"
+        }
+      ]
+    }
+  ]
+}
