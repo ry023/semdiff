@@ -184,7 +184,7 @@ func (d Draft) ToGroupsFile() model.GroupsFile {
 	for _, fragment := range d.Fragments {
 		byID[fragment.ID] = fragment
 	}
-	result := model.GroupsFile{Version: 3, BaseSHA: d.BaseSHA, HeadSHA: d.HeadSHA}
+	result := groups.NewFile(d.BaseSHA, d.HeadSHA, nil)
 	for _, group := range d.Groups {
 		semantic := model.SemanticGroup{ID: group.ID, Title: group.Title, Summary: group.Summary, Importance: group.Importance, Order: group.Order, FileCategories: append([]model.FileCategory(nil), group.FileCategories...), ReviewSteps: append([]model.ReviewStep(nil), group.ReviewSteps...)}
 		for _, id := range group.Members {

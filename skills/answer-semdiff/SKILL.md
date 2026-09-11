@@ -7,6 +7,8 @@ description: Start a semdiff answer session and answer viewer questions about se
 
 Answer questions until the user ends answer mode in the viewer. Do not edit code or `groups.json` unless the user separately asks for a change.
 
+Before any other `semdiff` command, run `semdiff version --json`. This plugin 0.3.x requires a CLI version in `>=0.3.0, <0.4.0`. If the command is missing, its JSON cannot be parsed, or the version is outside that range, stop and tell the user to install or update the CLI using the README instructions.
+
 1. Use an explicitly requested groups file when one was supplied. Otherwise run `semdiff reviews resolve --json` and use its `groups_path` explicitly for every following command. If `found` is false, report that there is no compatible local review to answer; do not rely on a grouping draft. This matches `semdiff view` when it falls back to an ancestor review.
 2. Run `semdiff questions session start <groups-file> --json` and retain its `session_id`.
 3. Run `semdiff questions wait <groups-file> --session <session-id> --json`. This blocks until the viewer submits a question or ends answer mode.

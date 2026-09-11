@@ -231,7 +231,12 @@ func reviewIndexHandler(ctx context.Context, runner gitdiff.Runner, store review
 		}
 		g, err := groups.Parse(b)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			status := http.StatusInternalServerError
+			var compatibilityError *groups.CompatibilityError
+			if errors.As(err, &compatibilityError) {
+				status = http.StatusConflict
+			}
+			http.Error(w, err.Error(), status)
 			return
 		}
 		changes, err := runner.Changes(r.Context(), g.BaseSHA+".."+g.HeadSHA)

@@ -1,6 +1,7 @@
 package groups
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,7 @@ func fixture() (model.GroupsFile, model.ChangeMap) {
 		{Path: "new.go", NewStart: 1, NewLines: 4},
 	}}
 	fileCategories := []model.FileCategory{{Path: "a.go", Category: "logic"}, {Path: "new.go", Category: "logic"}}
-	groups := model.GroupsFile{Version: 3, BaseSHA: "aaa", HeadSHA: "bbb", Groups: []model.SemanticGroup{{
+	groups := NewFile("aaa", "bbb", []model.SemanticGroup{{
 		ID: "logic", Title: "Logic", Summary: "Explains the change.", Importance: model.ImportanceCore, FileCategories: fileCategories,
 		ReviewSteps: []model.ReviewStep{{ID: "implementation", Title: "Implement the behavior", Summary: "Establish the changed behavior before its supporting additions.", FragmentIDs: []string{"replace", "new-top", "new-bottom"}}},
 		Fragments: []model.Fragment{
@@ -25,7 +26,7 @@ func fixture() (model.GroupsFile, model.ChangeMap) {
 			{ID: "new-top", Path: "new.go", Ranges: []model.FragmentRange{{New: lineRange(1, 2)}}, Description: "Adds the first concern.", ReviewLevel: model.ReviewLevelNormal},
 			{ID: "new-bottom", Path: "new.go", Ranges: []model.FragmentRange{{New: lineRange(3, 2)}}, Description: "Adds the second concern.", ReviewLevel: model.ReviewLevelNormal},
 		},
-	}}}
+	}})
 	return groups, changes
 }
 
@@ -88,11 +89,11 @@ func TestValidateAllowsDiscontiguousRanges(t *testing.T) {
 
 func TestValidateMetadataOnlyChange(t *testing.T) {
 	changes := model.ChangeMap{BaseSHA: "a", HeadSHA: "b", Changes: []model.DiffChange{{Path: "renamed.go"}}}
-	g := model.GroupsFile{Version: 3, BaseSHA: "a", HeadSHA: "b", Groups: []model.SemanticGroup{{
+	g := NewFile("a", "b", []model.SemanticGroup{{
 		ID: "rename", Title: "Rename", Summary: "Renames the file.", Importance: model.ImportanceSide, FileCategories: []model.FileCategory{{Path: "renamed.go", Category: "logic"}},
 		ReviewSteps: []model.ReviewStep{{ID: "rename", Title: "Rename the file", Summary: "Review the metadata ownership.", FragmentIDs: []string{"rename-file"}}},
 		Fragments:   []model.Fragment{{ID: "rename-file", Path: "renamed.go", FileMetadata: true, Description: "Renames the file.", ReviewLevel: model.ReviewLevelNormal}},
-	}}}
+	}})
 	if errors := Validate(g, changes); len(errors) != 0 {
 		t.Fatal(errors)
 	}
@@ -100,7 +101,7 @@ func TestValidateMetadataOnlyChange(t *testing.T) {
 
 func TestLoadRejectsOldFragmentIDs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "groups.json")
-	if err := os.WriteFile(path, []byte(`{"version":1,"base_sha":"a","head_sha":"b","groups":[{"id":"g","title":"G","summary":"S","fragment_ids":["F1"]}]}`), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"format":"semdiff.groups","format_version":"1.0.0","base_sha":"a","head_sha":"b","groups":[{"id":"g","title":"G","summary":"S","fragment_ids":["F1"]}]}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "unknown field \"fragment_ids\"") {
@@ -110,7 +111,7 @@ func TestLoadRejectsOldFragmentIDs(t *testing.T) {
 
 func TestLoadDefaultsOmittedFragmentReviewLevelToNormal(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "groups.json")
-	content := `{"version":3,"base_sha":"a","head_sha":"b","groups":[{"id":"g","title":"G","summary":"S","importance":"core","review_steps":[{"id":"behavior","title":"Behavior","summary":"Read the behavior.","fragment_ids":["F1"]}],"fragments":[{"id":"F1","path":"a.go","description":"Changes behavior.","ranges":[{"new":{"start":1,"lines":1}}]}]}]}`
+	content := `{"format":"semdiff.groups","format_version":"1.0.0","base_sha":"a","head_sha":"b","groups":[{"id":"g","title":"G","summary":"S","importance":"core","review_steps":[{"id":"behavior","title":"Behavior","summary":"Read the behavior.","fragment_ids":["F1"]}],"fragments":[{"id":"F1","path":"a.go","description":"Changes behavior.","ranges":[{"new":{"start":1,"lines":1}}]}]}]}`
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -120,5 +121,48 @@ func TestLoadDefaultsOmittedFragmentReviewLevelToNormal(t *testing.T) {
 	}
 	if got := loaded.Groups[0].Fragments[0].ReviewLevel; got != model.ReviewLevelNormal {
 		t.Fatalf("review level = %q", got)
+	}
+}
+
+func TestParseChecksSchemaCompatibilityBeforeTheBody(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		kind CompatibilityErrorKind
+	}{
+		{"legacy", `{"version":3,"not_a_groups_file":true}`, CompatibilityLegacy},
+		{"missing format", `{"format_version":"1.0.0"}`, CompatibilityMissingFormat},
+		{"unknown format", `{"format":"other.groups","format_version":"1.0.0"}`, CompatibilityUnknownFormat},
+		{"missing version", `{"format":"semdiff.groups"}`, CompatibilityMissingVersion},
+		{"invalid version", `{"format":"semdiff.groups","format_version":"v1.0.0"}`, CompatibilityInvalidVersion},
+		{"too old", `{"format":"semdiff.groups","format_version":"0.9.9"}`, CompatibilityTooOld},
+		{"untested minor", `{"format":"semdiff.groups","format_version":"1.1.0"}`, CompatibilityTooNew},
+		{"new major", `{"format":"semdiff.groups","format_version":"2.0.0"}`, CompatibilityTooNew},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := Parse([]byte(test.body))
+			var compatibilityError *CompatibilityError
+			if !errors.As(err, &compatibilityError) || compatibilityError.Kind != test.kind {
+				t.Fatalf("error = %v, want compatibility kind %s", err, test.kind)
+			}
+		})
+	}
+}
+
+func TestParseAcceptsSupportedPatchVersion(t *testing.T) {
+	loaded, err := Parse([]byte(`{"format":"semdiff.groups","format_version":"1.0.9","base_sha":"a","head_sha":"b","groups":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.FormatVersion != "1.0.9" {
+		t.Fatalf("format version = %q", loaded.FormatVersion)
+	}
+}
+
+func TestParseRejectsMultipleJSONValues(t *testing.T) {
+	_, err := Parse([]byte(`{"format":"semdiff.groups","format_version":"1.0.0"} {}`))
+	if err == nil || !strings.Contains(err.Error(), "multiple JSON values") {
+		t.Fatalf("multiple values were accepted: %v", err)
 	}
 }

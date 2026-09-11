@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ry023/semdiff/internal/categories"
+	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
 )
 
@@ -34,12 +35,12 @@ func TestNewKeepsSuggestionsSeparateFromAuthoredFragments(t *testing.T) {
 }
 
 func TestNewFromGroupsCarriesSemanticDecisionsIntoFreshInventory(t *testing.T) {
-	source := model.GroupsFile{Version: 3, BaseSHA: "base", HeadSHA: "old-head", Groups: []model.SemanticGroup{{
+	source := groups.NewFile("base", "old-head", []model.SemanticGroup{{
 		ID: "logic", Title: "Logic", Summary: "Explains the existing behavior.", Importance: model.ImportanceCore,
 		FileCategories: []model.FileCategory{{Path: "src/a.ts", Category: "logic"}},
 		ReviewSteps:    []model.ReviewStep{{ID: "behavior", Title: "Behavior", Summary: "Read the behavior.", FragmentIDs: []string{"behavior"}}},
 		Fragments:      []model.Fragment{{ID: "behavior", Path: "src/a.ts", Ranges: []model.FragmentRange{{New: &model.Range{Start: 3, Lines: 2}}}, Description: "Implements the existing behavior.", ReviewLevel: model.ReviewLevelCareful}},
-	}}}
+	}})
 	inv := model.ChangeMap{BaseSHA: "base", HeadSHA: "new-head", Changes: []model.DiffChange{{ID: "new", Path: "new.ts", NewStart: 1, NewLines: 1}}}
 	draft := NewFromGroups(inv, []categories.Suggestion{{Path: "new.ts", Category: "implementation"}}, source)
 	if draft.BaseSHA != "base" || draft.HeadSHA != "new-head" || len(draft.Suggestions) != 1 || len(draft.Fragments) != 1 || len(draft.Groups) != 1 {

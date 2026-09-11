@@ -29,6 +29,8 @@ CLI をインストールします。
 go install github.com/ry023/semdiff@latest
 ```
 
+`semdiff --version` でインストールされたreleaseを確認できます。同梱pluginはCLIと同じ製品バージョンを使用します。互換性とrelease policyは[バージョン管理](docs/versioning_ja.md)を参照してください。
+
 GitHub Copilot CLI では、このリポジトリから同梱スキルを plugin として直接インストールできます。
 
 ```sh
@@ -190,13 +192,14 @@ Viewer では semantic Group または Fragment に質問 thread を紐づけら
 
 `classify` はパスから標準 category `logic`、`component`、`config`、`implementation`、`test`、`docs`、`unknown` を提案します。Markdown や reStructuredText などのドキュメント拡張子、`README` や `CHANGELOG` などの定番ファイル名、`docs/` や `guides/` などのドキュメント用 directory 配下を `docs` に分類します。
 
-この workflow では draft schema version 4、最終的な `groups.json` schema version 3 を使用します。古い draft は `grouping init --force` で作り直してください。
+この workflow では draft schema version 4、最終的な `groups.json` format `semdiff.groups` version `1.0.0` を使用します。古い draft は `grouping init --force` で作り直してください。数値の `version` fieldを持つ従来のfinalized fileも再生成が必要です。
 
 `groups.json` が source of truth です。各 Fragment はファイルパス、1つ以上の変更前・変更後の行範囲、semantic な説明を保持します。
 
 ```json
 {
-  "version": 3,
+  "format": "semdiff.groups",
+  "format_version": "1.0.0",
   "base_sha": "<full base SHA>",
   "head_sha": "<full head SHA>",
   "groups": [

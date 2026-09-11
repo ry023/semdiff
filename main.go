@@ -29,12 +29,18 @@ import (
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
+		var compatibilityError *groups.CompatibilityError
+		if errors.As(err, &compatibilityError) {
+			fmt.Fprintln(os.Stderr, "semdiff version:", productVersion())
+		}
 		os.Exit(1)
 	}
 }
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
+	semdiff --version
+	semdiff version [--json]
 	semdiff commits <base>..<head> [--json]
 	semdiff fragments <base>..<head> [--json]
 	semdiff classify <base>..<head> [--json]
@@ -61,8 +67,38 @@ func run(ctx context.Context, args []string) error {
 		usage()
 		return errors.New("command is required")
 	}
+	if err := validateProductVersion(); err != nil {
+		return err
+	}
+	if args[0] == "--version" {
+		if len(args) != 1 {
+			return errors.New("--version does not accept arguments")
+		}
+		fmt.Printf("semdiff %s\n", productVersion())
+		return nil
+	}
 	r := gitdiff.Runner{Dir: "."}
 	switch args[0] {
+	case "version":
+		fs := flag.NewFlagSet("version", flag.ContinueOnError)
+		jsonOut := fs.Bool("json", false, "JSON output")
+		positional, err := parseInterspersed(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(positional) != 0 {
+			return errors.New("version does not accept positional arguments")
+		}
+		output := currentVersionOutput()
+		if *jsonOut {
+			return printJSON(output)
+		}
+		fmt.Printf("semdiff %s\n", output.Version)
+		for _, supported := range output.GroupsSchema.ReadRanges {
+			fmt.Printf("groups schema read: >=%s, <%s\n", supported.Min, supported.MaxExclusive)
+		}
+		fmt.Printf("groups schema write: %s %s\n", output.GroupsSchema.Format, output.GroupsSchema.Write)
+		return nil
 	case "grouping":
 		return runGrouping(ctx, r, args[1:])
 	case "questions":
@@ -451,6 +487,9 @@ func resolveViewForRange(ctx context.Context, r gitdiff.Runner, rangeSpec string
 	if found, err := reviewFileExists(exactPath); err != nil {
 		return viewSelection{}, err
 	} else if found {
+		if err := ensureReviewCompatible(exactPath); err != nil {
+			return viewSelection{}, err
+		}
 		return viewSelection{GroupsPath: exactPath, CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA, ReviewHeadSHA: headSHA, Exact: true}, nil
 	}
 	if exactOnly {
@@ -471,10 +510,20 @@ func resolveViewForRange(ctx context.Context, r gitdiff.Runner, rangeSpec string
 			return viewSelection{}, statErr
 		}
 		if found {
+			if err := ensureReviewCompatible(candidatePath); err != nil {
+				return viewSelection{}, err
+			}
 			return viewSelection{GroupsPath: candidatePath, CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA, ReviewHeadSHA: candidateHead}, nil
 		}
 	}
 	return viewSelection{}, noReviewError{CurrentBaseSHA: baseSHA, CurrentHeadSHA: headSHA}
+}
+
+func ensureReviewCompatible(path string) error {
+	if _, err := groups.Load(path); err != nil {
+		return fmt.Errorf("review artifact %s is not compatible: %w", path, err)
+	}
+	return nil
 }
 
 type noReviewError struct {

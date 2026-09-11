@@ -106,10 +106,11 @@ type Fragment struct {
 }
 
 type GroupsFile struct {
-	Version int             `json:"version"`
-	BaseSHA string          `json:"base_sha"`
-	HeadSHA string          `json:"head_sha"`
-	Groups  []SemanticGroup `json:"groups"`
+	Format        string          `json:"format"`
+	FormatVersion string          `json:"format_version"`
+	BaseSHA       string          `json:"base_sha"`
+	HeadSHA       string          `json:"head_sha"`
+	Groups        []SemanticGroup `json:"groups"`
 }
 
 type ChangeMap struct {
