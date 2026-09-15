@@ -604,9 +604,6 @@ function FragmentDescription({
   return (
     <div className="fragment-description">
       <Level value={fragment.review_level} />
-      <strong>
-        {fragment.id} · {fragment.range_label}
-      </strong>
       <Markdown inline source={fragment.description} />
       <Ask anchor={anchor} questions={questions} />
     </div>
@@ -629,7 +626,6 @@ function GuidedFragment({
   };
   const [reviewed, setReviewed] = useState(false);
   const diff = [
-    ...list(fragment.header),
     ...list(fragment.upper_context),
     ...list(fragment.hunk),
     ...list(fragment.lower_context),
@@ -759,7 +755,6 @@ function FileDetails({
 }) {
   const [reviewed, setReviewed] = useState(false);
   const body = [
-    ...list(file.header),
     ...list(file.fragments).flatMap((fragment) => [
       ...list(fragment.upper_context),
       ...list(fragment.hunk),

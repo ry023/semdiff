@@ -33,7 +33,7 @@ type FragmentView struct {
 	Additions    int               `json:"additions"`
 	Deletions    int               `json:"deletions"`
 	Diffstat     []string          `json:"diffstat"`
-	Header       []DiffItem        `json:"header"`
+	Header       []DiffItem        `json:"-"`
 	Hunk         []DiffItem        `json:"hunk"`
 	UpperContext []DiffItem        `json:"upper_context"`
 	LowerContext []DiffItem        `json:"lower_context"`
@@ -60,7 +60,7 @@ type FileView struct {
 	Additions   int               `json:"additions"`
 	Deletions   int               `json:"deletions"`
 	Diffstat    []string          `json:"diffstat"`
-	Header      []DiffItem        `json:"header"`
+	Header      []DiffItem        `json:"-"`
 	Fragments   []FragmentView    `json:"fragments"`
 	ReviewLevel model.ReviewLevel `json:"review_level"`
 }
@@ -183,6 +183,12 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
 				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
 				file.Fragments[i].ReviewLevel = reviewLevels[file.Fragments[i].ID]
+				file.Fragments[i].Directory = file.Directory
+				file.Fragments[i].Name = file.Name
+				file.Fragments[i].Status = file.Status
+				file.Fragments[i].Additions = file.Additions
+				file.Fragments[i].Deletions = file.Deletions
+				file.Fragments[i].Diffstat = file.Diffstat
 				file.ReviewLevel = strongerReviewLevel(file.ReviewLevel, file.Fragments[i].ReviewLevel)
 			}
 			gv.Files = append(gv.Files, file)

@@ -199,6 +199,9 @@ func TestBuildAndHandler(t *testing.T) {
 	if fragment.Patch != "" {
 		t.Fatal("viewer retained a derived patch after building structured diff items")
 	}
+	if fragment.Name != "a.go" || fragment.Status != "updated" || fragment.Additions != 1 || fragment.Deletions != 1 {
+		t.Fatalf("fragment file header metadata is missing: %+v", fragment)
+	}
 	upper, lower := diffItemsText(fragment.UpperContext), diffItemsText(fragment.LowerContext)
 	if strings.Contains(upper, "Show ") || !strings.Contains(lower, "Show 8 lines below") {
 		t.Fatalf("missing directional context controls: upper=%q lower=%q", upper, lower)
@@ -379,7 +382,11 @@ func TestHandlerEmbedsViewerAssetsAndData(t *testing.T) {
 
 func TestReactBootstrapSerializesDiffPayloadOnce(t *testing.T) {
 	fragment := func(description string) FragmentView {
-		return FragmentView{MaterializedFragment: model.MaterializedFragment{ID: "F1"}, Description: description}
+		return FragmentView{
+			MaterializedFragment: model.MaterializedFragment{ID: "F1"},
+			Description:          description,
+			Header:               []DiffItem{{Kind: "line", Text: "diff header"}},
+		}
 	}
 	page := Page{Groups: []GroupView{{
 		ID:    "group",
@@ -398,6 +405,9 @@ func TestReactBootstrapSerializesDiffPayloadOnce(t *testing.T) {
 	}
 	if bytes.Contains(document, []byte("navigation copy")) || bytes.Contains(document, []byte("guided copy")) {
 		t.Fatal("viewer bootstrap duplicated the canonical fragment payload")
+	}
+	if bytes.Contains(document, []byte(`"header":`)) || bytes.Contains(document, []byte("diff header")) {
+		t.Fatal("viewer bootstrap retained a Git diff header")
 	}
 	bootstrap := bootstrapFromHTML(t, document)
 	group := bootstrap.Page.Groups[0]

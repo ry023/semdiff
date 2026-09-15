@@ -25,7 +25,6 @@ export interface FragmentView {
   additions: number;
   deletions: number;
   diffstat: string[] | null;
-  header: DiffItem[] | null;
   hunk: DiffItem[] | null;
   upper_context: DiffItem[] | null;
   lower_context: DiffItem[] | null;
@@ -39,7 +38,6 @@ export interface FileView {
   additions: number;
   deletions: number;
   diffstat: string[] | null;
-  header: DiffItem[] | null;
   fragments: FragmentView[] | null;
   review_level: ReviewLevel;
 }
