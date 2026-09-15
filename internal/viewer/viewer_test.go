@@ -196,6 +196,9 @@ func TestBuildAndHandler(t *testing.T) {
 		t.Fatalf("unexpected group categories: %+v", p.Groups[0].Categories)
 	}
 	fragment := p.Groups[0].Files[0].Fragments[0]
+	if fragment.Patch != "" {
+		t.Fatal("viewer retained a derived patch after building structured diff items")
+	}
 	upper, lower := diffItemsText(fragment.UpperContext), diffItemsText(fragment.LowerContext)
 	if strings.Contains(upper, "Show ") || !strings.Contains(lower, "Show 8 lines below") {
 		t.Fatalf("missing directional context controls: upper=%q lower=%q", upper, lower)
@@ -222,8 +225,11 @@ func TestBuildAndHandler(t *testing.T) {
 	if strings.Contains(w.Body.String(), "hunk_html") || strings.Contains(w.Body.String(), "description_html") || strings.Contains(w.Body.String(), "summary_html") || !strings.Contains(w.Body.String(), `"hunk"`) {
 		t.Fatal("viewer bootstrap should carry structured diff items instead of rendered hunk HTML")
 	}
-	if got := bootstrap.Page.Groups[0].Files[0].Fragments[0].Description; got != "Explains the <safe> change." {
+	if got := bootstrap.Page.Groups[0].Categories[0].Files[0].Fragments[0].Description; got != "Explains the <safe> change." {
 		t.Fatalf("missing or altered raw fragment description: %q", got)
+	}
+	if strings.Contains(w.Body.String(), `\u003csafe\u003e`) {
+		t.Fatal("viewer bootstrap unnecessarily expanded HTML-safe source text")
 	}
 }
 
@@ -365,9 +371,41 @@ func TestHandlerEmbedsViewerAssetsAndData(t *testing.T) {
 		t.Fatalf("viewer assets are not inline: status=%d", response.Code)
 	}
 	bootstrap := bootstrapFromHTML(t, response.Body.Bytes())
-	fragment := bootstrap.Page.Groups[0].Files[0].Fragments[0]
+	fragment := bootstrap.Page.Groups[0].Categories[0].Files[0].Fragments[0]
 	if bootstrap.Page.Groups[0].Importance != model.ImportanceCore || fragment.ReviewLevel != model.ReviewLevelCareful {
 		t.Fatalf("importance data is missing: %+v", bootstrap.Page.Groups[0])
+	}
+}
+
+func TestReactBootstrapSerializesDiffPayloadOnce(t *testing.T) {
+	fragment := func(description string) FragmentView {
+		return FragmentView{MaterializedFragment: model.MaterializedFragment{ID: "F1"}, Description: description}
+	}
+	page := Page{Groups: []GroupView{{
+		ID:    "group",
+		Files: []FileView{{Fragments: []FragmentView{fragment("navigation copy")}}},
+		Categories: []CategoryView{{Name: "logic", Files: []FileView{{
+			Fragments: []FragmentView{fragment("canonical payload")},
+		}}}},
+		Steps: []ReviewStepView{{
+			ID: "step", Fragments: []FragmentView{fragment("guided copy")}, FragmentIDs: []string{"F1"},
+		}},
+	}}}
+
+	document, err := renderReactHTML(page, nil, false, "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(document, []byte("navigation copy")) || bytes.Contains(document, []byte("guided copy")) {
+		t.Fatal("viewer bootstrap duplicated the canonical fragment payload")
+	}
+	bootstrap := bootstrapFromHTML(t, document)
+	group := bootstrap.Page.Groups[0]
+	if len(group.Files) != 0 || len(group.Steps[0].Fragments) != 0 || len(group.Steps[0].FragmentIDs) != 1 {
+		t.Fatalf("unexpected normalized bootstrap: %+v", group)
+	}
+	if got := group.Categories[0].Files[0].Fragments[0].Description; got != "canonical payload" {
+		t.Fatalf("canonical fragment payload = %q", got)
 	}
 }
 

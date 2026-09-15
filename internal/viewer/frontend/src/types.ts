@@ -49,7 +49,7 @@ export interface ReviewStepView {
   summary: string;
   anchor_id: string;
   number: number;
-  fragments: FragmentView[] | null;
+  fragment_ids: string[] | null;
 }
 export interface CategoryView {
   name: string;
@@ -67,7 +67,6 @@ export interface GroupView {
   importance: Importance;
   anchor_id: string;
   order?: number;
-  files: FileView[] | null;
   categories: CategoryView[] | null;
   steps: ReviewStepView[] | null;
   fragment_count: number;

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
@@ -74,6 +74,9 @@ for (const [name, language] of Object.entries({
 
 const markup = (value: string) => ({ __html: value });
 const list = <T,>(value: T[] | null | undefined): T[] => value ?? [];
+const DiffModeContext = React.createContext<"unified" | "split">("unified");
+const maxHighlightedLineLength = 10_000;
+const maxRenderedLineLength = 20_000;
 
 function Importance({ value }: { value: string }) {
   return value ? (
@@ -229,9 +232,17 @@ function highlightDiffText(item: DiffItem, path: string): string {
     prefix = source[0];
     source = source.slice(1);
   }
+  const omitted = Math.max(0, source.length - maxRenderedLineLength);
+  if (omitted > 0)
+    source = `${source.slice(0, maxRenderedLineLength)} … [${omitted} characters omitted]`;
   const language = languageForPath(path);
   let highlighted = escapeHTML(source);
-  if (language && hljs.getLanguage(language)) {
+  if (
+    omitted === 0 &&
+    source.length <= maxHighlightedLineLength &&
+    language &&
+    hljs.getLanguage(language)
+  ) {
     try {
       highlighted = hljs.highlight(source, { language }).value;
     } catch {
@@ -248,6 +259,7 @@ function DiffItems({
   items: DiffItem[] | null;
   path: string;
 }) {
+  const diffMode = useContext(DiffModeContext);
   const renderItem = (item: DiffItem, index: number) => {
     if (item.kind === "expand") {
       const direction = item.direction === "up" ? "up" : "down";
@@ -279,12 +291,15 @@ function DiffItems({
         hidden={item.hidden || undefined}
         key={`line-${index}`}
       >
-        <span className="line-number unified-cell">{unifiedNumber}</span>
-        <span
-          className="line-code unified-cell"
-          dangerouslySetInnerHTML={markup(highlighted)}
-        />
-        {oldNumber === "" && newNumber === "" ? (
+        {diffMode === "unified" ? (
+          <>
+            <span className="line-number unified-cell">{unifiedNumber}</span>
+            <span
+              className="line-code unified-cell"
+              dangerouslySetInnerHTML={markup(highlighted)}
+            />
+          </>
+        ) : oldNumber === "" && newNumber === "" ? (
           <span
             className="split-wide"
             dangerouslySetInnerHTML={markup(highlighted)}
@@ -662,6 +677,15 @@ function GuidedGroup({
   questions: Questions;
 }) {
   const groupAnchor: Anchor = { type: "group", group_id: group.id };
+  const fragments = new Map(
+    list(group.categories).flatMap((category) =>
+      list(category.files).flatMap((file) =>
+        list(file.fragments).map(
+          (fragment) => [fragment.id, fragment] as const,
+        ),
+      ),
+    ),
+  );
   return (
     <details
       id={`guided-${group.anchor_id}`}
@@ -700,20 +724,23 @@ function GuidedGroup({
               <h3>
                 {step.number}. {step.title}
               </h3>
-              <div className="step-summary">
-                <Markdown source={step.summary} />
-              </div>
               <Ask anchor={anchor} questions={questions} />
             </summary>
+            <div className="step-summary">
+              <Markdown source={step.summary} />
+            </div>
             <QuestionPanel anchor={anchor} questions={questions} />
-            {list(step.fragments).map((fragment) => (
-              <GuidedFragment
-                fragment={fragment}
-                groupID={group.id}
-                questions={questions}
-                key={fragment.id}
-              />
-            ))}
+            {list(step.fragment_ids).map((fragmentID) => {
+              const fragment = fragments.get(fragmentID);
+              return fragment ? (
+                <GuidedFragment
+                  fragment={fragment}
+                  groupID={group.id}
+                  questions={questions}
+                  key={fragment.id}
+                />
+              ) : null;
+            })}
           </details>
         );
       })}
@@ -833,6 +860,9 @@ function FilesGroup({
   group: GroupView;
   questions: Questions;
 }) {
+  const files = list(group.categories).flatMap((category) =>
+    list(category.files),
+  );
   return (
     <details id={group.anchor_id} className="group files-group" open>
       <summary>
@@ -840,7 +870,7 @@ function FilesGroup({
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
         <span className="count">
-          {list(group.files).length} files · {group.fragment_count} fragments
+          {files.length} files · {group.fragment_count} fragments
         </span>
         <DisclosureActions selector=".category,.file" />
       </summary>
@@ -984,11 +1014,12 @@ function GroupDirectory({
 
 function Sidebar({
   bootstrap,
-  activeKey,
+  reviewMode,
 }: {
   bootstrap: Bootstrap;
-  activeKey: string;
+  reviewMode: "guided" | "files";
 }) {
+  const [activeKey, setActiveKey] = useState("");
   const [width, setWidth] = useState(() => {
     try {
       return Number(localStorage.getItem("semdiff-sidebar-width")) || 360;
@@ -997,6 +1028,36 @@ function Sidebar({
     }
   });
   const [resizing, setResizing] = useState(false);
+  useEffect(() => {
+    let observer: IntersectionObserver | undefined;
+    const observe = () => {
+      observer?.disconnect();
+      const bottomMargin = Math.max(0, window.innerHeight - 81);
+      observer = new IntersectionObserver(
+        (entries) => {
+          const file = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort(
+              (left, right) =>
+                Math.abs(left.boundingClientRect.top - 80) -
+                Math.abs(right.boundingClientRect.top - 80),
+            )[0]?.target as HTMLElement | undefined;
+          if (file)
+            setActiveKey(`${file.dataset.groupId}\0${file.dataset.filePath}`);
+        },
+        { rootMargin: `-80px 0px -${bottomMargin}px 0px` },
+      );
+      document
+        .querySelectorAll<HTMLElement>(".main-file,.guided-file[data-group-id]")
+        .forEach((file) => observer?.observe(file));
+    };
+    observe();
+    window.addEventListener("resize", observe);
+    return () => {
+      window.removeEventListener("resize", observe);
+      observer?.disconnect();
+    };
+  }, [reviewMode]);
   useEffect(() => {
     if (!resizing) return;
     const move = (event: PointerEvent) =>
@@ -1020,14 +1081,17 @@ function Sidebar({
     <aside className="sidebar" style={{ width }}>
       <nav className="sidebar-pane">
         {list(bootstrap.page.groups).map((group) => {
-          const tree = buildFileTree(list(group.files));
+          const files = list(group.categories).flatMap((category) =>
+            list(category.files),
+          );
+          const tree = buildFileTree(files);
           return (
             <details className="nav-group" key={group.id} open>
               <summary>
                 <DisclosureIcon />
                 <span>{group.title}</span>
                 <Importance value={group.importance} />
-                <small>{list(group.files).length}</small>
+                <small>{files.length}</small>
               </summary>
               <div className="nav-group-files">
                 {tree.directories.map((directory) => (
@@ -1111,7 +1175,6 @@ function Drift({ bootstrap }: { bootstrap: Bootstrap }) {
 function App({ bootstrap }: { bootstrap: Bootstrap }) {
   const [reviewMode, setReviewMode] = useState<"guided" | "files">("guided");
   const [diffMode, setDiffMode] = useState<"unified" | "split">("unified");
-  const [activeKey, setActiveKey] = useState("");
   const questions = useQuestions(bootstrap);
   useEffect(() => {
     document.body.dataset.view = diffMode;
@@ -1144,99 +1207,68 @@ function App({ bootstrap }: { bootstrap: Bootstrap }) {
     document.addEventListener("click", expand);
     return () => document.removeEventListener("click", expand);
   }, []);
-  useEffect(() => {
-    let scheduled = false;
-    const sync = () => {
-      if (scheduled) return;
-      scheduled = true;
-      requestAnimationFrame(() => {
-        scheduled = false;
-        const visible = Array.from(
-          document.querySelectorAll<HTMLElement>(
-            ".main-file,.guided-file[data-group-id]",
-          ),
-        ).filter((file) => {
-          const rect = file.getBoundingClientRect();
-          return (
-            file.offsetParent !== null &&
-            rect.bottom > 48 &&
-            rect.top < innerHeight
-          );
-        });
-        visible.sort(
-          (left, right) =>
-            Math.abs(left.getBoundingClientRect().top - 80) -
-            Math.abs(right.getBoundingClientRect().top - 80),
-        );
-        const file = visible[0];
-        if (file)
-          setActiveKey(`${file.dataset.groupId}\0${file.dataset.filePath}`);
-      });
-    };
-    window.addEventListener("scroll", sync, { passive: true });
-    sync();
-    return () => window.removeEventListener("scroll", sync);
-  }, [reviewMode]);
   return (
-    <div className="app-shell">
-      <Sidebar bootstrap={bootstrap} activeKey={activeKey} />
-      <main className="wrap">
-        <header className="page-header">
-          <div>
-            <h1>Semantic Changes</h1>
-            <code>
-              {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
-            </code>
+    <DiffModeContext.Provider value={diffMode}>
+      <div className="app-shell">
+        <Sidebar bootstrap={bootstrap} reviewMode={reviewMode} />
+        <main className="wrap">
+          <header className="page-header">
+            <div>
+              <h1>Semantic Changes</h1>
+              <code>
+                {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
+              </code>
+            </div>
+            {questions.mode === "interactive" && (
+              <button
+                type="button"
+                disabled={!questions.active}
+                onClick={questions.stop}
+              >
+                {questions.active ? "End answer mode" : "Answer mode stopped"}
+              </button>
+            )}
+          </header>
+          <div className="stats">
+            {list(bootstrap.page.groups).length} groups ·{" "}
+            {bootstrap.page.file_count} files · {bootstrap.page.fragment_count}{" "}
+            fragments
           </div>
-          {questions.mode === "interactive" && (
-            <button
-              type="button"
-              disabled={!questions.active}
-              onClick={questions.stop}
-            >
-              {questions.active ? "End answer mode" : "Answer mode stopped"}
-            </button>
+          <Drift bootstrap={bootstrap} />
+          <div className="toolbar">
+            <div>
+              {(["guided", "files"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  aria-pressed={reviewMode === mode}
+                  onClick={() => setReviewMode(mode)}
+                >
+                  {mode === "guided" ? "Guided" : "Files"}
+                </button>
+              ))}
+            </div>
+            <div>
+              {(["unified", "split"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  aria-pressed={diffMode === mode}
+                  onClick={() => setDiffMode(mode)}
+                >
+                  {mode === "unified" ? "Unified" : "Split"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {list(bootstrap.page.groups).map((group) =>
+            reviewMode === "guided" ? (
+              <GuidedGroup group={group} questions={questions} key={group.id} />
+            ) : (
+              <FilesGroup group={group} questions={questions} key={group.id} />
+            ),
           )}
-        </header>
-        <div className="stats">
-          {list(bootstrap.page.groups).length} groups ·{" "}
-          {bootstrap.page.file_count} files · {bootstrap.page.fragment_count}{" "}
-          fragments
-        </div>
-        <Drift bootstrap={bootstrap} />
-        <div className="toolbar">
-          <div>
-            {(["guided", "files"] as const).map((mode) => (
-              <button
-                key={mode}
-                aria-pressed={reviewMode === mode}
-                onClick={() => setReviewMode(mode)}
-              >
-                {mode === "guided" ? "Guided" : "Files"}
-              </button>
-            ))}
-          </div>
-          <div>
-            {(["unified", "split"] as const).map((mode) => (
-              <button
-                key={mode}
-                aria-pressed={diffMode === mode}
-                onClick={() => setDiffMode(mode)}
-              >
-                {mode === "unified" ? "Unified" : "Split"}
-              </button>
-            ))}
-          </div>
-        </div>
-        {list(bootstrap.page.groups).map((group) =>
-          reviewMode === "guided" ? (
-            <GuidedGroup group={group} questions={questions} key={group.id} />
-          ) : (
-            <FilesGroup group={group} questions={questions} key={group.id} />
-          ),
-        )}
-      </main>
-    </div>
+        </main>
+      </div>
+    </DiffModeContext.Provider>
   );
 }
 
