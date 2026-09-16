@@ -1,7 +1,7 @@
 {
   "name": "semdiff",
   "description": "Organize Git diffs into semantic reviews and answer questions about them.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "ry023"
   },
