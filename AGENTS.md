@@ -56,6 +56,17 @@ git diff --check
 
 開発中は対象 package の test を先に実行して構いませんが、完了前には原則として `go test ./...` を実行してください。実行できない場合は、未実行の command と理由を報告します。
 
+React viewer (`internal/viewer/frontend`) を変更したら、user-facing behavior に対応する Vitest の regression test を追加または更新します。特に DOM の構造・順序、表示モード、展開・折りたたみ、scroll/render のような performance-sensitive な経路を変更するときは、再発を検知できる test を残してください。
+
+```sh
+cd internal/viewer/frontend
+npm run test
+npm run typecheck
+npm run build
+```
+
+GitHub Actions では `npm run check` により formatting、test、build、生成済み `internal/viewer/dist` との一致を検証します。
+
 CLI の表示、viewer、静的 HTML を変更した場合は、該当 test に加えて実際の出力も確認します。生成した一時ファイルは repository に残しません。
 
 ## Documentation と skill
