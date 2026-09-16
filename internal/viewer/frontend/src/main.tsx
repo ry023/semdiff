@@ -127,11 +127,22 @@ const categoryIcons: Record<string, LucideIcon> = {
   custom: Tag,
 };
 
-function CategoryIcon({ name }: { name: string }) {
+function CategoryIcon({ name, title }: { name: string; title?: string }) {
   const Icon = categoryIcons[name] ?? Tag;
   return (
-    <span className="category-icon" aria-hidden="true">
+    <span className="category-icon" title={title} aria-hidden="true">
       <Icon size={18} />
+    </span>
+  );
+}
+
+type CategoryLike = Pick<CategoryView, "name" | "icon">;
+
+function CategoryBadge({ category }: { category: CategoryLike }) {
+  return (
+    <span className="category-badge">
+      <CategoryIcon name={category.icon} />
+      <span className="category-badge-label">{category.name}</span>
     </span>
   );
 }
@@ -147,7 +158,13 @@ type FileLike = Pick<
   "directory" | "name" | "status" | "additions" | "deletions" | "diffstat"
 >;
 
-function FileHeader({ file }: { file: FileLike }) {
+function FileHeader({
+  file,
+  category,
+}: {
+  file: FileLike;
+  category?: CategoryLike;
+}) {
   return (
     <>
       <span className="file-heading">
@@ -158,6 +175,7 @@ function FileHeader({ file }: { file: FileLike }) {
           )}
           <span className="file-name">{file.name}</span>
         </h3>
+        {category && <CategoryBadge category={category} />}
       </span>
       <span className="file-stats">
         <span className="stat-add">+{file.additions}</span>
@@ -612,10 +630,12 @@ function FragmentDescription({
 
 function GuidedFragment({
   fragment,
+  category,
   groupID,
   questions,
 }: {
   fragment: FragmentView;
+  category?: CategoryLike;
   groupID: string;
   questions: Questions;
 }) {
@@ -639,7 +659,7 @@ function GuidedFragment({
     >
       <summary>
         <DisclosureIcon />
-        <FileHeader file={fragment} />
+        <FileHeader file={fragment} category={category} />
         <button
           className="file-review-toggle"
           type="button"
@@ -680,6 +700,11 @@ function GuidedGroup({
           (fragment) => [fragment.id, fragment] as const,
         ),
       ),
+    ),
+  );
+  const categoriesByPath = new Map(
+    list(group.categories).flatMap((category) =>
+      list(category.files).map((file) => [file.path, category] as const),
     ),
   );
   return (
@@ -731,6 +756,7 @@ function GuidedGroup({
               return fragment ? (
                 <GuidedFragment
                   fragment={fragment}
+                  category={categoriesByPath.get(fragment.path)}
                   groupID={group.id}
                   questions={questions}
                   key={fragment.id}
@@ -944,10 +970,12 @@ function fileTreeCount(directory: FileTreeNode): number {
 
 function GroupFileLink({
   file,
+  category,
   groupID,
   activeKey,
 }: {
   file: FileView;
+  category: CategoryLike;
   groupID: string;
   activeKey: string;
 }) {
@@ -959,6 +987,7 @@ function GroupFileLink({
       key={file.anchor_id}
     >
       <StatusIcon status={file.status} />
+      <CategoryIcon name={category.icon} title={category.name} />
       <span className="nav-file-name">{file.name}</span>
       <small>
         <span className="stat-add">+{file.additions}</span>{" "}
@@ -970,10 +999,12 @@ function GroupFileLink({
 
 function GroupDirectory({
   directory,
+  categoriesByPath,
   groupID,
   activeKey,
 }: {
   directory: FileTreeNode;
+  categoriesByPath: ReadonlyMap<string, CategoryLike>;
   groupID: string;
   activeKey: string;
 }) {
@@ -989,6 +1020,7 @@ function GroupDirectory({
         {directory.directories.map((child) => (
           <GroupDirectory
             directory={child}
+            categoriesByPath={categoriesByPath}
             groupID={groupID}
             activeKey={activeKey}
             key={child.name}
@@ -997,6 +1029,12 @@ function GroupDirectory({
         {directory.files.map((file) => (
           <GroupFileLink
             file={file}
+            category={
+              categoriesByPath.get(file.path) ?? {
+                name: "unknown",
+                icon: "unknown",
+              }
+            }
             groupID={groupID}
             activeKey={activeKey}
             key={file.path}
@@ -1079,6 +1117,13 @@ function Sidebar({
           const files = list(group.categories).flatMap((category) =>
             list(category.files),
           );
+          const categoriesByPath = new Map(
+            list(group.categories).flatMap((category) =>
+              list(category.files).map(
+                (file) => [file.path, category] as const,
+              ),
+            ),
+          );
           const tree = buildFileTree(files);
           return (
             <details className="nav-group" key={group.id} open>
@@ -1092,6 +1137,7 @@ function Sidebar({
                 {tree.directories.map((directory) => (
                   <GroupDirectory
                     directory={directory}
+                    categoriesByPath={categoriesByPath}
                     groupID={group.id}
                     activeKey={activeKey}
                     key={directory.name}
@@ -1100,6 +1146,12 @@ function Sidebar({
                 {tree.files.map((file) => (
                   <GroupFileLink
                     file={file}
+                    category={
+                      categoriesByPath.get(file.path) ?? {
+                        name: "unknown",
+                        icon: "unknown",
+                      }
+                    }
                     groupID={group.id}
                     activeKey={activeKey}
                     key={file.path}

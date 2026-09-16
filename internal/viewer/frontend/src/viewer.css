@@ -273,14 +273,43 @@ summary::-webkit-details-marker {
 }
 .file-heading h3 {
   display: inline;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   color: var(--text);
   font:
     400 14px ui-monospace,
     monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .file-name {
   font-weight: 700;
+}
+.category-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font:
+    600 11px system-ui,
+    sans-serif;
+  white-space: nowrap;
+}
+.category-badge .category-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.category-badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .file-status-icon {
   display: inline-flex;
@@ -644,12 +673,17 @@ body[data-view="split"] .diff-row.add .new-code {
   cursor: pointer;
 }
 .nav-group-file {
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: 20px 18px minmax(0, 1fr) auto;
   align-items: center;
 }
 .nav-group-file .file-status-icon {
   width: 20px;
   height: 20px;
+}
+.nav-group-file .category-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
 }
 .nav-file-name {
   overflow: hidden;
