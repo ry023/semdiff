@@ -1240,16 +1240,32 @@ function App({ bootstrap }: { bootstrap: Bootstrap }) {
       const hidden = Array.from(
         container.querySelectorAll<HTMLElement>(".context-hidden[hidden]"),
       );
-      (button.dataset.direction === "up"
-        ? hidden.slice(-10)
-        : hidden.slice(0, 10)
-      ).forEach((line) => {
+      const direction = button.dataset.direction === "up" ? "up" : "down";
+      const revealed =
+        direction === "up" ? hidden.slice(-10) : hidden.slice(0, 10);
+      revealed.forEach((line) => {
         line.hidden = false;
       });
-      if (!container.querySelector(".context-hidden[hidden]"))
+      const remaining = container.querySelectorAll(
+        ".context-hidden[hidden]",
+      ).length;
+      if (remaining === 0) {
         container
           .querySelectorAll(".expand-lines")
           .forEach((item) => item.remove());
+        return;
+      }
+      if (direction === "up") {
+        revealed[0]?.before(button);
+      } else {
+        revealed.at(-1)?.after(button);
+      }
+      container
+        .querySelectorAll<HTMLButtonElement>(".expand-lines")
+        .forEach((item) => {
+          const itemDirection = item.dataset.direction === "up" ? "up" : "down";
+          item.textContent = `${itemDirection === "up" ? "↑" : "↓"} Show ${remaining} lines ${itemDirection === "up" ? "above" : "below"}`;
+        });
     };
     document.addEventListener("click", expand);
     return () => document.removeEventListener("click", expand);
