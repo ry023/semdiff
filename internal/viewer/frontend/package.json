@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b && vite build",
-    "check": "prettier --check . && npm run build && git diff --exit-code -- ../dist",
+    "check": "prettier --check . && npm run test && npm run build && git diff --exit-code -- ../dist",
     "dev": "vite",
     "format": "prettier --write .",
+    "test": "vitest run",
     "typecheck": "tsc -b"
   },
   "dependencies": {
@@ -20,11 +21,15 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "^30.0.1",
     "prettier": "^3.9.6",
     "typescript": "7.0.2",
-    "vite": "8.2.2"
+    "vite": "8.2.2",
+    "vitest": "^5.0.1"
   }
 }

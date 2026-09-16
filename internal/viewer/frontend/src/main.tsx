@@ -236,7 +236,7 @@ const escapeHTML = (value: string) =>
       ] ?? character,
   );
 
-function highlightDiffText(item: DiffItem, path: string): string {
+export function highlightDiffText(item: DiffItem, path: string): string {
   const line = item.text ?? "";
   if (item.class === "meta") return escapeHTML(line);
   let prefix = "";
@@ -1219,7 +1219,41 @@ function Drift({ bootstrap }: { bootstrap: Bootstrap }) {
   );
 }
 
-function App({ bootstrap }: { bootstrap: Bootstrap }) {
+export function expandContext(
+  button: HTMLButtonElement,
+  container: Element,
+): void {
+  const hidden = Array.from(
+    container.querySelectorAll<HTMLElement>(".context-hidden[hidden]"),
+  );
+  const direction = button.dataset.direction === "up" ? "up" : "down";
+  const revealed = direction === "up" ? hidden.slice(-10) : hidden.slice(0, 10);
+  revealed.forEach((line) => {
+    line.hidden = false;
+  });
+  const remaining = container.querySelectorAll(
+    ".context-hidden[hidden]",
+  ).length;
+  if (remaining === 0) {
+    container
+      .querySelectorAll(".expand-lines")
+      .forEach((item) => item.remove());
+    return;
+  }
+  if (direction === "up") {
+    revealed[0]?.before(button);
+  } else {
+    revealed.at(-1)?.after(button);
+  }
+  container
+    .querySelectorAll<HTMLButtonElement>(".expand-lines")
+    .forEach((item) => {
+      const itemDirection = item.dataset.direction === "up" ? "up" : "down";
+      item.textContent = `${itemDirection === "up" ? "↑" : "↓"} Show ${remaining} lines ${itemDirection === "up" ? "above" : "below"}`;
+    });
+}
+
+export function App({ bootstrap }: { bootstrap: Bootstrap }) {
   const [reviewMode, setReviewMode] = useState<"guided" | "files">("guided");
   const [diffMode, setDiffMode] = useState<"unified" | "split">("unified");
   const questions = useQuestions(bootstrap);
@@ -1237,35 +1271,7 @@ function App({ bootstrap }: { bootstrap: Bootstrap }) {
       )?.closest<HTMLButtonElement>(".expand-lines");
       const container = button?.closest(".context-expand");
       if (!button || !container) return;
-      const hidden = Array.from(
-        container.querySelectorAll<HTMLElement>(".context-hidden[hidden]"),
-      );
-      const direction = button.dataset.direction === "up" ? "up" : "down";
-      const revealed =
-        direction === "up" ? hidden.slice(-10) : hidden.slice(0, 10);
-      revealed.forEach((line) => {
-        line.hidden = false;
-      });
-      const remaining = container.querySelectorAll(
-        ".context-hidden[hidden]",
-      ).length;
-      if (remaining === 0) {
-        container
-          .querySelectorAll(".expand-lines")
-          .forEach((item) => item.remove());
-        return;
-      }
-      if (direction === "up") {
-        revealed[0]?.before(button);
-      } else {
-        revealed.at(-1)?.after(button);
-      }
-      container
-        .querySelectorAll<HTMLButtonElement>(".expand-lines")
-        .forEach((item) => {
-          const itemDirection = item.dataset.direction === "up" ? "up" : "down";
-          item.textContent = `${itemDirection === "up" ? "↑" : "↓"} Show ${remaining} lines ${itemDirection === "up" ? "above" : "below"}`;
-        });
+      expandContext(button, container);
     };
     document.addEventListener("click", expand);
     return () => document.removeEventListener("click", expand);
