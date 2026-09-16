@@ -25,7 +25,6 @@ export interface FragmentView {
   additions: number;
   deletions: number;
   diffstat: string[] | null;
-  header: DiffItem[] | null;
   hunk: DiffItem[] | null;
   upper_context: DiffItem[] | null;
   lower_context: DiffItem[] | null;
@@ -39,7 +38,6 @@ export interface FileView {
   additions: number;
   deletions: number;
   diffstat: string[] | null;
-  header: DiffItem[] | null;
   fragments: FragmentView[] | null;
   review_level: ReviewLevel;
 }
@@ -49,7 +47,7 @@ export interface ReviewStepView {
   summary: string;
   anchor_id: string;
   number: number;
-  fragments: FragmentView[] | null;
+  fragment_ids: string[] | null;
 }
 export interface CategoryView {
   name: string;
@@ -67,7 +65,6 @@ export interface GroupView {
   importance: Importance;
   anchor_id: string;
   order?: number;
-  files: FileView[] | null;
   categories: CategoryView[] | null;
   steps: ReviewStepView[] | null;
   fragment_count: number;

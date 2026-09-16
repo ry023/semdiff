@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
@@ -74,6 +74,9 @@ for (const [name, language] of Object.entries({
 
 const markup = (value: string) => ({ __html: value });
 const list = <T,>(value: T[] | null | undefined): T[] => value ?? [];
+const DiffModeContext = React.createContext<"unified" | "split">("unified");
+const maxHighlightedLineLength = 10_000;
+const maxRenderedLineLength = 20_000;
 
 function Importance({ value }: { value: string }) {
   return value ? (
@@ -124,11 +127,22 @@ const categoryIcons: Record<string, LucideIcon> = {
   custom: Tag,
 };
 
-function CategoryIcon({ name }: { name: string }) {
+function CategoryIcon({ name, title }: { name: string; title?: string }) {
   const Icon = categoryIcons[name] ?? Tag;
   return (
-    <span className="category-icon" aria-hidden="true">
+    <span className="category-icon" title={title} aria-hidden="true">
       <Icon size={18} />
+    </span>
+  );
+}
+
+type CategoryLike = Pick<CategoryView, "name" | "icon">;
+
+function CategoryBadge({ category }: { category: CategoryLike }) {
+  return (
+    <span className="category-badge">
+      <CategoryIcon name={category.icon} />
+      <span className="category-badge-label">{category.name}</span>
     </span>
   );
 }
@@ -144,7 +158,13 @@ type FileLike = Pick<
   "directory" | "name" | "status" | "additions" | "deletions" | "diffstat"
 >;
 
-function FileHeader({ file }: { file: FileLike }) {
+function FileHeader({
+  file,
+  category,
+}: {
+  file: FileLike;
+  category?: CategoryLike;
+}) {
   return (
     <>
       <span className="file-heading">
@@ -155,6 +175,7 @@ function FileHeader({ file }: { file: FileLike }) {
           )}
           <span className="file-name">{file.name}</span>
         </h3>
+        {category && <CategoryBadge category={category} />}
       </span>
       <span className="file-stats">
         <span className="stat-add">+{file.additions}</span>
@@ -215,7 +236,7 @@ const escapeHTML = (value: string) =>
       ] ?? character,
   );
 
-function highlightDiffText(item: DiffItem, path: string): string {
+export function highlightDiffText(item: DiffItem, path: string): string {
   const line = item.text ?? "";
   if (item.class === "meta") return escapeHTML(line);
   let prefix = "";
@@ -229,9 +250,17 @@ function highlightDiffText(item: DiffItem, path: string): string {
     prefix = source[0];
     source = source.slice(1);
   }
+  const omitted = Math.max(0, source.length - maxRenderedLineLength);
+  if (omitted > 0)
+    source = `${source.slice(0, maxRenderedLineLength)} … [${omitted} characters omitted]`;
   const language = languageForPath(path);
   let highlighted = escapeHTML(source);
-  if (language && hljs.getLanguage(language)) {
+  if (
+    omitted === 0 &&
+    source.length <= maxHighlightedLineLength &&
+    language &&
+    hljs.getLanguage(language)
+  ) {
     try {
       highlighted = hljs.highlight(source, { language }).value;
     } catch {
@@ -248,6 +277,7 @@ function DiffItems({
   items: DiffItem[] | null;
   path: string;
 }) {
+  const diffMode = useContext(DiffModeContext);
   const renderItem = (item: DiffItem, index: number) => {
     if (item.kind === "expand") {
       const direction = item.direction === "up" ? "up" : "down";
@@ -279,12 +309,15 @@ function DiffItems({
         hidden={item.hidden || undefined}
         key={`line-${index}`}
       >
-        <span className="line-number unified-cell">{unifiedNumber}</span>
-        <span
-          className="line-code unified-cell"
-          dangerouslySetInnerHTML={markup(highlighted)}
-        />
-        {oldNumber === "" && newNumber === "" ? (
+        {diffMode === "unified" ? (
+          <>
+            <span className="line-number unified-cell">{unifiedNumber}</span>
+            <span
+              className="line-code unified-cell"
+              dangerouslySetInnerHTML={markup(highlighted)}
+            />
+          </>
+        ) : oldNumber === "" && newNumber === "" ? (
           <span
             className="split-wide"
             dangerouslySetInnerHTML={markup(highlighted)}
@@ -589,9 +622,6 @@ function FragmentDescription({
   return (
     <div className="fragment-description">
       <Level value={fragment.review_level} />
-      <strong>
-        {fragment.id} · {fragment.range_label}
-      </strong>
       <Markdown inline source={fragment.description} />
       <Ask anchor={anchor} questions={questions} />
     </div>
@@ -600,10 +630,12 @@ function FragmentDescription({
 
 function GuidedFragment({
   fragment,
+  category,
   groupID,
   questions,
 }: {
   fragment: FragmentView;
+  category?: CategoryLike;
   groupID: string;
   questions: Questions;
 }) {
@@ -614,7 +646,6 @@ function GuidedFragment({
   };
   const [reviewed, setReviewed] = useState(false);
   const diff = [
-    ...list(fragment.header),
     ...list(fragment.upper_context),
     ...list(fragment.hunk),
     ...list(fragment.lower_context),
@@ -628,7 +659,7 @@ function GuidedFragment({
     >
       <summary>
         <DisclosureIcon />
-        <FileHeader file={fragment} />
+        <FileHeader file={fragment} category={category} />
         <button
           className="file-review-toggle"
           type="button"
@@ -662,6 +693,20 @@ function GuidedGroup({
   questions: Questions;
 }) {
   const groupAnchor: Anchor = { type: "group", group_id: group.id };
+  const fragments = new Map(
+    list(group.categories).flatMap((category) =>
+      list(category.files).flatMap((file) =>
+        list(file.fragments).map(
+          (fragment) => [fragment.id, fragment] as const,
+        ),
+      ),
+    ),
+  );
+  const categoriesByPath = new Map(
+    list(group.categories).flatMap((category) =>
+      list(category.files).map((file) => [file.path, category] as const),
+    ),
+  );
   return (
     <details
       id={`guided-${group.anchor_id}`}
@@ -700,20 +745,24 @@ function GuidedGroup({
               <h3>
                 {step.number}. {step.title}
               </h3>
-              <div className="step-summary">
-                <Markdown source={step.summary} />
-              </div>
               <Ask anchor={anchor} questions={questions} />
             </summary>
+            <div className="step-summary">
+              <Markdown source={step.summary} />
+            </div>
             <QuestionPanel anchor={anchor} questions={questions} />
-            {list(step.fragments).map((fragment) => (
-              <GuidedFragment
-                fragment={fragment}
-                groupID={group.id}
-                questions={questions}
-                key={fragment.id}
-              />
-            ))}
+            {list(step.fragment_ids).map((fragmentID) => {
+              const fragment = fragments.get(fragmentID);
+              return fragment ? (
+                <GuidedFragment
+                  fragment={fragment}
+                  category={categoriesByPath.get(fragment.path)}
+                  groupID={group.id}
+                  questions={questions}
+                  key={fragment.id}
+                />
+              ) : null;
+            })}
           </details>
         );
       })}
@@ -732,7 +781,6 @@ function FileDetails({
 }) {
   const [reviewed, setReviewed] = useState(false);
   const body = [
-    ...list(file.header),
     ...list(file.fragments).flatMap((fragment) => [
       ...list(fragment.upper_context),
       ...list(fragment.hunk),
@@ -833,6 +881,9 @@ function FilesGroup({
   group: GroupView;
   questions: Questions;
 }) {
+  const files = list(group.categories).flatMap((category) =>
+    list(category.files),
+  );
   return (
     <details id={group.anchor_id} className="group files-group" open>
       <summary>
@@ -840,7 +891,7 @@ function FilesGroup({
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
         <span className="count">
-          {list(group.files).length} files · {group.fragment_count} fragments
+          {files.length} files · {group.fragment_count} fragments
         </span>
         <DisclosureActions selector=".category,.file" />
       </summary>
@@ -919,10 +970,12 @@ function fileTreeCount(directory: FileTreeNode): number {
 
 function GroupFileLink({
   file,
+  category,
   groupID,
   activeKey,
 }: {
   file: FileView;
+  category: CategoryLike;
   groupID: string;
   activeKey: string;
 }) {
@@ -934,6 +987,7 @@ function GroupFileLink({
       key={file.anchor_id}
     >
       <StatusIcon status={file.status} />
+      <CategoryIcon name={category.icon} title={category.name} />
       <span className="nav-file-name">{file.name}</span>
       <small>
         <span className="stat-add">+{file.additions}</span>{" "}
@@ -945,10 +999,12 @@ function GroupFileLink({
 
 function GroupDirectory({
   directory,
+  categoriesByPath,
   groupID,
   activeKey,
 }: {
   directory: FileTreeNode;
+  categoriesByPath: ReadonlyMap<string, CategoryLike>;
   groupID: string;
   activeKey: string;
 }) {
@@ -964,6 +1020,7 @@ function GroupDirectory({
         {directory.directories.map((child) => (
           <GroupDirectory
             directory={child}
+            categoriesByPath={categoriesByPath}
             groupID={groupID}
             activeKey={activeKey}
             key={child.name}
@@ -972,6 +1029,12 @@ function GroupDirectory({
         {directory.files.map((file) => (
           <GroupFileLink
             file={file}
+            category={
+              categoriesByPath.get(file.path) ?? {
+                name: "unknown",
+                icon: "unknown",
+              }
+            }
             groupID={groupID}
             activeKey={activeKey}
             key={file.path}
@@ -984,11 +1047,12 @@ function GroupDirectory({
 
 function Sidebar({
   bootstrap,
-  activeKey,
+  reviewMode,
 }: {
   bootstrap: Bootstrap;
-  activeKey: string;
+  reviewMode: "guided" | "files";
 }) {
+  const [activeKey, setActiveKey] = useState("");
   const [width, setWidth] = useState(() => {
     try {
       return Number(localStorage.getItem("semdiff-sidebar-width")) || 360;
@@ -997,6 +1061,36 @@ function Sidebar({
     }
   });
   const [resizing, setResizing] = useState(false);
+  useEffect(() => {
+    let observer: IntersectionObserver | undefined;
+    const observe = () => {
+      observer?.disconnect();
+      const bottomMargin = Math.max(0, window.innerHeight - 81);
+      observer = new IntersectionObserver(
+        (entries) => {
+          const file = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort(
+              (left, right) =>
+                Math.abs(left.boundingClientRect.top - 80) -
+                Math.abs(right.boundingClientRect.top - 80),
+            )[0]?.target as HTMLElement | undefined;
+          if (file)
+            setActiveKey(`${file.dataset.groupId}\0${file.dataset.filePath}`);
+        },
+        { rootMargin: `-80px 0px -${bottomMargin}px 0px` },
+      );
+      document
+        .querySelectorAll<HTMLElement>(".main-file,.guided-file[data-group-id]")
+        .forEach((file) => observer?.observe(file));
+    };
+    observe();
+    window.addEventListener("resize", observe);
+    return () => {
+      window.removeEventListener("resize", observe);
+      observer?.disconnect();
+    };
+  }, [reviewMode]);
   useEffect(() => {
     if (!resizing) return;
     const move = (event: PointerEvent) =>
@@ -1020,19 +1114,30 @@ function Sidebar({
     <aside className="sidebar" style={{ width }}>
       <nav className="sidebar-pane">
         {list(bootstrap.page.groups).map((group) => {
-          const tree = buildFileTree(list(group.files));
+          const files = list(group.categories).flatMap((category) =>
+            list(category.files),
+          );
+          const categoriesByPath = new Map(
+            list(group.categories).flatMap((category) =>
+              list(category.files).map(
+                (file) => [file.path, category] as const,
+              ),
+            ),
+          );
+          const tree = buildFileTree(files);
           return (
             <details className="nav-group" key={group.id} open>
               <summary>
                 <DisclosureIcon />
                 <span>{group.title}</span>
                 <Importance value={group.importance} />
-                <small>{list(group.files).length}</small>
+                <small>{files.length}</small>
               </summary>
               <div className="nav-group-files">
                 {tree.directories.map((directory) => (
                   <GroupDirectory
                     directory={directory}
+                    categoriesByPath={categoriesByPath}
                     groupID={group.id}
                     activeKey={activeKey}
                     key={directory.name}
@@ -1041,6 +1146,12 @@ function Sidebar({
                 {tree.files.map((file) => (
                   <GroupFileLink
                     file={file}
+                    category={
+                      categoriesByPath.get(file.path) ?? {
+                        name: "unknown",
+                        icon: "unknown",
+                      }
+                    }
                     groupID={group.id}
                     activeKey={activeKey}
                     key={file.path}
@@ -1108,10 +1219,43 @@ function Drift({ bootstrap }: { bootstrap: Bootstrap }) {
   );
 }
 
-function App({ bootstrap }: { bootstrap: Bootstrap }) {
+export function expandContext(
+  button: HTMLButtonElement,
+  container: Element,
+): void {
+  const hidden = Array.from(
+    container.querySelectorAll<HTMLElement>(".context-hidden[hidden]"),
+  );
+  const direction = button.dataset.direction === "up" ? "up" : "down";
+  const revealed = direction === "up" ? hidden.slice(-10) : hidden.slice(0, 10);
+  revealed.forEach((line) => {
+    line.hidden = false;
+  });
+  const remaining = container.querySelectorAll(
+    ".context-hidden[hidden]",
+  ).length;
+  if (remaining === 0) {
+    container
+      .querySelectorAll(".expand-lines")
+      .forEach((item) => item.remove());
+    return;
+  }
+  if (direction === "up") {
+    revealed[0]?.before(button);
+  } else {
+    revealed.at(-1)?.after(button);
+  }
+  container
+    .querySelectorAll<HTMLButtonElement>(".expand-lines")
+    .forEach((item) => {
+      const itemDirection = item.dataset.direction === "up" ? "up" : "down";
+      item.textContent = `${itemDirection === "up" ? "↑" : "↓"} Show ${remaining} lines ${itemDirection === "up" ? "above" : "below"}`;
+    });
+}
+
+export function App({ bootstrap }: { bootstrap: Bootstrap }) {
   const [reviewMode, setReviewMode] = useState<"guided" | "files">("guided");
   const [diffMode, setDiffMode] = useState<"unified" | "split">("unified");
-  const [activeKey, setActiveKey] = useState("");
   const questions = useQuestions(bootstrap);
   useEffect(() => {
     document.body.dataset.view = diffMode;
@@ -1127,116 +1271,73 @@ function App({ bootstrap }: { bootstrap: Bootstrap }) {
       )?.closest<HTMLButtonElement>(".expand-lines");
       const container = button?.closest(".context-expand");
       if (!button || !container) return;
-      const hidden = Array.from(
-        container.querySelectorAll<HTMLElement>(".context-hidden[hidden]"),
-      );
-      (button.dataset.direction === "up"
-        ? hidden.slice(-10)
-        : hidden.slice(0, 10)
-      ).forEach((line) => {
-        line.hidden = false;
-      });
-      if (!container.querySelector(".context-hidden[hidden]"))
-        container
-          .querySelectorAll(".expand-lines")
-          .forEach((item) => item.remove());
+      expandContext(button, container);
     };
     document.addEventListener("click", expand);
     return () => document.removeEventListener("click", expand);
   }, []);
-  useEffect(() => {
-    let scheduled = false;
-    const sync = () => {
-      if (scheduled) return;
-      scheduled = true;
-      requestAnimationFrame(() => {
-        scheduled = false;
-        const visible = Array.from(
-          document.querySelectorAll<HTMLElement>(
-            ".main-file,.guided-file[data-group-id]",
-          ),
-        ).filter((file) => {
-          const rect = file.getBoundingClientRect();
-          return (
-            file.offsetParent !== null &&
-            rect.bottom > 48 &&
-            rect.top < innerHeight
-          );
-        });
-        visible.sort(
-          (left, right) =>
-            Math.abs(left.getBoundingClientRect().top - 80) -
-            Math.abs(right.getBoundingClientRect().top - 80),
-        );
-        const file = visible[0];
-        if (file)
-          setActiveKey(`${file.dataset.groupId}\0${file.dataset.filePath}`);
-      });
-    };
-    window.addEventListener("scroll", sync, { passive: true });
-    sync();
-    return () => window.removeEventListener("scroll", sync);
-  }, [reviewMode]);
   return (
-    <div className="app-shell">
-      <Sidebar bootstrap={bootstrap} activeKey={activeKey} />
-      <main className="wrap">
-        <header className="page-header">
-          <div>
-            <h1>Semantic Changes</h1>
-            <code>
-              {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
-            </code>
+    <DiffModeContext.Provider value={diffMode}>
+      <div className="app-shell">
+        <Sidebar bootstrap={bootstrap} reviewMode={reviewMode} />
+        <main className="wrap">
+          <header className="page-header">
+            <div>
+              <h1>Semantic Changes</h1>
+              <code>
+                {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
+              </code>
+            </div>
+            {questions.mode === "interactive" && (
+              <button
+                type="button"
+                disabled={!questions.active}
+                onClick={questions.stop}
+              >
+                {questions.active ? "End answer mode" : "Answer mode stopped"}
+              </button>
+            )}
+          </header>
+          <div className="stats">
+            {list(bootstrap.page.groups).length} groups ·{" "}
+            {bootstrap.page.file_count} files · {bootstrap.page.fragment_count}{" "}
+            fragments
           </div>
-          {questions.mode === "interactive" && (
-            <button
-              type="button"
-              disabled={!questions.active}
-              onClick={questions.stop}
-            >
-              {questions.active ? "End answer mode" : "Answer mode stopped"}
-            </button>
+          <Drift bootstrap={bootstrap} />
+          <div className="toolbar">
+            <div>
+              {(["guided", "files"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  aria-pressed={reviewMode === mode}
+                  onClick={() => setReviewMode(mode)}
+                >
+                  {mode === "guided" ? "Guided" : "Files"}
+                </button>
+              ))}
+            </div>
+            <div>
+              {(["unified", "split"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  aria-pressed={diffMode === mode}
+                  onClick={() => setDiffMode(mode)}
+                >
+                  {mode === "unified" ? "Unified" : "Split"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {list(bootstrap.page.groups).map((group) =>
+            reviewMode === "guided" ? (
+              <GuidedGroup group={group} questions={questions} key={group.id} />
+            ) : (
+              <FilesGroup group={group} questions={questions} key={group.id} />
+            ),
           )}
-        </header>
-        <div className="stats">
-          {list(bootstrap.page.groups).length} groups ·{" "}
-          {bootstrap.page.file_count} files · {bootstrap.page.fragment_count}{" "}
-          fragments
-        </div>
-        <Drift bootstrap={bootstrap} />
-        <div className="toolbar">
-          <div>
-            {(["guided", "files"] as const).map((mode) => (
-              <button
-                key={mode}
-                aria-pressed={reviewMode === mode}
-                onClick={() => setReviewMode(mode)}
-              >
-                {mode === "guided" ? "Guided" : "Files"}
-              </button>
-            ))}
-          </div>
-          <div>
-            {(["unified", "split"] as const).map((mode) => (
-              <button
-                key={mode}
-                aria-pressed={diffMode === mode}
-                onClick={() => setDiffMode(mode)}
-              >
-                {mode === "unified" ? "Unified" : "Split"}
-              </button>
-            ))}
-          </div>
-        </div>
-        {list(bootstrap.page.groups).map((group) =>
-          reviewMode === "guided" ? (
-            <GuidedGroup group={group} questions={questions} key={group.id} />
-          ) : (
-            <FilesGroup group={group} questions={questions} key={group.id} />
-          ),
-        )}
-      </main>
-    </div>
+        </main>
+      </div>
+    </DiffModeContext.Provider>
   );
 }
 

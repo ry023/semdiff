@@ -33,7 +33,7 @@ type FragmentView struct {
 	Additions    int               `json:"additions"`
 	Deletions    int               `json:"deletions"`
 	Diffstat     []string          `json:"diffstat"`
-	Header       []DiffItem        `json:"header"`
+	Header       []DiffItem        `json:"-"`
 	Hunk         []DiffItem        `json:"hunk"`
 	UpperContext []DiffItem        `json:"upper_context"`
 	LowerContext []DiffItem        `json:"lower_context"`
@@ -60,7 +60,7 @@ type FileView struct {
 	Additions   int               `json:"additions"`
 	Deletions   int               `json:"deletions"`
 	Diffstat    []string          `json:"diffstat"`
-	Header      []DiffItem        `json:"header"`
+	Header      []DiffItem        `json:"-"`
 	Fragments   []FragmentView    `json:"fragments"`
 	ReviewLevel model.ReviewLevel `json:"review_level"`
 }
@@ -71,19 +71,20 @@ type GroupView struct {
 	Importance    model.Importance `json:"importance"`
 	AnchorID      string           `json:"anchor_id"`
 	Order         *int             `json:"order,omitempty"`
-	Files         []FileView       `json:"files"`
+	Files         []FileView       `json:"-"`
 	Categories    []CategoryView   `json:"categories"`
 	Steps         []ReviewStepView `json:"steps"`
 	FragmentCount int              `json:"fragment_count"`
 }
 
 type ReviewStepView struct {
-	ID        string         `json:"id"`
-	Title     string         `json:"title"`
-	Summary   string         `json:"summary"`
-	AnchorID  string         `json:"anchor_id"`
-	Number    int            `json:"number"`
-	Fragments []FragmentView `json:"fragments"`
+	ID          string         `json:"id"`
+	Title       string         `json:"title"`
+	Summary     string         `json:"summary"`
+	AnchorID    string         `json:"anchor_id"`
+	Number      int            `json:"number"`
+	Fragments   []FragmentView `json:"-"`
+	FragmentIDs []string       `json:"fragment_ids"`
 }
 type CategoryView struct {
 	Name     string     `json:"name"`
@@ -182,6 +183,12 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 				file.Fragments[i].Description = descriptions[file.Fragments[i].ID]
 				file.Fragments[i].RangeLabel = rangeLabels[file.Fragments[i].ID]
 				file.Fragments[i].ReviewLevel = reviewLevels[file.Fragments[i].ID]
+				file.Fragments[i].Directory = file.Directory
+				file.Fragments[i].Name = file.Name
+				file.Fragments[i].Status = file.Status
+				file.Fragments[i].Additions = file.Additions
+				file.Fragments[i].Deletions = file.Deletions
+				file.Fragments[i].Diffstat = file.Diffstat
 				file.ReviewLevel = strongerReviewLevel(file.ReviewLevel, file.Fragments[i].ReviewLevel)
 			}
 			gv.Files = append(gv.Files, file)
@@ -189,6 +196,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 		for stepIndex, step := range group.ReviewSteps {
 			sv := ReviewStepView{ID: step.ID, Title: step.Title, Summary: step.Summary, AnchorID: fmt.Sprintf("step-%d-%d", groupIndex, stepIndex), Number: stepIndex + 1}
 			for _, id := range step.FragmentIDs {
+				sv.FragmentIDs = append(sv.FragmentIDs, id)
 				fragment := byID[id]
 				view := buildFragmentView(fragment, fileContents[fragment.Path], nil, byPath[fragment.Path])
 				file := buildFileView(fragment.Path, []model.MaterializedFragment{fragment}, fileContents[fragment.Path], byPath[fragment.Path])
@@ -206,6 +214,7 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 			gv.Steps = append(gv.Steps, sv)
 		}
 		gv.Categories = buildCategoryViews(gv.Files, group.FileCategories)
+		stripDerivedPatches(&gv)
 		p.Groups = append(p.Groups, gv)
 		p.FragmentCount += gv.FragmentCount
 	}
@@ -221,6 +230,26 @@ func Build(g model.GroupsFile, inv model.FragmentSet, contents ...map[string]str
 	p.FileCount = len(allFiles)
 	p.buildSidebar()
 	return p
+}
+
+func stripDerivedPatches(group *GroupView) {
+	for fileIndex := range group.Files {
+		for fragmentIndex := range group.Files[fileIndex].Fragments {
+			group.Files[fileIndex].Fragments[fragmentIndex].Patch = ""
+		}
+	}
+	for stepIndex := range group.Steps {
+		for fragmentIndex := range group.Steps[stepIndex].Fragments {
+			group.Steps[stepIndex].Fragments[fragmentIndex].Patch = ""
+		}
+	}
+	for categoryIndex := range group.Categories {
+		for fileIndex := range group.Categories[categoryIndex].Files {
+			for fragmentIndex := range group.Categories[categoryIndex].Files[fileIndex].Fragments {
+				group.Categories[categoryIndex].Files[fileIndex].Fragments[fragmentIndex].Patch = ""
+			}
+		}
+	}
 }
 
 type sidebarDirectoryBuilder struct {

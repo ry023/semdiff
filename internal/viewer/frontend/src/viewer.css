@@ -113,7 +113,6 @@ summary::-webkit-details-marker {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  overflow: clip;
   scroll-margin-top: 8px;
 }
 .group > summary {
@@ -123,17 +122,24 @@ summary::-webkit-details-marker {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 42px;
+  height: 42px;
   padding: 9px 14px;
   border-left: 4px solid #cba6f7;
+  border-radius: 7px 7px 0 0;
   background: var(--raised);
   cursor: pointer;
+}
+.group:not([open]) > summary {
+  border-radius: 7px;
 }
 .group > summary h2 {
   display: inline;
   min-width: 0;
   margin: 0;
+  overflow: hidden;
   font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .count {
   margin-left: auto;
@@ -202,16 +208,29 @@ summary::-webkit-details-marker {
   position: sticky;
   top: 42px;
   z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 42px;
   padding: 8px;
   background: var(--panel);
 }
-.review-step h3 {
+.review-step > summary h3 {
   display: inline;
+  flex: 1;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-step > summary > .ask-button {
+  flex: none;
+  padding-block: 3px;
 }
 .step-summary {
-  margin: 7px 0 0 20px;
+  margin: 7px 8px 0 28px;
   color: var(--muted);
 }
 .guided-file {
@@ -220,7 +239,7 @@ summary::-webkit-details-marker {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #181825;
-  scroll-margin-top: 90px;
+  scroll-margin-top: 92px;
 }
 .guided-file > summary,
 .file > summary {
@@ -254,14 +273,43 @@ summary::-webkit-details-marker {
 }
 .file-heading h3 {
   display: inline;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   color: var(--text);
   font:
     400 14px ui-monospace,
     monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .file-name {
   font-weight: 700;
+}
+.category-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font:
+    600 11px system-ui,
+    sans-serif;
+  white-space: nowrap;
+}
+.category-badge .category-icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.category-badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .file-status-icon {
   display: inline-flex;
@@ -625,12 +673,17 @@ body[data-view="split"] .diff-row.add .new-code {
   cursor: pointer;
 }
 .nav-group-file {
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: 20px 18px minmax(0, 1fr) auto;
   align-items: center;
 }
 .nav-group-file .file-status-icon {
   width: 20px;
   height: 20px;
+}
+.nav-group-file .category-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
 }
 .nav-file-name {
   overflow: hidden;

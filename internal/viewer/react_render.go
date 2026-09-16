@@ -1,11 +1,15 @@
 package viewer
 
 import (
+	"bytes"
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	"github.com/ry023/semdiff/internal/questions"
 )
+
+var scriptTagPattern = regexp.MustCompile(`(?i)</?script`)
 
 type viewerCapabilities struct {
 	Questions string `json:"questions"`
@@ -43,6 +47,19 @@ func buildViewerThreads(threads []questions.Thread) []viewerThread {
 	return views
 }
 
+func marshalViewerBootstrap(bootstrap viewerBootstrap) ([]byte, error) {
+	var data bytes.Buffer
+	encoder := json.NewEncoder(&data)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(bootstrap); err != nil {
+		return nil, err
+	}
+	encoded := bytes.TrimSuffix(data.Bytes(), []byte{'\n'})
+	return scriptTagPattern.ReplaceAllFunc(encoded, func(tag []byte) []byte {
+		return append([]byte(`\u003c`), tag[1:]...)
+	}), nil
+}
+
 func renderReactHTML(page Page, threads []questions.Thread, interactive bool, basePath string) ([]byte, error) {
 	shell, err := assets.ReadFile("frontend/shell.html")
 	if err != nil {
@@ -62,7 +79,7 @@ func renderReactHTML(page Page, threads []questions.Thread, interactive bool, ba
 	} else if len(threads) > 0 {
 		capabilities.Questions = "readonly"
 	}
-	data, err := json.Marshal(viewerBootstrap{
+	data, err := marshalViewerBootstrap(viewerBootstrap{
 		Page:         page,
 		Capabilities: capabilities,
 		Threads:      buildViewerThreads(threads),
