@@ -4,6 +4,8 @@
 
 人間および AI Agent 向けの workflow、インストール方法、レビュー共有については [README](README_ja.md) を参照してください。
 
+用途別のコマンド概要は `semdiff --help`（または `semdiff help` / `semdiff -h`）で表示できます。`semdiff remote pull --help` のように各 command に `--help` を付けると、その引数と flag を確認できます。help は標準出力に表示され、正常終了します。
+
 ## バージョン互換性を確認する
 
 ```sh

@@ -4,6 +4,8 @@ This is the deterministic CLI layer used by the bundled skills. Use it directly 
 
 See the [README](README.md) for the human and AI-agent workflow, installation, and review sharing.
 
+Run `semdiff --help` (or `semdiff help` / `semdiff -h`) for a grouped command overview. Add `--help` to a command, such as `semdiff remote pull --help`, for its arguments and flags. Help prints to standard output and exits successfully.
+
 ## Inspect version compatibility
 
 ```sh

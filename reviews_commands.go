@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"html"
 	"io"
@@ -23,17 +22,14 @@ import (
 )
 
 func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
-	remote := fs.String("remote", "", "Git remote name")
-	repository := fs.String("repository", "", "artifact repository URL or path")
-	branch := fs.String("branch", "", "artifact branch")
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[publishArgs]("publish", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) > 1 {
-		return errors.New("publish accepts at most one <groups-file>")
+	remote, repository, branch, draftPath := &options.Remote, &options.Repository, &options.Branch, &options.Draft
+	positional := []string{}
+	if options.GroupsFile != "" {
+		positional = append(positional, options.GroupsFile)
 	}
 	translated := []string{}
 	if len(positional) == 1 {
@@ -100,18 +96,11 @@ func remoteStore(remote, repository, branch string) (reviews.Store, error) {
 }
 
 func runRemoteViewIndex(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("remote view-index", flag.ContinueOnError)
-	addr := fs.String("addr", "127.0.0.1:7363", "listen address")
-	remote := fs.String("remote", "", "Git remote name")
-	repository := fs.String("repository", "", "artifact repository URL or path")
-	branch := fs.String("branch", "", "artifact branch")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[remoteViewIndexArgs]("remote view-index", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 0 {
-		return errors.New("remote view-index does not accept positional arguments")
-	}
+	addr, remote, repository, branch := &options.Addr, &options.Remote, &options.Repository, &options.Branch
 	store, err := remoteStore(*remote, *repository, *branch)
 	if err != nil {
 		return err
@@ -181,14 +170,14 @@ func remoteArtifact(ctx context.Context, runner gitdiff.Runner, store reviews.St
 }
 
 func runRemoteView(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("remote view", flag.ContinueOnError)
-	addr := fs.String("addr", "127.0.0.1:7363", "listen address")
-	remote := fs.String("remote", "", "Git remote name")
-	repository := fs.String("repository", "", "artifact repository URL or path")
-	branch := fs.String("branch", "", "artifact branch")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[remoteViewArgs]("remote view", args)
 	if err != nil {
 		return err
+	}
+	addr, remote, repository, branch := &options.Addr, &options.Remote, &options.Repository, &options.Branch
+	positional := []string{}
+	if options.Range != "" {
+		positional = append(positional, options.Range)
 	}
 	baseSHA, headSHA, err := remoteRange(ctx, runner, positional)
 	if err != nil {
@@ -255,15 +244,15 @@ func saveRemoteArtifact(path string, data []byte) error {
 }
 
 func runRemotePull(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("remote pull", flag.ContinueOnError)
-	remote := fs.String("remote", "", "Git remote name")
-	repository := fs.String("repository", "", "artifact repository URL or path")
-	branch := fs.String("branch", "", "artifact branch")
-	force := fs.Bool("force", false, "overwrite an existing groups file without asking")
-	noClobber := fs.Bool("no-clobber", false, "fail if the groups file already exists")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[remotePullArgs]("remote pull", args)
 	if err != nil {
 		return err
+	}
+	remote, repository, branch := &options.Remote, &options.Repository, &options.Branch
+	force, noClobber := &options.Force, &options.NoClobber
+	positional := []string{}
+	if options.Range != "" {
+		positional = append(positional, options.Range)
 	}
 	if *force && *noClobber {
 		return errors.New("remote pull --force and --no-clobber cannot be used together")
@@ -305,15 +294,14 @@ func runRemotePull(ctx context.Context, runner gitdiff.Runner, args []string) er
 }
 
 func runRemotePush(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("remote push", flag.ContinueOnError)
-	remote := fs.String("remote", "", "Git remote name")
-	repository := fs.String("repository", "", "artifact repository URL or path")
-	branch := fs.String("branch", "", "artifact branch")
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
-	groupsFile := fs.String("groups-file", "", "groups file to publish")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[remotePushArgs]("remote push", args)
 	if err != nil {
 		return err
+	}
+	remote, repository, branch, draftPath, groupsFile := &options.Remote, &options.Repository, &options.Branch, &options.Draft, &options.GroupsFile
+	positional := []string{}
+	if options.Range != "" {
+		positional = append(positional, options.Range)
 	}
 	if len(positional) > 1 || len(positional) == 1 && *groupsFile != "" {
 		return errors.New("remote push accepts either <base>..<head> or --groups-file <path>")
@@ -367,15 +355,14 @@ type reviewResolveOutput struct {
 }
 
 func runReviewsResolve(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("resolve", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "JSON output")
-	exactOnly := fs.Bool("exact", false, "only resolve a review for the exact current range")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[resolveArgs]("resolve", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) > 1 {
-		return errors.New("resolve accepts at most one <base>..<head>")
+	jsonOut, exactOnly := &options.JSON, &options.Exact
+	positional := []string{}
+	if options.Range != "" {
+		positional = append(positional, options.Range)
 	}
 	rangeSpec := ""
 	if len(positional) == 1 {

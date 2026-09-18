@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,15 +17,72 @@ import (
 	"github.com/ry023/semdiff/internal/reviews"
 )
 
-func TestParseInterspersedKeepsStdinMarker(t *testing.T) {
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, []string{"-", "--json"})
+func TestKongParserKeepsStdinMarker(t *testing.T) {
+	options, err := parseCommand[groupingApplyArgs]("grouping apply", []string{"-", "--json"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(positional) != 1 || positional[0] != "-" || !*jsonOut {
-		t.Fatalf("unexpected parsed arguments: positional=%v json=%v", positional, *jsonOut)
+	if options.Operations != "-" || !options.JSON {
+		t.Fatalf("unexpected parsed arguments: %+v", options)
+	}
+}
+
+func TestKongParserPreservesInterspersedFlagsAndExplicitViewOptions(t *testing.T) {
+	view, err := parseCommand[viewArgs]("view", []string{"groups.json", "--addr", "127.0.0.1:9000", "--draft", "draft.json", "--include-answers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.GroupsFile != "groups.json" || view.Addr == nil || *view.Addr != "127.0.0.1:9000" || view.Draft == nil || *view.Draft != "draft.json" || !view.IncludeAnswers {
+		t.Fatalf("view options = %+v", view)
+	}
+	pull, err := parseCommand[remotePullArgs]("remote pull", []string{"main..HEAD", "--no-clobber", "--repository", "artifact.git"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pull.Range != "main..HEAD" || !pull.NoClobber || pull.Repository != "artifact.git" {
+		t.Fatalf("pull options = %+v", pull)
+	}
+}
+
+func TestHelpExplainsCommandsAndHidesDeprecatedAliases(t *testing.T) {
+	for _, arg := range []string{"--help", "-h", "help"} {
+		output, err := captureStdout(t, func() error { return run(context.Background(), []string{arg}) })
+		if err != nil {
+			t.Fatalf("%s: %v", arg, err)
+		}
+		for _, expected := range []string{
+			"Start a draft from Git changes",
+			"Serve one remote review without saving it",
+			"asks",
+			"--force/--no-clobber",
+			"--remote/--repository/--branch",
+		} {
+			if !strings.Contains(output, expected) {
+				t.Fatalf("%s help is missing %q", arg, expected)
+			}
+		}
+		for _, hidden := range []string{"reviews resolve", "reviews view", "semdiff publish"} {
+			if strings.Contains(output, hidden) {
+				t.Fatalf("%s help contains deprecated command %q", arg, hidden)
+			}
+		}
+	}
+	if err := run(context.Background(), []string{"--help", "remote"}); err == nil {
+		t.Fatal("help with an unsupported argument should fail")
+	}
+}
+
+func TestKongCommandHelp(t *testing.T) {
+	output, err := captureStdout(t, func() error {
+		return run(context.Background(), []string{"remote", "pull", "--help"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"--force", "--no-clobber", "--repository"} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("remote pull help missing %q: %s", expected, output)
+		}
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -74,17 +73,14 @@ func runGrouping(ctx context.Context, runner gitdiff.Runner, args []string) erro
 }
 
 func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("grouping init", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	fromPath := fs.String("from", "", "finalized groups file whose decisions seed this draft")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	force := fs.Bool("force", false, "replace an existing draft")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingInitArgs]("grouping init", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) > 1 {
-		return errors.New("grouping init accepts at most one <base>..<head>")
+	draftPath, fromPath, jsonOut, force := &options.Draft, &options.From, &options.JSON, &options.Force
+	positional := []string{}
+	if options.Range != "" {
+		positional = append(positional, options.Range)
 	}
 	if _, err := os.Stat(*draftPath); err == nil && !*force {
 		return fmt.Errorf("grouping draft already exists at %s (use --force to replace it)", *draftPath)
@@ -173,16 +169,15 @@ func validateGroupingSource(ctx context.Context, runner gitdiff.Runner, source m
 }
 
 func runGroupingApply(args []string) error {
-	fs := flag.NewFlagSet("grouping apply", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingApplyArgs]("grouping apply", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 1 {
+	if options.Operations == "" {
 		return errors.New("grouping apply requires <operations-file|->")
 	}
+	draftPath, jsonOut := &options.Draft, &options.JSON
+	positional := []string{options.Operations}
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {
 		return err
@@ -206,16 +201,11 @@ func runGroupingApply(args []string) error {
 }
 
 func runGroupingStatus(args []string) error {
-	fs := flag.NewFlagSet("grouping status", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingStatusArgs]("grouping status", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 0 {
-		return errors.New("grouping status does not take positional arguments")
-	}
+	draftPath, jsonOut := &options.Draft, &options.JSON
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {
 		return err
@@ -241,20 +231,13 @@ func runGroupingStatus(args []string) error {
 }
 
 func runGroupingInspect(args []string) error {
-	fs := flag.NewFlagSet("grouping inspect", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	unassigned := fs.Bool("unassigned", false, "show unassigned fragments")
-	suggestions := fs.Bool("suggestions", false, "show Git-derived fragment suggestions")
-	groupID := fs.String("group", "", "show one group")
-	fragmentID := fs.String("fragment", "", "show one fragment")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingInspectArgs]("grouping inspect", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 0 {
-		return errors.New("grouping inspect does not take positional arguments")
-	}
+	draftPath, jsonOut := &options.Draft, &options.JSON
+	unassigned, suggestions := &options.Unassigned, &options.Suggestions
+	groupID, fragmentID := &options.Group, &options.Fragment
 	selected := 0
 	if *unassigned {
 		selected++
@@ -336,15 +319,14 @@ func runGroupingInspect(args []string) error {
 }
 
 func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("grouping finalize", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingFinalizeArgs]("grouping finalize", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) > 1 {
-		return errors.New("grouping finalize accepts at most one <groups-file>")
+	draftPath, jsonOut := &options.Draft, &options.JSON
+	positional := []string{}
+	if options.GroupsFile != "" {
+		positional = append(positional, options.GroupsFile)
 	}
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {

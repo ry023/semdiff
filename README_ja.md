@@ -152,7 +152,7 @@ Agent が Fragment の範囲を選び、operation JSON を書き、質問 sessio
 
 ## CLI Reference
 
-CLI はスキルが利用する決定的な layer です。完全なコマンドリファレンスは別ファイルにあります。
+CLI はスキルが利用する決定的な layer です。`semdiff --help` で用途別のコマンド概要を確認できます。完全なコマンドリファレンスは別ファイルにあります。
 
 [CLI リファレンスを読む →](CLI_REFERENCE_ja.md)
 

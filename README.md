@@ -151,7 +151,7 @@ The agent should invoke the skills rather than requiring you to choose fragment 
 
 ## CLI Reference
 
-The CLI is the deterministic layer used by the skills. The complete command reference is maintained separately:
+The CLI is the deterministic layer used by the skills. Run `semdiff --help` for a grouped command overview; the complete command reference is maintained separately:
 
 [Read the CLI Reference →](CLI_REFERENCE.md)
 

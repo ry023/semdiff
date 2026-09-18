@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -38,39 +38,79 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage:
-	semdiff --version
-	semdiff version [--json]
-	semdiff commits <base>..<head> [--json]
-	semdiff fragments <base>..<head> [--json]
-	semdiff classify <base>..<head> [--json]
-	semdiff show [<groups-file>] <fragment-id> [--json]
-	semdiff show --draft <path> <fragment-id> [--json]
-	semdiff validate [<groups-file>] [--draft <path>] [--json]
-	semdiff grouping init [<base>..<head>] [--from <groups-file>] [--draft <path>] [--json]
-	semdiff grouping apply <operations-file|-> [--draft <path>] [--json]
-	semdiff grouping status [--draft <path>] [--json]
-	semdiff grouping inspect (--suggestions|--unassigned|--group <id>|--fragment <id>) [--draft <path>] [--json]
-	semdiff grouping finalize [<groups-file>] [--draft <path>] [--json]
-	semdiff questions wait [<groups-file>] [--session <session-id>] [--draft <path>] [--json]
-	semdiff questions session start [<groups-file>] [--draft <path>] [--json]
-	semdiff questions answer [<groups-file>] <question-id> --stdin [--draft <path>] [--json]
-	semdiff view [<groups-file>] [--draft <path>] [--exact] [--addr 127.0.0.1:7363]
-	semdiff view [<groups-file>] [--draft <path>] [--exact] --html <path> [--include-answers]
-	semdiff resolve [<base>..<head>] [--exact] [--json]
-	semdiff remote view-index [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]
-	semdiff remote view [<base>..<head>] [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]
-	semdiff remote pull [<base>..<head>] [--force|--no-clobber] [--remote origin|--repository <url>] [--branch semdiff/reviews]
-	semdiff remote push [<base>..<head>|--groups-file <path>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
+	writeUsage(os.Stderr)
 }
 
-func run(ctx context.Context, args []string) error {
+func writeUsage(w io.Writer) {
+	fmt.Fprintln(w, `semdiff organizes a fixed Git range into semantic review groups.
+
+Usage:
+  semdiff <command> [arguments] [flags]
+  semdiff --help
+
+Create and read a review:
+  grouping init [<base>..<head>]       Start a draft from Git changes.
+  grouping inspect --suggestions      Inspect draft candidates; also accepts
+                                      --unassigned, --group, or --fragment.
+  grouping apply <operations-file|->  Apply draft operations; - reads stdin.
+  grouping status                     Check draft progress and coverage.
+  grouping finalize [<groups-file>]   Validate and save groups.json locally.
+  view [<groups-file>]                 Serve the local review for a browser.
+  view --html <path>                   Export a self-contained HTML review.
+  resolve [<base>..<head>]            Find the exact or nearest compatible
+                                      local review; --exact disables fallback.
+
+Inspect Git changes and review data:
+  commits <base>..<head>              List commits in the range.
+  fragments <base>..<head>            List Git-derived fragment candidates.
+  classify <base>..<head>             Suggest file categories by path.
+  show [<groups-file>] <fragment-id>  Show a finalized fragment and its patch;
+                                      --draft <path> reads a draft instead.
+  validate [<groups-file>]           Check a finalized review against Git.
+
+Answer viewer questions:
+  questions session start            Start an answer session.
+  questions wait                     Wait for a pending question.
+  questions answer <id> --stdin       Attach an answer from stdin.
+
+Share reviews through a Git artifact branch:
+  remote view-index                   Serve the remote review index as HTML.
+  remote view [<base>..<head>]        Serve one remote review without saving it.
+  remote pull [<base>..<head>]        Save one remote review locally; asks
+                                      before overwrite (--force/--no-clobber).
+  remote push [<base>..<head>]        Publish a local review; defaults to the
+                                      current draft or use --groups-file.
+
+Other:
+  --version                           Show the CLI version on one line.
+  version [--json]                    Show CLI and groups schema versions.
+
+For range-based commands, omission selects the current pull request or
+default branch. remote push instead uses the current draft by default.
+Drafts live under .semdiff/; finalized reviews under .semdiff/reviews/.
+Use --json where available, --draft <path> to select a draft, and
+--remote/--repository/--branch to override the remote review store.`)
+}
+
+func run(ctx context.Context, args []string) (err error) {
+	defer func() {
+		if errors.Is(err, errCommandHelp) {
+			err = nil
+		}
+	}()
 	if len(args) == 0 {
 		usage()
 		return errors.New("command is required")
 	}
 	if err := validateProductVersion(); err != nil {
 		return err
+	}
+	if args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+		if len(args) != 1 {
+			return errors.New("help does not accept arguments")
+		}
+		writeUsage(os.Stdout)
+		return nil
 	}
 	if args[0] == "--version" {
 		if len(args) != 1 {
@@ -82,17 +122,12 @@ func run(ctx context.Context, args []string) error {
 	r := gitdiff.Runner{Dir: "."}
 	switch args[0] {
 	case "version":
-		fs := flag.NewFlagSet("version", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[versionArgs]("version", args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) != 0 {
-			return errors.New("version does not accept positional arguments")
-		}
 		output := currentVersionOutput()
-		if *jsonOut {
+		if options.JSON {
 			return printJSON(output)
 		}
 		fmt.Printf("semdiff %s\n", output.Version)
@@ -115,20 +150,18 @@ func run(ctx context.Context, args []string) error {
 	case "remote":
 		return runRemote(ctx, r, args[1:])
 	case "commits":
-		fs := flag.NewFlagSet("commits", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[rangeJSONArgs]("commits", args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) != 1 {
+		if options.Range == "" {
 			return errors.New("commits requires <base>..<head>")
 		}
-		cs, err := r.Commits(ctx, positional[0])
+		cs, err := r.Commits(ctx, options.Range)
 		if err != nil {
 			return err
 		}
-		if *jsonOut {
+		if options.JSON {
 			return printJSON(cs)
 		}
 		for _, c := range cs {
@@ -136,20 +169,18 @@ func run(ctx context.Context, args []string) error {
 		}
 		return nil
 	case "fragments":
-		fs := flag.NewFlagSet("fragments", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[rangeJSONArgs]("fragments", args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) != 1 {
+		if options.Range == "" {
 			return errors.New("fragments requires <base>..<head>")
 		}
-		inv, err := r.Changes(ctx, positional[0])
+		inv, err := r.Changes(ctx, options.Range)
 		if err != nil {
 			return err
 		}
-		if *jsonOut {
+		if options.JSON {
 			return printJSON(gitdiff.SuggestedFragments(inv))
 		}
 		for _, f := range gitdiff.SuggestedFragments(inv) {
@@ -157,16 +188,14 @@ func run(ctx context.Context, args []string) error {
 		}
 		return nil
 	case "classify":
-		fs := flag.NewFlagSet("classify", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[rangeJSONArgs]("classify", args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) != 1 {
+		if options.Range == "" {
 			return errors.New("classify requires <base>..<head>")
 		}
-		inv, err := r.Changes(ctx, positional[0])
+		inv, err := r.Changes(ctx, options.Range)
 		if err != nil {
 			return err
 		}
@@ -175,7 +204,7 @@ func run(ctx context.Context, args []string) error {
 			paths = append(paths, fragment.Path)
 		}
 		suggestions := categories.ClassifyPaths(paths)
-		if *jsonOut {
+		if options.JSON {
 			return printJSON(suggestions)
 		}
 		for _, suggestion := range suggestions {
@@ -183,13 +212,11 @@ func run(ctx context.Context, args []string) error {
 		}
 		return nil
 	case "show":
-		fs := flag.NewFlagSet("show", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		draftPath := fs.String("draft", "", "grouping draft path")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[showArgs]("show", args[1:])
 		if err != nil {
 			return err
 		}
+		jsonOut, draftPath, positional := &options.JSON, &options.Draft, options.Args
 		if *draftPath != "" {
 			if len(positional) != 1 {
 				return errors.New("show --draft requires <fragment-id>")
@@ -227,12 +254,14 @@ func run(ctx context.Context, args []string) error {
 		}
 		return printMaterializedFragment(inv, groups.Fragments(g), fragmentID, *jsonOut)
 	case "validate":
-		fs := flag.NewFlagSet("validate", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[validateArgs]("validate", args[1:])
 		if err != nil {
 			return err
+		}
+		jsonOut, draftPath := &options.JSON, &options.Draft
+		positional := []string{}
+		if options.GroupsFile != "" {
+			positional = append(positional, options.GroupsFile)
 		}
 		if len(positional) > 1 {
 			return errors.New("validate accepts at most one <groups-file>")
@@ -277,15 +306,24 @@ func run(ctx context.Context, args []string) error {
 		}
 		return nil
 	case "view":
-		fs := flag.NewFlagSet("view", flag.ContinueOnError)
-		addr := fs.String("addr", "127.0.0.1:7363", "listen address")
-		htmlPath := fs.String("html", "", "write a self-contained HTML file instead of serving the viewer")
-		includeAnswers := fs.Bool("include-answers", false, "include answered question threads in an HTML export")
-		draftPath := fs.String("draft", "", "use a grouping draft to locate the groups file instead of the current range")
-		exact := fs.Bool("exact", false, "require a finalized review for the current range")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[viewArgs]("view", args[1:])
 		if err != nil {
 			return err
+		}
+		addrValue := "127.0.0.1:7363"
+		if options.Addr != nil {
+			addrValue = *options.Addr
+		}
+		addr := &addrValue
+		htmlPath, includeAnswers, exact := &options.HTML, &options.IncludeAnswers, &options.Exact
+		draftValue := ""
+		if options.Draft != nil {
+			draftValue = *options.Draft
+		}
+		draftPath := &draftValue
+		positional := []string{}
+		if options.GroupsFile != "" {
+			positional = append(positional, options.GroupsFile)
 		}
 		if len(positional) > 1 {
 			return errors.New("view accepts at most one <groups-file>")
@@ -293,16 +331,7 @@ func run(ctx context.Context, args []string) error {
 		if *includeAnswers && *htmlPath == "" {
 			return errors.New("view --include-answers requires --html")
 		}
-		addrSet := false
-		draftSet := false
-		fs.Visit(func(item *flag.Flag) {
-			if item.Name == "addr" {
-				addrSet = true
-			}
-			if item.Name == "draft" {
-				draftSet = true
-			}
-		})
+		addrSet, draftSet := options.Addr != nil, options.Draft != nil
 		if *htmlPath != "" && addrSet {
 			return errors.New("view --html and --addr cannot be used together")
 		}
@@ -397,30 +426,6 @@ func run(ctx context.Context, args []string) error {
 	}
 }
 
-func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
-	var flags, pos []string
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if a != "-" && strings.HasPrefix(a, "-") {
-			flags = append(flags, a)
-			name := strings.TrimLeft(strings.SplitN(a, "=", 2)[0], "-")
-			f := fs.Lookup(name)
-			if f != nil && !strings.Contains(a, "=") && i+1 < len(args) {
-				boolFlag := false
-				if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); ok {
-					boolFlag = bf.IsBoolFlag()
-				}
-				if !boolFlag {
-					i++
-					flags = append(flags, args[i])
-				}
-			}
-		} else {
-			pos = append(pos, a)
-		}
-	}
-	return pos, fs.Parse(flags)
-}
 func printJSON(v any) error {
 	e := json.NewEncoder(os.Stdout)
 	e.SetIndent("", "  ")
