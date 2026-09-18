@@ -99,11 +99,11 @@ semdiff view --addr 127.0.0.1:8080
 
 groups file と `--draft` の両方を省略した `view` は、`grouping init` と同じロジックで現在の pull request range を計算します。完全一致する確定済み review を優先し、なければ現在の head の first-parent history 上にある同一 base の最も近い review を開きます。その場合、semantic grouping に未反映の commit と path を明示します。完全一致を必須にするには `semdiff view --exact` を使います。
 
-scriptやskillからViewerと同じ選択結果を使うには `reviews resolve` を使います。`found`、`groups_path`、現在と選択されたSHA、完全一致かどうか、first-parent上のcommit距離を返します。
+scriptやskillからViewerと同じ選択結果を使うには `resolve` を使います。`found`、`groups_path`、現在と選択されたSHA、完全一致かどうか、first-parent上のcommit距離を返します。
 
 ```sh
-semdiff reviews resolve --json
-semdiff reviews resolve --exact --json
+semdiff resolve --json
+semdiff resolve --exact --json
 ```
 
 server を起動する代わりに自己完結型の読み取り専用 file を作るには `--html` を使います。質問への回答は、明示的に含めない限り出力されません。
@@ -136,17 +136,22 @@ printf '%s\n' '回答本文' | semdiff questions answer Q-... --stdin
 現在の finalized review を、設定された Git artifact branch に公開します。
 
 ```sh
-semdiff publish
+semdiff remote push
+semdiff remote push <base>..<head>
+semdiff remote push --groups-file path/to/groups.json
 ```
 
 その branch に保存されたレビューを fetch して一覧表示します。
 
 ```sh
-semdiff reviews view
-semdiff reviews view --addr 127.0.0.1:8080
+semdiff remote view-index
+semdiff remote view <base>..<head>
+semdiff remote view --addr 127.0.0.1:8080
 ```
 
-両 command は `--remote`、`--repository`、`--branch` による上書きを受け付けます。`publish` が upload するのは `groups.json` だけで、ローカルの質問 thread は含まれません。設定と保存方法は [レビューを共有する](README_ja.md#レビューを共有する) を参照してください。
+`remote view` は HTML を表示し、リモートの `groups.json` をローカルに保存しません。完全一致するリモートレビューを `.semdiff/reviews/` に保存するには `semdiff remote pull [<base>..<head>]` を使います。保存先が既にある場合は上書きを確認します。`--force` は確認なしで上書きし、`--no-clobber` は確認なしでエラーにします。非対話環境で保存先がある場合は、どちらかのフラグが必要です。上書きを拒否した場合もエラーで終了します。`remote view` と `remote pull` で range を省略すると、`grouping init` と同じ現在の range を使います。
+
+すべての `remote` command は `--remote`、`--repository`、`--branch` による上書きを受け付けます。`remote push` は range と file の両方を省略すると現在の grouping draft から保存元を特定し、range を指定すると完全一致するローカルのレビューを使います。upload するのは `groups.json` だけで、ローカルの質問 thread は含まれません。旧 `publish`、`reviews view`、`reviews resolve` は警告付きの alias として残し、help には表示しません。設定と保存方法は [レビューを共有する](README_ja.md#レビューを共有する) を参照してください。
 
 ## Draft 操作
 

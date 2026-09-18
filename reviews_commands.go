@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -33,23 +35,307 @@ func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error
 	if len(positional) > 1 {
 		return errors.New("publish accepts at most one <groups-file>")
 	}
+	translated := []string{}
+	if len(positional) == 1 {
+		translated = append(translated, "--groups-file", positional[0])
+	}
+	if *draftPath != defaultGroupingDraftPath {
+		translated = append(translated, "--draft", *draftPath)
+	}
+	if *remote != "" {
+		translated = append(translated, "--remote", *remote)
+	}
+	if *repository != "" {
+		translated = append(translated, "--repository", *repository)
+	}
+	if *branch != "" {
+		translated = append(translated, "--branch", *branch)
+	}
+	return runRemotePush(ctx, runner, translated)
+}
+
+func runReviews(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New("reviews requires the subcommand resolve or view")
+	}
+	if args[0] == "resolve" {
+		fmt.Fprintln(os.Stderr, "warning: semdiff reviews resolve is deprecated; use semdiff resolve")
+		return runReviewsResolve(ctx, gitdiff.Runner{Dir: "."}, args[1:])
+	}
+	if args[0] != "view" {
+		return fmt.Errorf("unknown reviews subcommand %q", args[0])
+	}
+	fmt.Fprintln(os.Stderr, "warning: semdiff reviews view is deprecated; use semdiff remote view-index")
+	return runRemoteViewIndex(ctx, gitdiff.Runner{Dir: "."}, args[1:])
+}
+
+func runRemote(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	if len(args) == 0 {
+		return errors.New("remote requires view-index, view, pull, or push")
+	}
+	switch args[0] {
+	case "view-index":
+		return runRemoteViewIndex(ctx, runner, args[1:])
+	case "view":
+		return runRemoteView(ctx, runner, args[1:])
+	case "pull":
+		return runRemotePull(ctx, runner, args[1:])
+	case "push":
+		return runRemotePush(ctx, runner, args[1:])
+	default:
+		return fmt.Errorf("unknown remote subcommand %q", args[0])
+	}
+}
+
+func remoteStore(remote, repository, branch string) (reviews.Store, error) {
 	storeConfig, err := config.Load(".")
 	if err != nil {
-		return err
+		return reviews.Store{}, err
 	}
-	storeConfig, err = config.Override(storeConfig, *remote, *repository, *branch)
+	storeConfig, err = config.Override(storeConfig, remote, repository, branch)
+	if err != nil {
+		return reviews.Store{}, err
+	}
+	return reviews.Store{Dir: ".", Config: storeConfig}, nil
+}
+
+func runRemoteViewIndex(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	fs := flag.NewFlagSet("remote view-index", flag.ContinueOnError)
+	addr := fs.String("addr", "127.0.0.1:7363", "listen address")
+	remote := fs.String("remote", "", "Git remote name")
+	repository := fs.String("repository", "", "artifact repository URL or path")
+	branch := fs.String("branch", "", "artifact branch")
+	positional, err := parseInterspersed(fs, args)
 	if err != nil {
 		return err
 	}
-	store := reviews.Store{Dir: ".", Config: storeConfig}
-	groupsPath := ""
+	if len(positional) != 0 {
+		return errors.New("remote view-index does not accept positional arguments")
+	}
+	store, err := remoteStore(*remote, *repository, *branch)
+	if err != nil {
+		return err
+	}
+	if err := store.Fetch(ctx); err != nil {
+		return err
+	}
+	h := reviewIndexHandler(ctx, runner, store)
+	srv := &http.Server{Addr: *addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	log.Printf("Semantic Diff Reviews: http://%s", *addr)
+	return srv.ListenAndServe()
+}
+
+func remoteRange(ctx context.Context, runner gitdiff.Runner, positional []string) (string, string, error) {
+	if len(positional) > 1 {
+		return "", "", errors.New("accepts at most one <base>..<head>")
+	}
+	rangeSpec := ""
 	if len(positional) == 1 {
-		groupsPath = positional[0]
+		rangeSpec = positional[0]
 	} else {
+		var err error
+		rangeSpec, err = runner.DefaultRange(ctx)
+		if err != nil {
+			return "", "", fmt.Errorf("infer current review range: %w", err)
+		}
+	}
+	base, head, err := gitdiff.ParseRange(rangeSpec)
+	if err != nil {
+		return "", "", err
+	}
+	baseSHA, err := runner.Resolve(ctx, base)
+	if err != nil {
+		return "", "", err
+	}
+	headSHA, err := runner.Resolve(ctx, head)
+	if err != nil {
+		return "", "", err
+	}
+	return baseSHA, headSHA, nil
+}
+
+func remoteArtifact(ctx context.Context, runner gitdiff.Runner, store reviews.Store, baseSHA, headSHA string) ([]byte, error) {
+	if err := store.Fetch(ctx); err != nil {
+		return nil, err
+	}
+	data, err := store.Read(ctx, reviews.Path(baseSHA, headSHA))
+	if err != nil {
+		return nil, err
+	}
+	g, err := groups.Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	if g.BaseSHA != baseSHA || g.HeadSHA != headSHA {
+		return nil, fmt.Errorf("remote artifact range does not match requested range %s..%s", baseSHA, headSHA)
+	}
+	changes, err := runner.Changes(ctx, baseSHA+".."+headSHA)
+	if err != nil {
+		return nil, err
+	}
+	report := groups.ValidateReport(g, changes)
+	if len(report.Errors) > 0 {
+		return nil, fmt.Errorf("remote groups file is invalid: %s", strings.Join(report.Errors, "; "))
+	}
+	return data, nil
+}
+
+func runRemoteView(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	fs := flag.NewFlagSet("remote view", flag.ContinueOnError)
+	addr := fs.String("addr", "127.0.0.1:7363", "listen address")
+	remote := fs.String("remote", "", "Git remote name")
+	repository := fs.String("repository", "", "artifact repository URL or path")
+	branch := fs.String("branch", "", "artifact branch")
+	positional, err := parseInterspersed(fs, args)
+	if err != nil {
+		return err
+	}
+	baseSHA, headSHA, err := remoteRange(ctx, runner, positional)
+	if err != nil {
+		return err
+	}
+	store, err := remoteStore(*remote, *repository, *branch)
+	if err != nil {
+		return err
+	}
+	if _, err := remoteArtifact(ctx, runner, store, baseSHA, headSHA); err != nil {
+		return err
+	}
+	key := strings.TrimSuffix(reviews.Path(baseSHA, headSHA), "/groups.json")
+	path := "/review/" + key + "/"
+	index := reviewIndexHandler(ctx, runner, store)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, path, http.StatusSeeOther)
+			return
+		}
+		index.ServeHTTP(w, r)
+	})
+	srv := &http.Server{Addr: *addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	log.Printf("Semantic Diff Review: http://%s%s", *addr, path)
+	return srv.ListenAndServe()
+}
+
+func confirmOverwrite(path string, input io.Reader, output io.Writer, terminal bool) error {
+	if !terminal {
+		return fmt.Errorf("%s already exists; use --force or --no-clobber in non-interactive mode", path)
+	}
+	fmt.Fprintf(output, "overwrite %s? [y/N] ", path)
+	var answer string
+	if _, err := fmt.Fscanln(input, &answer); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if answer != "y" && answer != "Y" && !strings.EqualFold(answer, "yes") {
+		return fmt.Errorf("pull cancelled: %s was not overwritten", path)
+	}
+	return nil
+}
+
+func saveRemoteArtifact(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".groups-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Chmod(0644); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
+}
+
+func runRemotePull(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	fs := flag.NewFlagSet("remote pull", flag.ContinueOnError)
+	remote := fs.String("remote", "", "Git remote name")
+	repository := fs.String("repository", "", "artifact repository URL or path")
+	branch := fs.String("branch", "", "artifact branch")
+	force := fs.Bool("force", false, "overwrite an existing groups file without asking")
+	noClobber := fs.Bool("no-clobber", false, "fail if the groups file already exists")
+	positional, err := parseInterspersed(fs, args)
+	if err != nil {
+		return err
+	}
+	if *force && *noClobber {
+		return errors.New("remote pull --force and --no-clobber cannot be used together")
+	}
+	baseSHA, headSHA, err := remoteRange(ctx, runner, positional)
+	if err != nil {
+		return err
+	}
+	path := reviews.LocalPath(baseSHA, headSHA)
+	exists, err := reviewFileExists(path)
+	if err != nil {
+		return err
+	}
+	if exists && *noClobber {
+		return fmt.Errorf("%s already exists", path)
+	}
+	if exists && !*force {
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		if err := confirmOverwrite(path, os.Stdin, os.Stderr, stat.Mode()&os.ModeCharDevice != 0); err != nil {
+			return err
+		}
+	}
+	store, err := remoteStore(*remote, *repository, *branch)
+	if err != nil {
+		return err
+	}
+	data, err := remoteArtifact(ctx, runner, store, baseSHA, headSHA)
+	if err != nil {
+		return err
+	}
+	if err := saveRemoteArtifact(path, data); err != nil {
+		return err
+	}
+	fmt.Printf("pulled %s\n", path)
+	return nil
+}
+
+func runRemotePush(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	fs := flag.NewFlagSet("remote push", flag.ContinueOnError)
+	remote := fs.String("remote", "", "Git remote name")
+	repository := fs.String("repository", "", "artifact repository URL or path")
+	branch := fs.String("branch", "", "artifact branch")
+	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
+	groupsFile := fs.String("groups-file", "", "groups file to publish")
+	positional, err := parseInterspersed(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(positional) > 1 || len(positional) == 1 && *groupsFile != "" {
+		return errors.New("remote push accepts either <base>..<head> or --groups-file <path>")
+	}
+	groupsPath := *groupsFile
+	requestedBase, requestedHead := "", ""
+	if len(positional) == 1 {
+		baseSHA, headSHA, err := remoteRange(ctx, runner, positional)
+		if err != nil {
+			return err
+		}
+		groupsPath = reviews.LocalPath(baseSHA, headSHA)
+		requestedBase, requestedHead = baseSHA, headSHA
+	} else if groupsPath == "" {
 		groupsPath, err = defaultGroupsPath(*draftPath)
 		if err != nil {
 			return fmt.Errorf("locate default groups file from draft: %w", err)
 		}
+	}
+	store, err := remoteStore(*remote, *repository, *branch)
+	if err != nil {
+		return err
 	}
 	g, _, report, err := loadAndValidate(ctx, runner, groupsPath)
 	if err != nil {
@@ -58,52 +344,15 @@ func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error
 	if len(report.Errors) > 0 {
 		return fmt.Errorf("groups file is invalid: %s", strings.Join(report.Errors, "; "))
 	}
+	if requestedBase != "" && (g.BaseSHA != requestedBase || g.HeadSHA != requestedHead) {
+		return fmt.Errorf("groups file range does not match requested range %s..%s", requestedBase, requestedHead)
+	}
 	path, err := store.Publish(ctx, groupsPath, g)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("published %s to %s:%s\n", path, store.Config.Endpoint(), store.Config.Branch)
 	return nil
-}
-
-func runReviews(ctx context.Context, args []string) error {
-	if len(args) == 0 {
-		return errors.New("reviews requires the subcommand resolve or view")
-	}
-	if args[0] == "resolve" {
-		return runReviewsResolve(ctx, gitdiff.Runner{Dir: "."}, args[1:])
-	}
-	if args[0] != "view" {
-		return fmt.Errorf("unknown reviews subcommand %q", args[0])
-	}
-	fs := flag.NewFlagSet("reviews view", flag.ContinueOnError)
-	addr := fs.String("addr", "127.0.0.1:7363", "listen address")
-	remote := fs.String("remote", "", "Git remote name")
-	repository := fs.String("repository", "", "artifact repository URL or path")
-	branch := fs.String("branch", "", "artifact branch")
-	positional, err := parseInterspersed(fs, args[1:])
-	if err != nil {
-		return err
-	}
-	if len(positional) != 0 {
-		return errors.New("reviews view does not accept positional arguments")
-	}
-	storeConfig, err := config.Load(".")
-	if err != nil {
-		return err
-	}
-	storeConfig, err = config.Override(storeConfig, *remote, *repository, *branch)
-	if err != nil {
-		return err
-	}
-	store := reviews.Store{Dir: ".", Config: storeConfig}
-	if err := store.Fetch(ctx); err != nil {
-		return err
-	}
-	h := reviewIndexHandler(ctx, gitdiff.Runner{Dir: "."}, store)
-	srv := &http.Server{Addr: *addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("Semantic Diff Reviews: http://%s", *addr)
-	return srv.ListenAndServe()
 }
 
 type reviewResolveOutput struct {
@@ -118,7 +367,7 @@ type reviewResolveOutput struct {
 }
 
 func runReviewsResolve(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("reviews resolve", flag.ContinueOnError)
+	fs := flag.NewFlagSet("resolve", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
 	exactOnly := fs.Bool("exact", false, "only resolve a review for the exact current range")
 	positional, err := parseInterspersed(fs, args)
@@ -126,7 +375,7 @@ func runReviewsResolve(ctx context.Context, runner gitdiff.Runner, args []string
 		return err
 	}
 	if len(positional) > 1 {
-		return errors.New("reviews resolve accepts at most one <base>..<head>")
+		return errors.New("resolve accepts at most one <base>..<head>")
 	}
 	rangeSpec := ""
 	if len(positional) == 1 {

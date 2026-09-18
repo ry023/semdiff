@@ -57,9 +57,11 @@ func usage() {
 	semdiff questions answer [<groups-file>] <question-id> --stdin [--draft <path>] [--json]
 	semdiff view [<groups-file>] [--draft <path>] [--exact] [--addr 127.0.0.1:7363]
 	semdiff view [<groups-file>] [--draft <path>] [--exact] --html <path> [--include-answers]
-	semdiff publish [<groups-file>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]
-	semdiff reviews resolve [<base>..<head>] [--exact] [--json]
-	semdiff reviews view [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
+	semdiff resolve [<base>..<head>] [--exact] [--json]
+	semdiff remote view-index [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]
+	semdiff remote view [<base>..<head>] [--addr 127.0.0.1:7363] [--remote origin|--repository <url>] [--branch semdiff/reviews]
+	semdiff remote pull [<base>..<head>] [--force|--no-clobber] [--remote origin|--repository <url>] [--branch semdiff/reviews]
+	semdiff remote push [<base>..<head>|--groups-file <path>] [--draft <path>] [--remote origin|--repository <url>] [--branch semdiff/reviews]`)
 }
 
 func run(ctx context.Context, args []string) error {
@@ -104,9 +106,14 @@ func run(ctx context.Context, args []string) error {
 	case "questions":
 		return runQuestions(ctx, args[1:])
 	case "publish":
+		fmt.Fprintln(os.Stderr, "warning: semdiff publish is deprecated; use semdiff remote push")
 		return runPublish(ctx, r, args[1:])
 	case "reviews":
 		return runReviews(ctx, args[1:])
+	case "resolve":
+		return runReviewsResolve(ctx, r, args[1:])
+	case "remote":
+		return runRemote(ctx, r, args[1:])
 	case "commits":
 		fs := flag.NewFlagSet("commits", flag.ContinueOnError)
 		jsonOut := fs.Bool("json", false, "JSON output")
