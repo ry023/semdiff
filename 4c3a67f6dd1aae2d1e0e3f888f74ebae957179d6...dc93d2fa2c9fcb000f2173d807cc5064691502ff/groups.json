@@ -1,0 +1,1584 @@
+{
+  "format": "semdiff.groups",
+  "format_version": "1.0.0",
+  "base_sha": "4c3a67f6dd1aae2d1e0e3f888f74ebae957179d6",
+  "head_sha": "dc93d2fa2c9fcb000f2173d807cc5064691502ff",
+  "groups": [
+    {
+      "id": "cli-surface",
+      "title": "Modernize the CLI command surface and output",
+      "summary": "- Why: The command layer needed a consistent parser and clearer remote review workflow.\n- What: Reorganize top-level and grouping commands around Kong, add remote review operations and compatibility aliases, and select English or Japanese messages from `LANG`.\n- So what: Users get a discoverable command tree with localized help and output while existing review workflows remain addressable during the transition.",
+      "importance": "core",
+      "order": 1,
+      "file_categories": [
+        {
+          "path": "cli_args.go",
+          "category": "implementation"
+        },
+        {
+          "path": "go.mod",
+          "category": "config"
+        },
+        {
+          "path": "go.sum",
+          "category": "config"
+        },
+        {
+          "path": "grouping_commands.go",
+          "category": "implementation"
+        },
+        {
+          "path": "i18n.go",
+          "category": "implementation"
+        },
+        {
+          "path": "main.go",
+          "category": "implementation"
+        },
+        {
+          "path": "main_test.go",
+          "category": "test"
+        },
+        {
+          "path": "questions_commands.go",
+          "category": "implementation"
+        },
+        {
+          "path": "remote_commands_test.go",
+          "category": "test"
+        },
+        {
+          "path": "reviews_commands.go",
+          "category": "implementation"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "parse-and-route",
+          "title": "Parse and route the revised command tree",
+          "summary": "Review the Kong definitions and command handlers together so the new top-level, grouping, question, remote, and compatibility paths can be followed end to end.",
+          "fragment_ids": [
+            "frag-cli_args-go",
+            "frag-main-go",
+            "frag-grouping_commands-go",
+            "frag-questions_commands-go",
+            "frag-reviews_commands-go"
+          ]
+        },
+        {
+          "id": "localize-and-verify",
+          "title": "Localize and verify command behavior",
+          "summary": "Check the LANG-based message selection, dependency updates, and tests that exercise the revised help and remote review behavior.",
+          "fragment_ids": [
+            "frag-i18n-go",
+            "frag-go-mod",
+            "frag-go-sum",
+            "frag-main_test-go",
+            "frag-remote_commands_test-go"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "frag-cli_args-go",
+          "path": "cli_args.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 184
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Add Kong command and flag definitions for the reorganized CLI.",
+          "review_level": "careful"
+        },
+        {
+          "id": "frag-go-mod",
+          "path": "go.mod",
+          "ranges": [
+            {
+              "new": {
+                "start": 6,
+                "lines": 2
+              }
+            }
+          ],
+          "description": "Add Kong as the CLI parsing dependency.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-go-sum",
+          "path": "go.sum",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 8
+              }
+            }
+          ],
+          "description": "Record checksums for the Kong dependency.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-grouping_commands-go",
+          "path": "grouping_commands.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 7,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 40,
+                "lines": 1
+              },
+              "new": {
+                "start": 39,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 77,
+                "lines": 6
+              },
+              "new": {
+                "start": 76,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 86,
+                "lines": 2
+              },
+              "new": {
+                "start": 80,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 142,
+                "lines": 1
+              },
+              "new": {
+                "start": 138,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 144,
+                "lines": 1
+              },
+              "new": {
+                "start": 140,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 176,
+                "lines": 4
+              },
+              "new": {
+                "start": 172,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 183,
+                "lines": 1
+              },
+              "new": {
+                "start": 176,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 179,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 204,
+                "lines": 1
+              },
+              "new": {
+                "start": 199,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 209,
+                "lines": 4
+              },
+              "new": {
+                "start": 204,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 216,
+                "lines": 3
+              },
+              "new": {
+                "start": 208,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 227,
+                "lines": 1
+              },
+              "new": {
+                "start": 217,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 229,
+                "lines": 1
+              },
+              "new": {
+                "start": 219,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 238,
+                "lines": 1
+              },
+              "new": {
+                "start": 228,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 244,
+                "lines": 8
+              },
+              "new": {
+                "start": 234,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 255,
+                "lines": 3
+              },
+              "new": {
+                "start": 238,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 305,
+                "lines": 1
+              },
+              "new": {
+                "start": 288,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 307,
+                "lines": 1
+              },
+              "new": {
+                "start": 290,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 330,
+                "lines": 1
+              },
+              "new": {
+                "start": 313,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 339,
+                "lines": 4
+              },
+              "new": {
+                "start": 322,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 346,
+                "lines": 2
+              },
+              "new": {
+                "start": 326,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 393,
+                "lines": 1
+              },
+              "new": {
+                "start": 375,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Route grouping operations through the revised command parser and localized output.",
+          "review_level": "careful"
+        },
+        {
+          "id": "frag-i18n-go",
+          "path": "i18n.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 102
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Provide LANG-based English and Japanese messages for CLI output.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-main-go",
+          "path": "main.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 7,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 8,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 31,
+                "lines": 1
+              },
+              "new": {
+                "start": 31,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 34,
+                "lines": 1
+              },
+              "new": {
+                "start": 34,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 41,
+                "lines": 22
+              },
+              "new": {
+                "start": 41,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 65,
+                "lines": 1
+              },
+              "new": {
+                "start": 44,
+                "lines": 61
+              }
+            },
+            {
+              "old": {
+                "start": 89,
+                "lines": 3
+              }
+            },
+            {
+              "new": {
+                "start": 112,
+                "lines": 7
+              }
+            },
+            {
+              "old": {
+                "start": 83,
+                "lines": 3
+              },
+              "new": {
+                "start": 129,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 93,
+                "lines": 1
+              },
+              "new": {
+                "start": 134,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 98,
+                "lines": 1
+              },
+              "new": {
+                "start": 139,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 100,
+                "lines": 1
+              },
+              "new": {
+                "start": 141,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 148,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 152,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 111,
+                "lines": 3
+              },
+              "new": {
+                "start": 157,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 117,
+                "lines": 1
+              },
+              "new": {
+                "start": 161,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 120,
+                "lines": 1
+              },
+              "new": {
+                "start": 164,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 124,
+                "lines": 1
+              },
+              "new": {
+                "start": 168,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 128,
+                "lines": 1
+              },
+              "new": {
+                "start": 172,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 132,
+                "lines": 3
+              },
+              "new": {
+                "start": 176,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 138,
+                "lines": 1
+              },
+              "new": {
+                "start": 180,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 141,
+                "lines": 1
+              },
+              "new": {
+                "start": 183,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 145,
+                "lines": 1
+              },
+              "new": {
+                "start": 187,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 153,
+                "lines": 3
+              },
+              "new": {
+                "start": 195,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 159,
+                "lines": 1
+              },
+              "new": {
+                "start": 199,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 162,
+                "lines": 1
+              },
+              "new": {
+                "start": 202,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 171,
+                "lines": 1
+              },
+              "new": {
+                "start": 211,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 179,
+                "lines": 4
+              },
+              "new": {
+                "start": 219,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 223,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 223,
+                "lines": 4
+              },
+              "new": {
+                "start": 261,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 265,
+                "lines": 5
+              }
+            },
+            {
+              "old": {
+                "start": 257,
+                "lines": 1
+              },
+              "new": {
+                "start": 297,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 259,
+                "lines": 1
+              },
+              "new": {
+                "start": 299,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 262,
+                "lines": 1
+              },
+              "new": {
+                "start": 302,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 273,
+                "lines": 7
+              },
+              "new": {
+                "start": 313,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 317,
+                "lines": 15
+              }
+            },
+            {
+              "old": {
+                "start": 289,
+                "lines": 10
+              },
+              "new": {
+                "start": 338,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 334,
+                "lines": 1
+              },
+              "new": {
+                "start": 374,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 393,
+                "lines": 24
+              }
+            },
+            {
+              "old": {
+                "start": 365,
+                "lines": 1
+              },
+              "new": {
+                "start": 405,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Reorganize top-level commands and connect Kong parsing to command execution.",
+          "review_level": "careful"
+        },
+        {
+          "id": "frag-main_test-go",
+          "path": "main_test.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 7,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 21,
+                "lines": 4
+              },
+              "new": {
+                "start": 20,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 28,
+                "lines": 2
+              },
+              "new": {
+                "start": 25,
+                "lines": 103
+              }
+            }
+          ],
+          "description": "Cover the revised command parsing and help behavior.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-questions_commands-go",
+          "path": "questions_commands.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 6,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 25,
+                "lines": 4
+              },
+              "new": {
+                "start": 24,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 32,
+                "lines": 2
+              },
+              "new": {
+                "start": 28,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 50,
+                "lines": 1
+              },
+              "new": {
+                "start": 48,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 53,
+                "lines": 5
+              },
+              "new": {
+                "start": 51,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 61,
+                "lines": 2
+              },
+              "new": {
+                "start": 55,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 81,
+                "lines": 1
+              },
+              "new": {
+                "start": 77,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 97,
+                "lines": 5
+              },
+              "new": {
+                "start": 93,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 97,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 136,
+                "lines": 1
+              },
+              "new": {
+                "start": 129,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Adapt question commands to the revised parser and localized messages.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-remote_commands_test-go",
+          "path": "remote_commands_test.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 270
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Cover remote review push and pull command behavior.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-reviews_commands-go",
+          "path": "reviews_commands.go",
+          "ranges": [
+            {
+              "old": {
+                "start": 6,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 8,
+                "lines": 1
+              }
+            },
+            {
+              "new": {
+                "start": 11,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 24,
+                "lines": 6
+              },
+              "new": {
+                "start": 25,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 33,
+                "lines": 2
+              },
+              "new": {
+                "start": 29,
+                "lines": 31
+              }
+            },
+            {
+              "new": {
+                "start": 61,
+                "lines": 26
+              }
+            },
+            {
+              "new": {
+                "start": 88,
+                "lines": 12
+              }
+            },
+            {
+              "old": {
+                "start": 40,
+                "lines": 1
+              },
+              "new": {
+                "start": 103,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 44,
+                "lines": 2
+              },
+              "new": {
+                "start": 108,
+                "lines": 14
+              }
+            },
+            {
+              "old": {
+                "start": 47,
+                "lines": 1
+              },
+              "new": {
+                "start": 123,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 49,
+                "lines": 1
+              },
+              "new": {
+                "start": 125,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 51,
+                "lines": 1
+              },
+              "new": {
+                "start": 128,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 54,
+                "lines": 1
+              },
+              "new": {
+                "start": 131,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 56,
+                "lines": 1
+              },
+              "new": {
+                "start": 133,
+                "lines": 31
+              }
+            },
+            {
+              "new": {
+                "start": 165,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 59,
+                "lines": 1
+              },
+              "new": {
+                "start": 167,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 61,
+                "lines": 1
+              },
+              "new": {
+                "start": 169,
+                "lines": 5
+              }
+            },
+            {
+              "old": {
+                "start": 65,
+                "lines": 1
+              },
+              "new": {
+                "start": 177,
+                "lines": 43
+              }
+            },
+            {
+              "old": {
+                "start": 69,
+                "lines": 3
+              },
+              "new": {
+                "start": 223,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 73,
+                "lines": 2
+              },
+              "new": {
+                "start": 227,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 76,
+                "lines": 2
+              },
+              "new": {
+                "start": 231,
+                "lines": 11
+              }
+            },
+            {
+              "old": {
+                "start": 79,
+                "lines": 6
+              },
+              "new": {
+                "start": 243,
+                "lines": 5
+              }
+            },
+            {
+              "old": {
+                "start": 88,
+                "lines": 2
+              },
+              "new": {
+                "start": 251,
+                "lines": 5
+              }
+            },
+            {
+              "old": {
+                "start": 91,
+                "lines": 1
+              },
+              "new": {
+                "start": 257,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 95,
+                "lines": 1
+              },
+              "new": {
+                "start": 264,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 99,
+                "lines": 2
+              },
+              "new": {
+                "start": 269,
+                "lines": 14
+              }
+            },
+            {
+              "old": {
+                "start": 103,
+                "lines": 4
+              },
+              "new": {
+                "start": 285,
+                "lines": 59
+              }
+            },
+            {
+              "old": {
+                "start": 121,
+                "lines": 4
+              },
+              "new": {
+                "start": 358,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 128,
+                "lines": 2
+              },
+              "new": {
+                "start": 362,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 177,
+                "lines": 1
+              },
+              "new": {
+                "start": 413,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 180,
+                "lines": 1
+              },
+              "new": {
+                "start": 416,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 182,
+                "lines": 1
+              },
+              "new": {
+                "start": 418,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 184,
+                "lines": 1
+              },
+              "new": {
+                "start": 420,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Add remote review resolution and compatibility aliases with deprecation warnings.",
+          "review_level": "careful"
+        }
+      ]
+    },
+    {
+      "id": "guidance",
+      "title": "Align documentation and skills with the new CLI",
+      "summary": "- Why: The command surface and review workflow changed together with the implementation.\n- What: Update English and Japanese references, design notes, and semdiff skill instructions to describe the revised commands and language behavior.\n- So what: Users and agents can follow the same command names and workflow documented by the CLI.",
+      "importance": "supporting",
+      "order": 2,
+      "file_categories": [
+        {
+          "path": "CLI_REFERENCE.md",
+          "category": "docs"
+        },
+        {
+          "path": "CLI_REFERENCE_ja.md",
+          "category": "docs"
+        },
+        {
+          "path": "README.md",
+          "category": "docs"
+        },
+        {
+          "path": "README_ja.md",
+          "category": "docs"
+        },
+        {
+          "path": "docs/design.md",
+          "category": "docs"
+        },
+        {
+          "path": "skills/answer-semdiff/SKILL.md",
+          "category": "docs"
+        },
+        {
+          "path": "skills/semantic-grouping/SKILL.md",
+          "category": "docs"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "update-user-guidance",
+          "title": "Update command references and design notes",
+          "summary": "Read the English and Japanese README and CLI references with the design note changes to confirm they describe the same command workflow.",
+          "fragment_ids": [
+            "frag-README-md",
+            "frag-README_ja-md",
+            "frag-CLI_REFERENCE-md",
+            "frag-CLI_REFERENCE_ja-md",
+            "frag-docs-design-md"
+          ]
+        },
+        {
+          "id": "update-agent-guidance",
+          "title": "Keep semdiff skills aligned",
+          "summary": "Check the answer and semantic grouping skills for command names and language instructions that match the implementation.",
+          "fragment_ids": [
+            "frag-skills-answer-semdiff-SKILL-md",
+            "frag-skills-semantic-grouping-SKILL-md"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "frag-CLI_REFERENCE-md",
+          "path": "CLI_REFERENCE.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 7,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 102,
+                "lines": 1
+              },
+              "new": {
+                "start": 106,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 105,
+                "lines": 2
+              },
+              "new": {
+                "start": 109,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 134,
+                "lines": 1
+              },
+              "new": {
+                "start": 138,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 139,
+                "lines": 1
+              },
+              "new": {
+                "start": 143,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 142,
+                "lines": 1
+              },
+              "new": {
+                "start": 148,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 145,
+                "lines": 2
+              },
+              "new": {
+                "start": 151,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 149,
+                "lines": 1
+              },
+              "new": {
+                "start": 156,
+                "lines": 3
+              }
+            }
+          ],
+          "description": "Update the English CLI reference for the reorganized commands and expanded help.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-CLI_REFERENCE_ja-md",
+          "path": "CLI_REFERENCE_ja.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 7,
+                "lines": 4
+              }
+            },
+            {
+              "old": {
+                "start": 102,
+                "lines": 1
+              },
+              "new": {
+                "start": 106,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 105,
+                "lines": 2
+              },
+              "new": {
+                "start": 109,
+                "lines": 2
+              }
+            },
+            {
+              "old": {
+                "start": 139,
+                "lines": 1
+              },
+              "new": {
+                "start": 143,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 145,
+                "lines": 2
+              },
+              "new": {
+                "start": 151,
+                "lines": 3
+              }
+            },
+            {
+              "old": {
+                "start": 149,
+                "lines": 1
+              },
+              "new": {
+                "start": 156,
+                "lines": 3
+              }
+            }
+          ],
+          "description": "Update the Japanese CLI reference for the reorganized commands and expanded help.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-README-md",
+          "path": "README.md",
+          "ranges": [
+            {
+              "old": {
+                "start": 154,
+                "lines": 1
+              },
+              "new": {
+                "start": 154,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 160,
+                "lines": 1
+              },
+              "new": {
+                "start": 160,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 164,
+                "lines": 1
+              },
+              "new": {
+                "start": 164,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 166,
+                "lines": 1
+              },
+              "new": {
+                "start": 166,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 168,
+                "lines": 1
+              },
+              "new": {
+                "start": 168,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Update the English README with the revised command workflow and usage examples.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-README_ja-md",
+          "path": "README_ja.md",
+          "ranges": [
+            {
+              "old": {
+                "start": 155,
+                "lines": 1
+              },
+              "new": {
+                "start": 155,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 161,
+                "lines": 1
+              },
+              "new": {
+                "start": 161,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 165,
+                "lines": 1
+              },
+              "new": {
+                "start": 165,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 167,
+                "lines": 1
+              },
+              "new": {
+                "start": 167,
+                "lines": 1
+              }
+            },
+            {
+              "old": {
+                "start": 169,
+                "lines": 1
+              },
+              "new": {
+                "start": 169,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Update the Japanese README with the revised command workflow and usage examples.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-docs-design-md",
+          "path": "docs/design.md",
+          "ranges": [
+            {
+              "old": {
+                "start": 142,
+                "lines": 1
+              },
+              "new": {
+                "start": 142,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Record the revised CLI and review workflow in the design notes.",
+          "review_level": "skim"
+        },
+        {
+          "id": "frag-skills-answer-semdiff-SKILL-md",
+          "path": "skills/answer-semdiff/SKILL.md",
+          "ranges": [
+            {
+              "old": {
+                "start": 12,
+                "lines": 1
+              },
+              "new": {
+                "start": 12,
+                "lines": 1
+              }
+            }
+          ],
+          "description": "Update the answer skill command references for the revised CLI.",
+          "review_level": "normal"
+        },
+        {
+          "id": "frag-skills-semantic-grouping-SKILL-md",
+          "path": "skills/semantic-grouping/SKILL.md",
+          "ranges": [
+            {
+              "old": {
+                "start": 31,
+                "lines": 1
+              },
+              "new": {
+                "start": 31,
+                "lines": 7
+              }
+            }
+          ],
+          "description": "Update the grouping workflow to use revised commands and language-aware group text.",
+          "review_level": "normal"
+        }
+      ]
+    }
+  ]
+}
