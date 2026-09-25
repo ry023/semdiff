@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -37,7 +36,7 @@ func defaultGroupsPath(draftPath string) (string, error) {
 
 func formatFragmentRanges(fragment model.Fragment) string {
 	if fragment.FileMetadata && len(fragment.Ranges) == 0 {
-		return "metadata"
+		return localized("metadata", "メタデータ")
 	}
 	parts := make([]string, 0, len(fragment.Ranges))
 	for _, span := range fragment.Ranges {
@@ -74,17 +73,14 @@ func runGrouping(ctx context.Context, runner gitdiff.Runner, args []string) erro
 }
 
 func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("grouping init", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	fromPath := fs.String("from", "", "finalized groups file whose decisions seed this draft")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	force := fs.Bool("force", false, "replace an existing draft")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingInitArgs]("grouping init", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) > 1 {
-		return errors.New("grouping init accepts at most one <base>..<head>")
+	draftPath, fromPath, jsonOut, force := &options.Draft, &options.From, &options.JSON, &options.Force
+	positional := []string{}
+	if options.Range != "" {
+		positional = append(positional, options.Range)
 	}
 	if _, err := os.Stat(*draftPath); err == nil && !*force {
 		return fmt.Errorf("grouping draft already exists at %s (use --force to replace it)", *draftPath)
@@ -139,9 +135,9 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 		}{DraftPath: *draftPath, BaseSHA: draft.BaseSHA, HeadSHA: draft.HeadSHA, Source: groupingSourceSummary(*fromPath, source), Status: draft.Status()})
 	}
 	if source != nil {
-		fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions; seeded from %s)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions), *fromPath)
+		fmt.Printf(localized("initialized grouping draft: %s (%s..%s; %d suggestions; seeded from %s)\n", "grouping draft を作成しました: %s (%s..%s; 候補 %d 件; 元のレビュー %s)\n"), *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions), *fromPath)
 	} else {
-		fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions))
+		fmt.Printf(localized("initialized grouping draft: %s (%s..%s; %d suggestions)\n", "grouping draft を作成しました: %s (%s..%s; 候補 %d 件)\n"), *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions))
 	}
 	return nil
 }
@@ -173,16 +169,15 @@ func validateGroupingSource(ctx context.Context, runner gitdiff.Runner, source m
 }
 
 func runGroupingApply(args []string) error {
-	fs := flag.NewFlagSet("grouping apply", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingApplyArgs]("grouping apply", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 1 {
+	if options.Operations == "" {
 		return errors.New("grouping apply requires <operations-file|->")
 	}
+	draftPath, jsonOut := &options.Draft, &options.JSON
+	positional := []string{options.Operations}
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {
 		return err
@@ -201,21 +196,16 @@ func runGroupingApply(args []string) error {
 	if *jsonOut {
 		return printJSON(updated.Status())
 	}
-	fmt.Printf("applied %d operation(s) to %s; revision %d\n", len(request.Operations), *draftPath, updated.Revision)
+	fmt.Printf(localized("applied %d operation(s) to %s; revision %d\n", "%d 件の操作を %s に適用しました。revision %d\n"), len(request.Operations), *draftPath, updated.Revision)
 	return nil
 }
 
 func runGroupingStatus(args []string) error {
-	fs := flag.NewFlagSet("grouping status", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingStatusArgs]("grouping status", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 0 {
-		return errors.New("grouping status does not take positional arguments")
-	}
+	draftPath, jsonOut := &options.Draft, &options.JSON
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {
 		return err
@@ -224,9 +214,9 @@ func runGroupingStatus(args []string) error {
 	if *jsonOut {
 		return printJSON(status)
 	}
-	fmt.Printf("revision %d: %d suggestions; %d/%d authored fragments assigned, %d described\n", status.Revision, status.SuggestionCount, status.AssignedFragmentCount, status.FragmentCount, status.DescribedFragmentCount)
+	fmt.Printf(localized("revision %d: %d suggestions; %d/%d authored fragments assigned, %d described\n", "revision %d: 候補 %d 件; 作成済み Fragment %d/%d 件を割り当て済み、%d 件に説明あり\n"), status.Revision, status.SuggestionCount, status.AssignedFragmentCount, status.FragmentCount, status.DescribedFragmentCount)
 	if status.ReadyToFinalize {
-		fmt.Println("ready to finalize")
+		fmt.Println(localized("ready to finalize", "finalize できます"))
 	} else {
 		missingClassification := 0
 		for _, group := range status.Groups {
@@ -235,26 +225,19 @@ func runGroupingStatus(args []string) error {
 			}
 			missingClassification += len(group.MissingReviewLevelIDs)
 		}
-		fmt.Printf("not ready to finalize: %d unassigned, %d undescribed, %d missing classification\n", len(status.UnassignedFragmentIDs), len(status.UndescribedFragmentIDs), missingClassification)
+		fmt.Printf(localized("not ready to finalize: %d unassigned, %d undescribed, %d missing classification\n", "finalize できません: 未割り当て %d 件、説明なし %d 件、分類不足 %d 件\n"), len(status.UnassignedFragmentIDs), len(status.UndescribedFragmentIDs), missingClassification)
 	}
 	return nil
 }
 
 func runGroupingInspect(args []string) error {
-	fs := flag.NewFlagSet("grouping inspect", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	unassigned := fs.Bool("unassigned", false, "show unassigned fragments")
-	suggestions := fs.Bool("suggestions", false, "show Git-derived fragment suggestions")
-	groupID := fs.String("group", "", "show one group")
-	fragmentID := fs.String("fragment", "", "show one fragment")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingInspectArgs]("grouping inspect", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 0 {
-		return errors.New("grouping inspect does not take positional arguments")
-	}
+	draftPath, jsonOut := &options.Draft, &options.JSON
+	unassigned, suggestions := &options.Unassigned, &options.Suggestions
+	groupID, fragmentID := &options.Group, &options.Fragment
 	selected := 0
 	if *unassigned {
 		selected++
@@ -302,9 +285,9 @@ func runGroupingInspect(args []string) error {
 		if *jsonOut {
 			return printJSON(inspection)
 		}
-		fmt.Printf("%s  %s  assignment=%s  category=%s  review_level=%s\n", inspection.Fragment.ID, inspection.Fragment.Path, strings.Join(inspection.Assignments, ","), inspection.CategorySuggestion, inspection.Fragment.ReviewLevel)
+		fmt.Printf(localized("%s  %s  assignment=%s  category=%s  review_level=%s\n", "%s  %s  割り当て=%s  category=%s  review_level=%s\n"), inspection.Fragment.ID, inspection.Fragment.Path, strings.Join(inspection.Assignments, ","), inspection.CategorySuggestion, inspection.Fragment.ReviewLevel)
 		if inspection.Fragment.Description != "" {
-			fmt.Printf("description: %s\n", inspection.Fragment.Description)
+			fmt.Printf(localized("description: %s\n", "説明: %s\n"), inspection.Fragment.Description)
 		}
 		return nil
 	}
@@ -327,7 +310,7 @@ func runGroupingInspect(args []string) error {
 	if *jsonOut {
 		return printJSON(result)
 	}
-	fmt.Printf("%s: %s (%d fragments, importance=%s)\n", group.ID, group.Title, len(group.Members), group.Importance)
+	fmt.Printf(localized("%s: %s (%d fragments, importance=%s)\n", "%s: %s (Fragment %d 件、重要度=%s)\n"), group.ID, group.Title, len(group.Members), group.Importance)
 	for _, id := range group.Members {
 		inspection, _ := draft.FragmentInspection(id)
 		fmt.Printf("  %s [%s]: %s\n", id, inspection.Fragment.ReviewLevel, inspection.Fragment.Description)
@@ -336,15 +319,14 @@ func runGroupingInspect(args []string) error {
 }
 
 func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	fs := flag.NewFlagSet("grouping finalize", flag.ContinueOnError)
-	draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path")
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, args)
+	options, err := parseCommand[groupingFinalizeArgs]("grouping finalize", args)
 	if err != nil {
 		return err
 	}
-	if len(positional) > 1 {
-		return errors.New("grouping finalize accepts at most one <groups-file>")
+	draftPath, jsonOut := &options.Draft, &options.JSON
+	positional := []string{}
+	if options.GroupsFile != "" {
+		positional = append(positional, options.GroupsFile)
 	}
 	draft, err := groupingdraft.Load(*draftPath)
 	if err != nil {
@@ -390,7 +372,7 @@ func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []stri
 			Revision int    `json:"revision"`
 		}{true, outputPath, draft.Revision})
 	}
-	fmt.Printf("finalized groups file: %s\n", outputPath)
+	fmt.Printf(localized("finalized groups file: %s\n", "groups file を確定しました: %s\n"), outputPath)
 	return nil
 }
 

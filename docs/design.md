@@ -139,7 +139,7 @@ show --draft <path> <fragment-id>  materialize an editable draft fragment
 show [groups-file] <fragment-id>   materialize a finalized fragment
 validate [groups-file]             recompute and validate coverage
 view [groups-file]                 render the exact current review or nearest same-base first-parent review
-reviews resolve [range]             report the exact or nearest compatible local review
+resolve [range]                    report the exact or nearest compatible local review
 ```
 
 `show` always names its groups file or draft, so it does not depend on mutable “latest inventory” state.

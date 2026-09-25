@@ -152,21 +152,21 @@ Agent が Fragment の範囲を選び、operation JSON を書き、質問 sessio
 
 ## CLI Reference
 
-CLI はスキルが利用する決定的な layer です。完全なコマンドリファレンスは別ファイルにあります。
+CLI はスキルが利用する決定的な layer です。`semdiff --help` で用途別のコマンド概要を確認できます。`LANG=ja_JP.UTF-8` にすると help と CLI メッセージが日本語になります。command 名と JSON は変わりません。完全なコマンドリファレンスは別ファイルにあります。
 
 [CLI リファレンスを読む →](CLI_REFERENCE_ja.md)
 
 ## レビューを共有する
 
-range を省略した `grouping init` は、`gh` で現在の PR を特定できる場合はその base branch を、できない場合は Git remote の default branch を使います。merge-base と `HEAD` を比較し、`<base>..<head>` を渡せば明示的に上書きできます。`grouping finalize` は出力先を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も利用できます。`show`、`validate`、`questions`、`publish` は、groups file の省略時に現在の grouping draft から確定済みファイルを特定します。
+range を省略した `grouping init` は、`gh` で現在の PR を特定できる場合はその base branch を、できない場合は Git remote の default branch を使います。merge-base と `HEAD` を比較し、`<base>..<head>` を渡せば明示的に上書きできます。`grouping finalize` は出力先を省略すると、Git 管理外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存します。明示的な groups file も利用できます。`show`、`validate`、`questions`、`remote push` は、groups file の省略時に現在の grouping draft から確定済みファイルを特定します。
 
 groups file と `--draft` の両方を省略した `semdiff view` は、`grouping init` と同じロジックで現在の range を独立に計算します。完全一致する確定済み review があればそれを開き、なければ現在の head の first-parent history をたどって、同じ merge-base を持つ最も近い review を開きます。古い snapshot を表示する場合は HEAD より遅れていることを明示し、未レビューの commit と変更 path を別枠に表示します。古い Fragment range を現在の diff に適用することはありません。fallback を許可しない場合は `--exact`、特定の snapshot を選ぶ場合は groups file または `--draft <path>` を指定します。
 
-`semdiff reviews resolve --json` は、scriptやskill向けに同じ現在rangeの選択結果を返します。返された `groups_path` を `semdiff grouping init --from <groups-path> --force` に渡すと、最も近い互換reviewから現在range用のdraftをseedできます。sourceは同一base SHAで、headが現在のfirst-parent history上にある必要があります。新draftではGit由来の事実を常に再計算するため、finalize前に改めてvalidateされます。
+`semdiff resolve --json` は、scriptやskill向けに同じ現在rangeの選択結果を返します。返された `groups_path` を `semdiff grouping init --from <groups-path> --force` に渡すと、最も近い互換reviewから現在range用のdraftをseedできます。sourceは同一base SHAで、headが現在のfirst-parent history上にある必要があります。新draftではGit由来の事実を常に再計算するため、finalize前に改めてvalidateされます。
 
-`publish` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。質問 thread はローカルのままで、共有・upload されません。設定なしでは現在の repository の `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の publish 時に orphan branch として作成されます。
+`remote push` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。通常は現在の grouping draft を使い、`<base>..<head>` で完全一致するローカルレビュー、`--groups-file` で任意の保存元も指定できます。質問 thread はローカルのままで、共有・upload されません。設定なしでは現在の repository の `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の push 時に orphan branch として作成されます。
 
-保存先は full SHA による `<base-sha>...<head-sha>/groups.json` です。`semdiff reviews view` は branch の一覧を表示し、Refresh で fetch します。
+保存先は full SHA による `<base-sha>...<head-sha>/groups.json` です。`semdiff remote view-index` は branch の一覧を HTML で表示し、Refresh で fetch します。`semdiff remote view [<base>..<head>]` は完全一致するリモートレビューをローカルに `groups.json` を保存せず表示します。`semdiff remote pull [<base>..<head>]` は `.semdiff/reviews/` に保存します。view と pull で range を省略すると現在の range を使います。pull は既存ファイルを上書きする前に確認し、`--force` は確認なしで上書き、`--no-clobber` は確認なしでエラーにします。非対話環境で既存ファイルがある場合はどちらかの指定が必要です。旧 `publish`、`reviews view`、`reviews resolve` は help に表示しない警告付き alias として残します。
 
 任意の repository 共通 `semdiff.yaml` で保存先を指定できます。
 

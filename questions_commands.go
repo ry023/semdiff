@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -22,15 +21,14 @@ func runQuestions(ctx context.Context, args []string) error {
 		if len(args) < 2 || args[1] != "start" {
 			return errors.New("questions session requires start")
 		}
-		fs := flag.NewFlagSet("questions session start", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
-		positional, err := parseInterspersed(fs, args[2:])
+		options, err := parseCommand[questionSessionStartArgs]("questions session start", args[2:])
 		if err != nil {
 			return err
 		}
-		if len(positional) > 1 {
-			return errors.New("questions session start accepts at most one <groups-file>")
+		jsonOut, draftPath := &options.JSON, &options.Draft
+		positional := []string{}
+		if options.GroupsFile != "" {
+			positional = append(positional, options.GroupsFile)
 		}
 		groupsPath, err := resolveQuestionGroupsPath(positional, *draftPath)
 		if err != nil {
@@ -47,19 +45,17 @@ func runQuestions(ctx context.Context, args []string) error {
 		if *jsonOut {
 			return printJSON(session)
 		}
-		fmt.Printf("started %s\n", session.ID)
+		fmt.Printf(localized("started %s\n", "開始しました: %s\n"), session.ID)
 		return nil
 	case "wait":
-		fs := flag.NewFlagSet("questions wait", flag.ContinueOnError)
-		jsonOut := fs.Bool("json", false, "JSON output")
-		sessionID := fs.String("session", "", "answer session ID")
-		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[questionWaitArgs]("questions wait", args[1:])
 		if err != nil {
 			return err
 		}
-		if len(positional) > 1 {
-			return errors.New("questions wait accepts at most one <groups-file>")
+		jsonOut, sessionID, draftPath := &options.JSON, &options.Session, &options.Draft
+		positional := []string{}
+		if options.GroupsFile != "" {
+			positional = append(positional, options.GroupsFile)
 		}
 		groupsPath, err := resolveQuestionGroupsPath(positional, *draftPath)
 		if err != nil {
@@ -78,7 +74,7 @@ func runQuestions(ctx context.Context, args []string) error {
 				return printJSON(event)
 			}
 			if event.Event == "stopped" {
-				fmt.Printf("stopped %s\n", event.SessionID)
+				fmt.Printf(localized("stopped %s\n", "停止しました: %s\n"), event.SessionID)
 			} else {
 				fmt.Printf("%s  %s\n", event.Question.ID, event.Question.Question)
 			}
@@ -94,14 +90,11 @@ func runQuestions(ctx context.Context, args []string) error {
 		fmt.Printf("%s  %s\n", question.ID, question.Question)
 		return nil
 	case "answer":
-		fs := flag.NewFlagSet("questions answer", flag.ContinueOnError)
-		stdin := fs.Bool("stdin", false, "read answer from stdin")
-		jsonOut := fs.Bool("json", false, "JSON output")
-		draftPath := fs.String("draft", defaultGroupingDraftPath, "draft path used to locate the default groups file")
-		positional, err := parseInterspersed(fs, args[1:])
+		options, err := parseCommand[questionAnswerArgs]("questions answer", args[1:])
 		if err != nil {
 			return err
 		}
+		stdin, jsonOut, draftPath, positional := &options.Stdin, &options.JSON, &options.Draft, options.Args
 		if (len(positional) != 1 && len(positional) != 2) || !*stdin {
 			return errors.New("questions answer requires [<groups-file>] <question-id> --stdin")
 		}
@@ -133,7 +126,7 @@ func runQuestions(ctx context.Context, args []string) error {
 		if *jsonOut {
 			return printJSON(thread)
 		}
-		fmt.Printf("answered %s\n", questionID)
+		fmt.Printf(localized("answered %s\n", "回答しました: %s\n"), questionID)
 		return nil
 	default:
 		return fmt.Errorf("unknown questions command %q", args[0])

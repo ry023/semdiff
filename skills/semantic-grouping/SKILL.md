@@ -28,7 +28,7 @@ Group（1 つの成果に対するレビュー判断）
 
 以下の手順を実行します。構成中の説明は暫定で構いません。境界を見直した後は、関係する title・summary・description も更新し、古い説明を残さないでください。
 
-1. draft を作成する前に `semdiff reviews resolve --json` を実行します。範囲を指定しない場合は `grouping init` と同じ pull request の範囲判定を使います。`found` が false なら `semdiff grouping init --json` で新しい draft を作成します。祖先レビューが見つかった場合（`exact: false`）は、`semdiff grouping init --from <groups_path> --force --json` でそのレビューを元にした現在の範囲の draft を新しく作成します。完全一致するレビューが見つかった場合は、ユーザーがグループ化の見直しを明示的に求めていない限り、その成果物を再利用します。
+1. draft を作成する前に `semdiff resolve --json` を実行します。範囲を指定しない場合は `grouping init` と同じ pull request の範囲判定を使います。`found` が false なら `semdiff grouping init --json` で新しい draft を作成します。祖先レビューが見つかった場合（`exact: false`）は、`semdiff grouping init --from <groups_path> --force --json` でそのレビューを元にした現在の範囲の draft を新しく作成します。完全一致するレビューが見つかった場合は、ユーザーがグループ化の見直しを明示的に求めていない限り、その成果物を再利用します。
 2. 既存レビューを引き継いだ draft は既存の Groups、summary、レビュー metadata、Fragment 定義を引き継ぎますが、Git の変更マップと suggestions は現在の範囲について必ず再計算されます。`review_head_sha` より後のすべてのコミットと、影響を受けたパスにある既存のすべての Fragment を再確認が必要な対象として扱います。古い行範囲が意味的に正しいとは仮定しないでください。CLI は、source の Base が異なる場合、または Head が現在の first-parent history 上にない場合、その source を拒否します。
 3. `grouping init` が返した SHA を使って `semdiff commits <base-sha>..<head-sha> --json` を実行し、変更の経緯を把握します。祖先レビューの場合は、まず `semdiff commits <review_head_sha>..<head-sha> --json` も確認します。完全な diff を最初から読み込まないでください。
 4. `semdiff grouping inspect --suggestions --json` を実行し、ファイルと周辺コードを確認しながら suggestions をレビューします。Groups を命名する前に、範囲全体にある独立してレビュー可能な成果を棚卸ししてください。最初に確認したファイル、コミット、suggestions だけで Group の構成を決めないでください。既存レビューを引き継いだ draft では、未グループ化の suggestions と、引き継ぎ元のレビュー後にファイルが変更された Groups を優先します。関連する候補には `semdiff show --draft .semdiff/grouping-draft.json <id> --json` を使います。
