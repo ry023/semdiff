@@ -28,10 +28,10 @@ import (
 
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, localized("error:", "エラー:"), err)
 		var compatibilityError *groups.CompatibilityError
 		if errors.As(err, &compatibilityError) {
-			fmt.Fprintln(os.Stderr, "semdiff version:", productVersion())
+			fmt.Fprintln(os.Stderr, localized("semdiff version:", "semdiff バージョン:"), productVersion())
 		}
 		os.Exit(1)
 	}
@@ -42,6 +42,10 @@ func usage() {
 }
 
 func writeUsage(w io.Writer) {
+	if japaneseLocale() {
+		fmt.Fprintln(w, usageJA)
+		return
+	}
 	fmt.Fprintln(w, `semdiff organizes a fixed Git range into semantic review groups.
 
 Usage:
@@ -132,16 +136,16 @@ func run(ctx context.Context, args []string) (err error) {
 		}
 		fmt.Printf("semdiff %s\n", output.Version)
 		for _, supported := range output.GroupsSchema.ReadRanges {
-			fmt.Printf("groups schema read: >=%s, <%s\n", supported.Min, supported.MaxExclusive)
+			fmt.Printf(localized("groups schema read: >=%s, <%s\n", "読み込み可能な groups schema: >=%s, <%s\n"), supported.Min, supported.MaxExclusive)
 		}
-		fmt.Printf("groups schema write: %s %s\n", output.GroupsSchema.Format, output.GroupsSchema.Write)
+		fmt.Printf(localized("groups schema write: %s %s\n", "書き込む groups schema: %s %s\n"), output.GroupsSchema.Format, output.GroupsSchema.Write)
 		return nil
 	case "grouping":
 		return runGrouping(ctx, r, args[1:])
 	case "questions":
 		return runQuestions(ctx, args[1:])
 	case "publish":
-		fmt.Fprintln(os.Stderr, "warning: semdiff publish is deprecated; use semdiff remote push")
+		fmt.Fprintln(os.Stderr, localized("warning: semdiff publish is deprecated; use semdiff remote push", "警告: semdiff publish は非推奨です。semdiff remote push を使ってください"))
 		return runPublish(ctx, r, args[1:])
 	case "reviews":
 		return runReviews(ctx, args[1:])
@@ -165,7 +169,7 @@ func run(ctx context.Context, args []string) (err error) {
 			return printJSON(cs)
 		}
 		for _, c := range cs {
-			fmt.Printf("%.12s  %s  %s  (%d files)\n", c.SHA, c.Subject, c.Author, c.FilesChanged)
+			fmt.Printf(localized("%.12s  %s  %s  (%d files)\n", "%.12s  %s  %s  (%d ファイル)\n"), c.SHA, c.Subject, c.Author, c.FilesChanged)
 		}
 		return nil
 	case "fragments":
@@ -290,12 +294,12 @@ func run(ctx context.Context, args []string) (err error) {
 			_ = printJSON(result)
 		} else if len(report.Errors) == 0 {
 			for _, warning := range report.Warnings {
-				fmt.Fprintln(os.Stderr, "warning:", warning)
+				fmt.Fprintln(os.Stderr, localized("warning:", "警告:"), warning)
 			}
-			fmt.Printf("valid: %d fragments assigned exactly once across %d groups\n", len(inv.Fragments), len(g.Groups))
+			fmt.Printf(localized("valid: %d fragments assigned exactly once across %d groups\n", "検証成功: %d 個の Fragment が %d 個の Group に重複なく割り当てられています\n"), len(inv.Fragments), len(g.Groups))
 		} else {
 			for _, warning := range report.Warnings {
-				fmt.Fprintln(os.Stderr, "warning:", warning)
+				fmt.Fprintln(os.Stderr, localized("warning:", "警告:"), warning)
 			}
 			for _, p := range report.Errors {
 				fmt.Fprintln(os.Stderr, "-", p)
@@ -367,7 +371,7 @@ func run(ctx context.Context, args []string) (err error) {
 			return fmt.Errorf("groups file is invalid: %s", strings.Join(report.Errors, "; "))
 		}
 		for _, warning := range report.Warnings {
-			log.Printf("warning: %s", warning)
+			log.Printf(localized("warning: %s", "警告: %s"), warning)
 		}
 		paths := make([]string, 0, len(inv.Fragments))
 		for _, fragment := range inv.Fragments {
@@ -398,7 +402,7 @@ func run(ctx context.Context, args []string) (err error) {
 			if err := os.WriteFile(*htmlPath, content, 0644); err != nil {
 				return fmt.Errorf("write HTML export: %w", err)
 			}
-			fmt.Printf("wrote %s\n", *htmlPath)
+			fmt.Printf(localized("wrote %s\n", "%s を書き出しました\n"), *htmlPath)
 			return nil
 		}
 		h, err := viewer.HandlerWithQuestions(page, questionStore)

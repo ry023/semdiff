@@ -6,6 +6,8 @@ See the [README](README.md) for the human and AI-agent workflow, installation, a
 
 Run `semdiff --help` (or `semdiff help` / `semdiff -h`) for a grouped command overview. Add `--help` to a command, such as `semdiff remote pull --help`, for its arguments and flags. Help prints to standard output and exits successfully.
 
+When `LANG` starts with `ja` (for example, `ja_JP.UTF-8`), help and semdiff's human-readable CLI messages use Japanese. Other or unset values use English. Command and flag names, JSON fields, and file formats do not change. Errors returned by Kong, Git, or internal data validation may still be in English.
+
 ## Inspect version compatibility
 
 ```sh

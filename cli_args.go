@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/alecthomas/kong"
 )
@@ -14,12 +16,23 @@ var errCommandHelp = errors.New("command help displayed")
 // Command execution and domain validation remain in their existing packages.
 func parseCommand[T any](name string, args []string) (T, error) {
 	var options T
-	parser, err := kong.New(&options, kong.Name("semdiff "+name), kong.NoDefaultHelp(), kong.Writers(os.Stdout, os.Stderr))
+	parserOptions := []kong.Option{kong.Name("semdiff " + name), kong.NoDefaultHelp(), kong.Writers(os.Stdout, os.Stderr)}
+	if japaneseLocale() {
+		parserOptions = append(parserOptions, kong.ValueFormatter(func(value *kong.Value) string {
+			if translated, ok := commandHelpJA[value.Help]; ok {
+				return translated
+			}
+			return kong.DefaultHelpValueFormatter(value)
+		}))
+	}
+	parser, err := kong.New(&options, parserOptions...)
 	if err != nil {
 		return options, fmt.Errorf("build %s parser: %w", name, err)
 	}
 	for _, arg := range args {
 		if arg == "--help" || arg == "-h" {
+			var help bytes.Buffer
+			parser.Stdout = &help
 			ctx, err := parser.Parse(nil)
 			if err != nil {
 				return options, err
@@ -27,6 +40,11 @@ func parseCommand[T any](name string, args []string) (T, error) {
 			if err := ctx.PrintUsage(false); err != nil {
 				return options, err
 			}
+			output := help.String()
+			if japaneseLocale() {
+				output = strings.NewReplacer("Usage:", "使い方:", "Arguments:", "引数:", "Flags:", "フラグ:", "[flags]", "[フラグ]", "=STRING", "=<文字列>").Replace(output)
+			}
+			fmt.Fprint(os.Stdout, output)
 			return options, errCommandHelp
 		}
 	}

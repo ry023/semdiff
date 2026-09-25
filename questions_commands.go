@@ -45,7 +45,7 @@ func runQuestions(ctx context.Context, args []string) error {
 		if *jsonOut {
 			return printJSON(session)
 		}
-		fmt.Printf("started %s\n", session.ID)
+		fmt.Printf(localized("started %s\n", "開始しました: %s\n"), session.ID)
 		return nil
 	case "wait":
 		options, err := parseCommand[questionWaitArgs]("questions wait", args[1:])
@@ -74,7 +74,7 @@ func runQuestions(ctx context.Context, args []string) error {
 				return printJSON(event)
 			}
 			if event.Event == "stopped" {
-				fmt.Printf("stopped %s\n", event.SessionID)
+				fmt.Printf(localized("stopped %s\n", "停止しました: %s\n"), event.SessionID)
 			} else {
 				fmt.Printf("%s  %s\n", event.Question.ID, event.Question.Question)
 			}
@@ -126,7 +126,7 @@ func runQuestions(ctx context.Context, args []string) error {
 		if *jsonOut {
 			return printJSON(thread)
 		}
-		fmt.Printf("answered %s\n", questionID)
+		fmt.Printf(localized("answered %s\n", "回答しました: %s\n"), questionID)
 		return nil
 	default:
 		return fmt.Errorf("unknown questions command %q", args[0])

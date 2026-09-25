@@ -171,6 +171,7 @@ func TestRemotePushPullAndValidation(t *testing.T) {
 }
 
 func TestConfirmOverwrite(t *testing.T) {
+	t.Setenv("LANG", "C")
 	for _, test := range []struct {
 		name, answer        string
 		terminal, wantError bool
@@ -193,7 +194,19 @@ func TestConfirmOverwrite(t *testing.T) {
 	}
 }
 
+func TestConfirmOverwriteUsesLANG(t *testing.T) {
+	t.Setenv("LANG", "ja_JP.UTF-8")
+	var output bytes.Buffer
+	if err := confirmOverwrite("groups.json", strings.NewReader("n\n"), &output, true); err == nil {
+		t.Fatal("refusing overwrite should fail")
+	}
+	if !strings.Contains(output.String(), "上書きしますか？") || !strings.Contains(output.String(), "[y/N]") {
+		t.Fatalf("Japanese prompt = %q", output.String())
+	}
+}
+
 func TestDeprecatedResolveWarnsOnlyOnStderr(t *testing.T) {
+	t.Setenv("LANG", "C")
 	repo, _, base, head, _ := remoteFixture(t)
 	inRepo(t, repo)
 	stdoutReader, stdoutWriter, err := os.Pipe()
@@ -225,6 +238,7 @@ func TestDeprecatedResolveWarnsOnlyOnStderr(t *testing.T) {
 }
 
 func TestDeprecatedCommandsAreHiddenAndWarn(t *testing.T) {
+	t.Setenv("LANG", "C")
 	oldStderr := os.Stderr
 	reader, writer, err := os.Pipe()
 	if err != nil {

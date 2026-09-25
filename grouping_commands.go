@@ -36,7 +36,7 @@ func defaultGroupsPath(draftPath string) (string, error) {
 
 func formatFragmentRanges(fragment model.Fragment) string {
 	if fragment.FileMetadata && len(fragment.Ranges) == 0 {
-		return "metadata"
+		return localized("metadata", "メタデータ")
 	}
 	parts := make([]string, 0, len(fragment.Ranges))
 	for _, span := range fragment.Ranges {
@@ -135,9 +135,9 @@ func runGroupingInit(ctx context.Context, runner gitdiff.Runner, args []string) 
 		}{DraftPath: *draftPath, BaseSHA: draft.BaseSHA, HeadSHA: draft.HeadSHA, Source: groupingSourceSummary(*fromPath, source), Status: draft.Status()})
 	}
 	if source != nil {
-		fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions; seeded from %s)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions), *fromPath)
+		fmt.Printf(localized("initialized grouping draft: %s (%s..%s; %d suggestions; seeded from %s)\n", "grouping draft を作成しました: %s (%s..%s; 候補 %d 件; 元のレビュー %s)\n"), *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions), *fromPath)
 	} else {
-		fmt.Printf("initialized grouping draft: %s (%s..%s; %d suggestions)\n", *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions))
+		fmt.Printf(localized("initialized grouping draft: %s (%s..%s; %d suggestions)\n", "grouping draft を作成しました: %s (%s..%s; 候補 %d 件)\n"), *draftPath, draft.BaseSHA, draft.HeadSHA, len(draft.Suggestions))
 	}
 	return nil
 }
@@ -196,7 +196,7 @@ func runGroupingApply(args []string) error {
 	if *jsonOut {
 		return printJSON(updated.Status())
 	}
-	fmt.Printf("applied %d operation(s) to %s; revision %d\n", len(request.Operations), *draftPath, updated.Revision)
+	fmt.Printf(localized("applied %d operation(s) to %s; revision %d\n", "%d 件の操作を %s に適用しました。revision %d\n"), len(request.Operations), *draftPath, updated.Revision)
 	return nil
 }
 
@@ -214,9 +214,9 @@ func runGroupingStatus(args []string) error {
 	if *jsonOut {
 		return printJSON(status)
 	}
-	fmt.Printf("revision %d: %d suggestions; %d/%d authored fragments assigned, %d described\n", status.Revision, status.SuggestionCount, status.AssignedFragmentCount, status.FragmentCount, status.DescribedFragmentCount)
+	fmt.Printf(localized("revision %d: %d suggestions; %d/%d authored fragments assigned, %d described\n", "revision %d: 候補 %d 件; 作成済み Fragment %d/%d 件を割り当て済み、%d 件に説明あり\n"), status.Revision, status.SuggestionCount, status.AssignedFragmentCount, status.FragmentCount, status.DescribedFragmentCount)
 	if status.ReadyToFinalize {
-		fmt.Println("ready to finalize")
+		fmt.Println(localized("ready to finalize", "finalize できます"))
 	} else {
 		missingClassification := 0
 		for _, group := range status.Groups {
@@ -225,7 +225,7 @@ func runGroupingStatus(args []string) error {
 			}
 			missingClassification += len(group.MissingReviewLevelIDs)
 		}
-		fmt.Printf("not ready to finalize: %d unassigned, %d undescribed, %d missing classification\n", len(status.UnassignedFragmentIDs), len(status.UndescribedFragmentIDs), missingClassification)
+		fmt.Printf(localized("not ready to finalize: %d unassigned, %d undescribed, %d missing classification\n", "finalize できません: 未割り当て %d 件、説明なし %d 件、分類不足 %d 件\n"), len(status.UnassignedFragmentIDs), len(status.UndescribedFragmentIDs), missingClassification)
 	}
 	return nil
 }
@@ -285,9 +285,9 @@ func runGroupingInspect(args []string) error {
 		if *jsonOut {
 			return printJSON(inspection)
 		}
-		fmt.Printf("%s  %s  assignment=%s  category=%s  review_level=%s\n", inspection.Fragment.ID, inspection.Fragment.Path, strings.Join(inspection.Assignments, ","), inspection.CategorySuggestion, inspection.Fragment.ReviewLevel)
+		fmt.Printf(localized("%s  %s  assignment=%s  category=%s  review_level=%s\n", "%s  %s  割り当て=%s  category=%s  review_level=%s\n"), inspection.Fragment.ID, inspection.Fragment.Path, strings.Join(inspection.Assignments, ","), inspection.CategorySuggestion, inspection.Fragment.ReviewLevel)
 		if inspection.Fragment.Description != "" {
-			fmt.Printf("description: %s\n", inspection.Fragment.Description)
+			fmt.Printf(localized("description: %s\n", "説明: %s\n"), inspection.Fragment.Description)
 		}
 		return nil
 	}
@@ -310,7 +310,7 @@ func runGroupingInspect(args []string) error {
 	if *jsonOut {
 		return printJSON(result)
 	}
-	fmt.Printf("%s: %s (%d fragments, importance=%s)\n", group.ID, group.Title, len(group.Members), group.Importance)
+	fmt.Printf(localized("%s: %s (%d fragments, importance=%s)\n", "%s: %s (Fragment %d 件、重要度=%s)\n"), group.ID, group.Title, len(group.Members), group.Importance)
 	for _, id := range group.Members {
 		inspection, _ := draft.FragmentInspection(id)
 		fmt.Printf("  %s [%s]: %s\n", id, inspection.Fragment.ReviewLevel, inspection.Fragment.Description)
@@ -372,7 +372,7 @@ func runGroupingFinalize(ctx context.Context, runner gitdiff.Runner, args []stri
 			Revision int    `json:"revision"`
 		}{true, outputPath, draft.Revision})
 	}
-	fmt.Printf("finalized groups file: %s\n", outputPath)
+	fmt.Printf(localized("finalized groups file: %s\n", "groups file を確定しました: %s\n"), outputPath)
 	return nil
 }
 

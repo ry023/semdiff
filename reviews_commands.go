@@ -55,13 +55,13 @@ func runReviews(ctx context.Context, args []string) error {
 		return errors.New("reviews requires the subcommand resolve or view")
 	}
 	if args[0] == "resolve" {
-		fmt.Fprintln(os.Stderr, "warning: semdiff reviews resolve is deprecated; use semdiff resolve")
+		fmt.Fprintln(os.Stderr, localized("warning: semdiff reviews resolve is deprecated; use semdiff resolve", "警告: semdiff reviews resolve は非推奨です。semdiff resolve を使ってください"))
 		return runReviewsResolve(ctx, gitdiff.Runner{Dir: "."}, args[1:])
 	}
 	if args[0] != "view" {
 		return fmt.Errorf("unknown reviews subcommand %q", args[0])
 	}
-	fmt.Fprintln(os.Stderr, "warning: semdiff reviews view is deprecated; use semdiff remote view-index")
+	fmt.Fprintln(os.Stderr, localized("warning: semdiff reviews view is deprecated; use semdiff remote view-index", "警告: semdiff reviews view は非推奨です。semdiff remote view-index を使ってください"))
 	return runRemoteViewIndex(ctx, gitdiff.Runner{Dir: "."}, args[1:])
 }
 
@@ -207,15 +207,15 @@ func runRemoteView(ctx context.Context, runner gitdiff.Runner, args []string) er
 
 func confirmOverwrite(path string, input io.Reader, output io.Writer, terminal bool) error {
 	if !terminal {
-		return fmt.Errorf("%s already exists; use --force or --no-clobber in non-interactive mode", path)
+		return fmt.Errorf(localized("%s already exists; use --force or --no-clobber in non-interactive mode", "%s は既に存在します。非対話環境では --force または --no-clobber を指定してください"), path)
 	}
-	fmt.Fprintf(output, "overwrite %s? [y/N] ", path)
+	fmt.Fprintf(output, localized("overwrite %s? [y/N] ", "%s を上書きしますか？ [y/N] "), path)
 	var answer string
 	if _, err := fmt.Fscanln(input, &answer); err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 	if answer != "y" && answer != "Y" && !strings.EqualFold(answer, "yes") {
-		return fmt.Errorf("pull cancelled: %s was not overwritten", path)
+		return fmt.Errorf(localized("pull cancelled: %s was not overwritten", "pull を中止しました: %s は上書きされていません"), path)
 	}
 	return nil
 }
@@ -289,7 +289,7 @@ func runRemotePull(ctx context.Context, runner gitdiff.Runner, args []string) er
 	if err := saveRemoteArtifact(path, data); err != nil {
 		return err
 	}
-	fmt.Printf("pulled %s\n", path)
+	fmt.Printf(localized("pulled %s\n", "取得しました: %s\n"), path)
 	return nil
 }
 
@@ -339,7 +339,7 @@ func runRemotePush(ctx context.Context, runner gitdiff.Runner, args []string) er
 	if err != nil {
 		return err
 	}
-	fmt.Printf("published %s to %s:%s\n", path, store.Config.Endpoint(), store.Config.Branch)
+	fmt.Printf(localized("published %s to %s:%s\n", "%s を %s:%s に共有しました\n"), path, store.Config.Endpoint(), store.Config.Branch)
 	return nil
 }
 
@@ -410,14 +410,14 @@ func printReviewResolution(jsonOut bool, result reviewResolveOutput) error {
 		return printJSON(result)
 	}
 	if !result.Found {
-		fmt.Printf("no compatible finalized review for %s..%s\n", result.CurrentBaseSHA, result.CurrentHeadSHA)
+		fmt.Printf(localized("no compatible finalized review for %s..%s\n", "%s..%s に対応する確定済みレビューはありません\n"), result.CurrentBaseSHA, result.CurrentHeadSHA)
 		return nil
 	}
-	state := "ancestor"
+	state := localized("ancestor", "祖先")
 	if result.Exact {
-		state = "exact"
+		state = localized("exact", "完全一致")
 	}
-	fmt.Printf("%s review: %s (%s..%s; %d first-parent commits behind)\n", state, result.GroupsPath, result.ReviewBaseSHA, result.ReviewHeadSHA, result.CommitsBehind)
+	fmt.Printf(localized("%s review: %s (%s..%s; %d first-parent commits behind)\n", "%sのレビュー: %s (%s..%s; first-parent 上で %d commit 前)\n"), state, result.GroupsPath, result.ReviewBaseSHA, result.ReviewHeadSHA, result.CommitsBehind)
 	return nil
 }
 

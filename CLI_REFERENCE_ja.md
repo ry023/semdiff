@@ -6,6 +6,8 @@
 
 用途別のコマンド概要は `semdiff --help`（または `semdiff help` / `semdiff -h`）で表示できます。`semdiff remote pull --help` のように各 command に `--help` を付けると、その引数と flag を確認できます。help は標準出力に表示され、正常終了します。
 
+`LANG` が `ja` で始まる場合（例: `ja_JP.UTF-8`）、help と semdiff が直接表示する CLI メッセージを日本語にします。それ以外、または未設定の場合は英語です。command 名、flag 名、JSON field、file format は変わりません。Kong、Git、内部データ検証が返すエラー本文は英語のままの場合があります。
+
 ## バージョン互換性を確認する
 
 ```sh

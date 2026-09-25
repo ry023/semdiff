@@ -45,6 +45,7 @@ func TestKongParserPreservesInterspersedFlagsAndExplicitViewOptions(t *testing.T
 }
 
 func TestHelpExplainsCommandsAndHidesDeprecatedAliases(t *testing.T) {
+	t.Setenv("LANG", "C")
 	for _, arg := range []string{"--help", "-h", "help"} {
 		output, err := captureStdout(t, func() error { return run(context.Background(), []string{arg}) })
 		if err != nil {
@@ -73,6 +74,7 @@ func TestHelpExplainsCommandsAndHidesDeprecatedAliases(t *testing.T) {
 }
 
 func TestKongCommandHelp(t *testing.T) {
+	t.Setenv("LANG", "C")
 	output, err := captureStdout(t, func() error {
 		return run(context.Background(), []string{"remote", "pull", "--help"})
 	})
@@ -83,6 +85,46 @@ func TestKongCommandHelp(t *testing.T) {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("remote pull help missing %q: %s", expected, output)
 		}
+	}
+}
+
+func TestHelpFollowsLANG(t *testing.T) {
+	t.Setenv("LANG", "ja_JP.UTF-8")
+	root, err := captureStdout(t, func() error { return run(context.Background(), []string{"--help"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(root, "レビューの作成と閲覧") || strings.Contains(root, "Create and read a review") {
+		t.Fatalf("Japanese root help was not selected: %s", root)
+	}
+	command, err := captureStdout(t, func() error { return run(context.Background(), []string{"remote", "pull", "--help"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(command, "使い方:") || !strings.Contains(command, "確認せずに既存の groups file を上書き") || !strings.Contains(command, "--force") {
+		t.Fatalf("Japanese command help was not selected: %s", command)
+	}
+	jsonOutput, err := captureStdout(t, func() error { return run(context.Background(), []string{"version", "--json"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(jsonOutput, `"groups_schema"`) || strings.Contains(jsonOutput, "グループ") {
+		t.Fatalf("JSON keys changed with LANG: %s", jsonOutput)
+	}
+	versionText, err := captureStdout(t, func() error { return run(context.Background(), []string{"version"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(versionText, "読み込み可能な groups schema") {
+		t.Fatalf("Japanese status text was not selected: %s", versionText)
+	}
+	t.Setenv("LANG", "C")
+	english, err := captureStdout(t, func() error { return run(context.Background(), []string{"--help"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(english, "Create and read a review") {
+		t.Fatalf("English fallback was not selected: %s", english)
 	}
 }
 
