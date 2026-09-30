@@ -78,6 +78,7 @@ Answer viewer questions:
   questions answer <id> --stdin       Attach an answer from stdin.
 
 Share reviews through a Git artifact branch:
+  remote resolve [<base>..<head>]     Find the exact or nearest remote review; --pull saves it.
   remote view-index                   Serve the remote review index as HTML.
   remote view [<base>..<head>]        Serve one remote review without saving it.
   remote pull [<base>..<head>]        Save one remote review locally; asks

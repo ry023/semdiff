@@ -110,6 +110,10 @@ semdiff resolve --json
 semdiff resolve --exact --json
 ```
 
+`semdiff remote resolve [<base>..<head>] --json` は設定された artifact branch から完全一致するレビュー、なければ同じ base の first-parent 上で最も近い祖先レビューを探します。`--exact` は祖先への fallback を無効にします。`--pull` を付けなければ groups file を保存せず、一致した成果物を `remote_path` で返します。`groups_path` は省略されます。`--pull` を付けると、検証済みのレビューを `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存し、`groups_path` を返します。既存ファイルがある場合は `remote pull` と同様に上書きを確認し、`--force` または `--no-clobber` を指定できます。CI ではローカルレビューを保持するなら `--no-clobber`、置き換えるなら `--force` を使えます。一致なしや artifact branch が未作成の場合は正常終了して `found: false` を返します。fetch・認証失敗や不正な成果物はエラーです。
+
+CI では draft 作成前にローカルの `resolve --json` と `remote resolve --json` を実行し、完全一致を優先し、なければ最も近い祖先を選びます（同距離ならローカルを優先）。選んだレビューがリモートにある場合は、同じ範囲で `remote resolve --pull --json` を実行し、必要に応じて `--force` または `--no-clobber` を指定して `groups_path` を取得します。完全一致なら再利用し、祖先なら返された `groups_path` を `grouping init <base>..<head> --from <groups-path> --force --json` に渡し、追加変更に合わせて draft を調整して finalize します。確定済みファイルを `remote push --groups-file <groups-path>` で共有すると、次回の CI やローカル環境から再利用できます。ローカルで作成したレビューも CI で使うには push が必要です。checkout には source の base と first-parent history が必要で、shallow checkout では過去レビューが見つからない場合があります。base の変更や履歴の書き換えで祖先関係が失われたレビューは、この検索では引き継げません。共有対象は確定済みレビューで、未完成の draft は含みません。
+
 server を起動する代わりに自己完結型の読み取り専用 file を作るには `--html` を使います。質問への回答は、明示的に含めない限り出力されません。
 
 ```sh

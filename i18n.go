@@ -26,30 +26,33 @@ func localized(english, japanese string) string {
 var commandHelpJA = map[string]string{
 	"Git range to inspect.": "調べる Git の範囲。",
 	"Print JSON output.":    "JSON 形式で出力します。",
-	"Read a grouping draft instead of a finalized review.":            "確定済みレビューの代わりに grouping draft を読みます。",
-	"Draft used to locate the default groups file.":                   "既定の groups file を特定するための draft。",
-	"Viewer listen address.":                                          "Viewer の待受アドレス。",
-	"Write a self-contained HTML file instead of serving the viewer.": "サーバを起動せず、自己完結型の HTML ファイルを書き出します。",
-	"Include answered questions in an HTML export.":                   "HTML 出力に回答済みの質問を含めます。",
-	"Use a draft to locate the groups file.":                          "draft から groups file を特定します。",
-	"Require a finalized review for the current range.":               "現在の範囲と完全一致する確定済みレビューを必須にします。",
-	"Grouping draft path.":                                            "grouping draft のパス。",
-	"Finalized groups file used to seed this draft.":                  "この draft の元にする確定済み groups file。",
-	"Replace an existing draft.":                                      "既存の draft を置き換えます。",
-	"Show unassigned fragments.":                                      "未割り当ての Fragment を表示します。",
-	"Show Git-derived fragment suggestions.":                          "Git から導出した Fragment 候補を表示します。",
-	"Show one group.":                                                 "指定した Group を表示します。",
-	"Show one fragment.":                                              "指定した Fragment を表示します。",
-	"Answer session ID.":                                              "回答セッション ID。",
-	"Read answer from stdin.":                                         "標準入力から回答を読みます。",
-	"Listen address.":                                                 "待受アドレス。",
-	"Git remote name.":                                                "Git remote の名前。",
-	"Artifact repository URL or path.":                                "成果物 repository の URL またはパス。",
-	"Artifact branch.":                                                "成果物 branch。",
-	"Overwrite an existing groups file without asking.":               "確認せずに既存の groups file を上書きします。",
-	"Fail if the groups file exists.":                                 "groups file が既にあればエラーにします。",
-	"Groups file to publish.":                                         "共有する groups file。",
-	"Require a review for the exact current range.":                   "現在の範囲と完全一致するレビューを必須にします。",
+	"Read a grouping draft instead of a finalized review.":                "確定済みレビューの代わりに grouping draft を読みます。",
+	"Draft used to locate the default groups file.":                       "既定の groups file を特定するための draft。",
+	"Viewer listen address.":                                              "Viewer の待受アドレス。",
+	"Write a self-contained HTML file instead of serving the viewer.":     "サーバを起動せず、自己完結型の HTML ファイルを書き出します。",
+	"Include answered questions in an HTML export.":                       "HTML 出力に回答済みの質問を含めます。",
+	"Use a draft to locate the groups file.":                              "draft から groups file を特定します。",
+	"Require a finalized review for the current range.":                   "現在の範囲と完全一致する確定済みレビューを必須にします。",
+	"Grouping draft path.":                                                "grouping draft のパス。",
+	"Finalized groups file used to seed this draft.":                      "この draft の元にする確定済み groups file。",
+	"Replace an existing draft.":                                          "既存の draft を置き換えます。",
+	"Show unassigned fragments.":                                          "未割り当ての Fragment を表示します。",
+	"Show Git-derived fragment suggestions.":                              "Git から導出した Fragment 候補を表示します。",
+	"Show one group.":                                                     "指定した Group を表示します。",
+	"Show one fragment.":                                                  "指定した Fragment を表示します。",
+	"Answer session ID.":                                                  "回答セッション ID。",
+	"Read answer from stdin.":                                             "標準入力から回答を読みます。",
+	"Listen address.":                                                     "待受アドレス。",
+	"Git remote name.":                                                    "Git remote の名前。",
+	"Artifact repository URL or path.":                                    "成果物 repository の URL またはパス。",
+	"Artifact branch.":                                                    "成果物 branch。",
+	"Overwrite an existing groups file without asking.":                   "確認せずに既存の groups file を上書きします。",
+	"Fail if the groups file exists.":                                     "groups file が既にあればエラーにします。",
+	"Groups file to publish.":                                             "共有する groups file。",
+	"Save the selected review under .semdiff/reviews/.":                   "選択したレビューを .semdiff/reviews/ に保存します。",
+	"Overwrite an existing groups file without asking (requires --pull).": "既存の groups file を確認せずに上書きします（--pull が必要）。",
+	"Fail if the groups file exists (requires --pull).":                   "groups file が存在する場合はエラーにします（--pull が必要）。",
+	"Require a review for the exact current range.":                       "現在の範囲と完全一致するレビューを必須にします。",
 }
 
 const usageJA = `semdiff は固定した Git の範囲を意味に基づくレビュー Group に整理します。
@@ -84,6 +87,7 @@ Viewer の質問への回答:
   questions answer <id> --stdin       標準入力から回答を登録します。
 
 Git の成果物 branch でレビューを共有:
+  remote resolve [<base>..<head>]     完全一致または最も近いリモートレビューを探します。--pull で保存します。
   remote view-index                   リモートレビューの HTML 一覧を表示します。
   remote view [<base>..<head>]        保存せずにリモートレビューを表示します。
   remote pull [<base>..<head>]        リモートレビューをローカルに保存します。

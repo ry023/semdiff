@@ -110,6 +110,10 @@ semdiff resolve --json
 semdiff resolve --exact --json
 ```
 
+`semdiff remote resolve [<base>..<head>] --json` searches the configured artifact branch for an exact review, then the nearest first-parent ancestor with the same base. `--exact` disables ancestor fallback. Without `--pull`, it reports the match without writing a groups file: `remote_path` identifies the artifact in the remote branch and `groups_path` is omitted. Add `--pull` to save the validated match under `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` and return its `groups_path`. As with `remote pull`, an existing file requires confirmation or `--force`/`--no-clobber`; CI can use `--no-clobber` to preserve a local review or `--force` to replace it. With no match, including a branch that does not exist yet, it returns `found: false` successfully. Fetch/authentication failures and invalid artifacts are errors.
+
+For CI, run local `resolve --json` and `remote resolve --json` before creating a draft; prefer an exact match, otherwise the nearest ancestor (prefer local on a tie). If the selected match is remote, run `remote resolve --pull --json` with the same range (and `--force` or `--no-clobber` when appropriate) to obtain `groups_path`. Reuse an exact review, or pass an ancestor's `groups_path` to `grouping init <base>..<head> --from <groups-path> --force --json`, adjust the draft for new changes, and finalize it. Publish the finalized file with `remote push --groups-file <groups-path>` so subsequent CI runs and local checkouts can reuse it. Locally created reviews must also be pushed to be available in CI. The checkout needs the source base and first-parent history; a shallow checkout can hide prior reviews. A changed base or a head rewritten off that history cannot be reused by this lookup. This shares finalized reviews, not unfinished drafts.
+
 To create a self-contained, read-only file instead of starting a server, use `--html`. Question answers are omitted unless explicitly included:
 
 ```sh

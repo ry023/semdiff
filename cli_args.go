@@ -182,3 +182,13 @@ type resolveArgs struct {
 	JSON  bool   `help:"Print JSON output."`
 	Exact bool   `help:"Require a review for the exact current range."`
 }
+
+type remoteResolveArgs struct {
+	resolveArgs
+	Remote     string `help:"Git remote name."`
+	Repository string `help:"Artifact repository URL or path."`
+	Branch     string `help:"Artifact branch."`
+	Pull       bool   `help:"Save the selected review under .semdiff/reviews/."`
+	Force      bool   `help:"Overwrite an existing groups file without asking (requires --pull)."`
+	NoClobber  bool   `name:"no-clobber" help:"Fail if the groups file exists (requires --pull)."`
+}

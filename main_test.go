@@ -86,6 +86,17 @@ func TestKongCommandHelp(t *testing.T) {
 			t.Fatalf("remote pull help missing %q: %s", expected, output)
 		}
 	}
+	resolveHelp, err := captureStdout(t, func() error {
+		return run(context.Background(), []string{"remote", "resolve", "--help"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"--pull", "--force", "--no-clobber", "--exact", "--repository"} {
+		if !strings.Contains(resolveHelp, expected) {
+			t.Fatalf("remote resolve help missing %q: %s", expected, resolveHelp)
+		}
+	}
 }
 
 func TestHelpFollowsLANG(t *testing.T) {
