@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,15 +17,114 @@ import (
 	"github.com/ry023/semdiff/internal/reviews"
 )
 
-func TestParseInterspersedKeepsStdinMarker(t *testing.T) {
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	jsonOut := fs.Bool("json", false, "JSON output")
-	positional, err := parseInterspersed(fs, []string{"-", "--json"})
+func TestKongParserKeepsStdinMarker(t *testing.T) {
+	options, err := parseCommand[groupingApplyArgs]("grouping apply", []string{"-", "--json"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(positional) != 1 || positional[0] != "-" || !*jsonOut {
-		t.Fatalf("unexpected parsed arguments: positional=%v json=%v", positional, *jsonOut)
+	if options.Operations != "-" || !options.JSON {
+		t.Fatalf("unexpected parsed arguments: %+v", options)
+	}
+}
+
+func TestKongParserPreservesInterspersedFlagsAndExplicitViewOptions(t *testing.T) {
+	view, err := parseCommand[viewArgs]("view", []string{"groups.json", "--addr", "127.0.0.1:9000", "--draft", "draft.json", "--include-answers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.GroupsFile != "groups.json" || view.Addr == nil || *view.Addr != "127.0.0.1:9000" || view.Draft == nil || *view.Draft != "draft.json" || !view.IncludeAnswers {
+		t.Fatalf("view options = %+v", view)
+	}
+	pull, err := parseCommand[remotePullArgs]("remote pull", []string{"main..HEAD", "--no-clobber", "--repository", "artifact.git"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pull.Range != "main..HEAD" || !pull.NoClobber || pull.Repository != "artifact.git" {
+		t.Fatalf("pull options = %+v", pull)
+	}
+}
+
+func TestHelpExplainsCommandsAndHidesDeprecatedAliases(t *testing.T) {
+	t.Setenv("LANG", "C")
+	for _, arg := range []string{"--help", "-h", "help"} {
+		output, err := captureStdout(t, func() error { return run(context.Background(), []string{arg}) })
+		if err != nil {
+			t.Fatalf("%s: %v", arg, err)
+		}
+		for _, expected := range []string{
+			"Start a draft from Git changes",
+			"Serve one remote review without saving it",
+			"asks",
+			"--force/--no-clobber",
+			"--remote/--repository/--branch",
+		} {
+			if !strings.Contains(output, expected) {
+				t.Fatalf("%s help is missing %q", arg, expected)
+			}
+		}
+		for _, hidden := range []string{"reviews resolve", "reviews view", "semdiff publish"} {
+			if strings.Contains(output, hidden) {
+				t.Fatalf("%s help contains deprecated command %q", arg, hidden)
+			}
+		}
+	}
+	if err := run(context.Background(), []string{"--help", "remote"}); err == nil {
+		t.Fatal("help with an unsupported argument should fail")
+	}
+}
+
+func TestKongCommandHelp(t *testing.T) {
+	t.Setenv("LANG", "C")
+	output, err := captureStdout(t, func() error {
+		return run(context.Background(), []string{"remote", "pull", "--help"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"--force", "--no-clobber", "--repository"} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("remote pull help missing %q: %s", expected, output)
+		}
+	}
+}
+
+func TestHelpFollowsLANG(t *testing.T) {
+	t.Setenv("LANG", "ja_JP.UTF-8")
+	root, err := captureStdout(t, func() error { return run(context.Background(), []string{"--help"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(root, "レビューの作成と閲覧") || strings.Contains(root, "Create and read a review") {
+		t.Fatalf("Japanese root help was not selected: %s", root)
+	}
+	command, err := captureStdout(t, func() error { return run(context.Background(), []string{"remote", "pull", "--help"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(command, "使い方:") || !strings.Contains(command, "確認せずに既存の groups file を上書き") || !strings.Contains(command, "--force") {
+		t.Fatalf("Japanese command help was not selected: %s", command)
+	}
+	jsonOutput, err := captureStdout(t, func() error { return run(context.Background(), []string{"version", "--json"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(jsonOutput, `"groups_schema"`) || strings.Contains(jsonOutput, "グループ") {
+		t.Fatalf("JSON keys changed with LANG: %s", jsonOutput)
+	}
+	versionText, err := captureStdout(t, func() error { return run(context.Background(), []string{"version"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(versionText, "読み込み可能な groups schema") {
+		t.Fatalf("Japanese status text was not selected: %s", versionText)
+	}
+	t.Setenv("LANG", "C")
+	english, err := captureStdout(t, func() error { return run(context.Background(), []string{"--help"}) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(english, "Create and read a review") {
+		t.Fatalf("English fallback was not selected: %s", english)
 	}
 }
 

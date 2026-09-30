@@ -151,21 +151,21 @@ The agent should invoke the skills rather than requiring you to choose fragment 
 
 ## CLI Reference
 
-The CLI is the deterministic layer used by the skills. The complete command reference is maintained separately:
+The CLI is the deterministic layer used by the skills. Run `semdiff --help` for a grouped command overview. Set `LANG=ja_JP.UTF-8` for Japanese help and CLI messages; command names and JSON remain unchanged. The complete command reference is maintained separately:
 
 [Read the CLI Reference →](CLI_REFERENCE.md)
 
 ## Sharing reviews
 
-With no range, `grouping init` uses the current pull request's base branch when `gh` can identify one, otherwise the Git remote's default branch. It compares the merge base with `HEAD`; pass `<base>..<head>` to override this. With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit groups file remains supported. `show`, `validate`, `questions`, and `publish` locate the finalized file from the current grouping draft when it is omitted.
+With no range, `grouping init` uses the current pull request's base branch when `gh` can identify one, otherwise the Git remote's default branch. It compares the merge base with `HEAD`; pass `<base>..<head>` to override this. With no output argument, `grouping finalize` writes to the Git-ignored `.semdiff/reviews/<base-sha>...<head-sha>/groups.json`. An explicit groups file remains supported. `show`, `validate`, `questions`, and `remote push` locate the finalized file from the current grouping draft when it is omitted.
 
 With no groups file or `--draft`, `semdiff view` independently infers the current range using the same logic as `grouping init`. It opens an exact finalized review when one exists. Otherwise it walks the current head's first-parent history and opens the nearest review with the same merge-base. The viewer marks that snapshot as behind HEAD and lists the unreviewed commits and changed paths separately; it never applies old Fragment ranges to the current diff. Use `--exact` to reject this fallback, or pass a groups file or `--draft <path>` to select a specific snapshot.
 
-`semdiff reviews resolve --json` exposes the same current-range selection for scripts and skills. Use its `groups_path` with `semdiff grouping init --from <groups-path> --force` to seed a new current-range draft from the nearest compatible review. The source must have the same base SHA and a head on the current first-parent history; the new draft always recomputes Git facts and must be validated again before finalization.
+`semdiff resolve --json` exposes the same current-range selection for scripts and skills. Use its `groups_path` with `semdiff grouping init --from <groups-path> --force` to seed a new current-range draft from the nearest compatible review. The source must have the same base SHA and a head on the current first-parent history; the new draft always recomputes Git facts and must be validated again before finalization.
 
-`publish` stores only the review artifact, `groups.json`, on a Git artifact branch. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first publish creates that branch as an orphan branch.
+`remote push` stores only the review artifact, `groups.json`, on a Git artifact branch. It uses the current grouping draft by default, an exact local review with `<base>..<head>`, or an explicit `--groups-file`. Question threads remain local and are never uploaded. With no configuration, semdiff uses the current repository's `origin` and the `semdiff/reviews` branch; the first push creates that branch as an orphan branch.
 
-Artifacts are stored at `<base-sha>...<head-sha>/groups.json` using full SHAs. `semdiff reviews view` lists the branch and its Refresh button fetches updates.
+Artifacts are stored at `<base-sha>...<head-sha>/groups.json` using full SHAs. `semdiff remote view-index` opens an HTML index of the branch, and its Refresh button fetches updates. `semdiff remote view [<base>..<head>]` opens one exact remote review without saving `groups.json` locally. `semdiff remote pull [<base>..<head>]` saves it under `.semdiff/reviews/`. View and pull use the current range when omitted. Pull confirms before replacing an existing file; `--force` overwrites without prompting, while `--no-clobber` fails without prompting. A non-interactive pull with an existing file requires one of these flags. The old `publish`, `reviews view`, and `reviews resolve` commands remain as warning-producing aliases outside CLI help.
 
 An optional repository-shared `semdiff.yaml` can specify the store:
 
