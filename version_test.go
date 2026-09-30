@@ -35,11 +35,13 @@ func captureStdout(t *testing.T, fn func() error) (string, error) {
 }
 
 func TestVersionCommands(t *testing.T) {
+	t.Setenv("LANG", "C")
+	expectedVersion := "semdiff " + productVersion()
 	short, err := captureStdout(t, func() error { return run(context.Background(), []string{"--version"}) })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if short != "semdiff 0.3.0\n" {
+	if short != expectedVersion+"\n" {
 		t.Fatalf("--version output = %q", short)
 	}
 
@@ -47,7 +49,7 @@ func TestVersionCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"semdiff 0.3.0", "groups schema read: >=1.0.0, <1.1.0", "groups schema write: semdiff.groups 1.0.0"} {
+	for _, expected := range []string{expectedVersion, "groups schema read: >=1.0.0, <1.1.0", "groups schema write: semdiff.groups 1.0.0"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("version output is missing %q: %s", expected, text)
 		}
