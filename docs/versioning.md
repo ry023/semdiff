@@ -8,11 +8,11 @@ The root `VERSION` file is the source of truth for the CLI and plugin version. T
 
 While the product is below `1.0.0`, patch releases contain compatible fixes and minor releases may add features or break compatibility. Starting at `1.0.0`, releases follow the standard SemVer major/minor/patch compatibility rules. semdiff currently publishes release-only `MAJOR.MINOR.PATCH` versions without prerelease or build metadata.
 
-The plugin and CLI use the same version at release time. A plugin may use any CLI patch release in the same minor line; plugin `0.3.x` therefore accepts CLI versions `>=0.3.0, <0.4.0`.
+The plugin and CLI use the same version at release time. A plugin may use any CLI patch release in the same minor line; plugin `0.4.x` therefore accepts CLI versions `>=0.4.0, <0.5.0`.
 
 ## Automated product releases
 
-The release workflow on `main` uses [tagpr](https://github.com/Songmu/tagpr) to keep a release pull request open for unreleased changes. `.tagpr` lists `VERSION` and all three plugin manifests as version files, so the release pull request keeps the CLI and bundled plugins synchronized. Pull request labels can select a minor or major bump; otherwise tagpr proposes a patch release.
+The release workflow on `main` uses [tagpr](https://github.com/Songmu/tagpr) to keep a release pull request open for unreleased changes. `.tagpr` lists `VERSION` and all three plugin manifests as version files. Its `postVersionCommand` updates both bundled skills' CLI compatibility ranges from `VERSION`, and tagpr commits those changes to the release pull request. Pull request labels can select a minor or major bump; otherwise tagpr proposes a patch release.
 
 Merging the release pull request creates the `v<VERSION>` tag and a draft GitHub Release with tagpr's generated release notes. The same workflow passes tagpr's tag output to GoReleaser, which uses that draft, uploads the cross-platform archives and `checksums.txt`, and publishes it. Release tags should therefore be created through the tagpr release pull request so the draft Release and its notes exist before GoReleaser runs.
 
@@ -34,14 +34,15 @@ The schema version is independent of the product version. A schema major release
 | CLI/plugin | Readable `groups.json` | Written `groups.json` |
 |---|---|---|
 | `0.3.x` | `semdiff.groups >=1.0.0, <1.1.0` | `semdiff.groups 1.0.0` |
+| `0.4.x` | `semdiff.groups >=1.0.0, <1.1.0` | `semdiff.groups 1.0.0` |
 
-Numeric `version` fields belong to the legacy format. CLI `0.3.x` does not migrate or read those artifacts; regenerate them or use the older unversioned CLI that created them.
+Numeric `version` fields belong to the legacy format. CLI `0.3.x` and `0.4.x` do not migrate or read those artifacts; regenerate them or use the older unversioned CLI that created them.
 
 Draft schema version 4, question file version 2, and answer-session version 1 are local state formats. They remain independent of both the product version and finalized artifact schema.
 
 ## Release checklist
 
 1. Update the compatibility table and the CLI's schema read/write constants when schema support changes.
-2. Update both bundled skills when their accepted CLI minor line changes.
+2. Review the bundled skill ranges that tagpr generates from `VERSION` in the release pull request. `go test ./...` checks that both match the product minor line.
 3. Run `gofmt`, `go test ./...`, plugin validation, and `git diff --check`.
-4. Merge the tagpr release pull request. It updates `VERSION` and the plugin manifests, creates `v<VERSION>` and a draft Release with generated notes, then GoReleaser uploads the artifacts and publishes it.
+4. Merge the tagpr release pull request. It updates `VERSION`, the plugin manifests, and both skills, creates `v<VERSION>` and a draft Release with generated notes, then GoReleaser uploads the artifacts and publishes it.

@@ -8,11 +8,11 @@ rootの `VERSION` がCLIとplugin versionのsource of truthです。Codex manife
 
 製品versionが `1.0.0` 未満の間は、patch releaseを互換な修正、minor releaseを機能追加または破壊的変更に使用します。`1.0.0` 以降は通常のSemVerのmajor/minor/patch互換性規則に従います。現在はprereleaseやbuild metadataを含まないrelease-onlyの `MAJOR.MINOR.PATCH` だけを公開します。
 
-pluginとCLIはrelease時に同じversionを使用します。pluginは同じminor系列の任意のCLI patch releaseを利用できます。そのためplugin `0.3.x` はCLI `>=0.3.0, <0.4.0` を受け入れます。
+pluginとCLIはrelease時に同じversionを使用します。pluginは同じminor系列の任意のCLI patch releaseを利用できます。そのためplugin `0.4.x` はCLI `>=0.4.0, <0.5.0` を受け入れます。
 
 ## 製品releaseの自動化
 
-`main` のrelease workflowは [tagpr](https://github.com/Songmu/tagpr)を使い、未releaseの変更に対するrelease pull requestを作成・更新します。`.tagpr` には `VERSION` と三つのplugin manifestをversion fileとして指定しているため、release pull requestの中でCLIと同梱pluginのversionが同期されます。pull requestのlabelでminorまたはmajor bumpを選べます。指定がなければtagprはpatch releaseを提案します。
+`main` のrelease workflowは [tagpr](https://github.com/Songmu/tagpr)を使い、未releaseの変更に対するrelease pull requestを作成・更新します。`.tagpr` には `VERSION` と三つのplugin manifestをversion fileとして指定しています。`postVersionCommand` は `VERSION` から同梱する両skillのCLI互換範囲を更新し、tagprはその変更をrelease pull requestにcommitします。pull requestのlabelでminorまたはmajor bumpを選べます。指定がなければtagprはpatch releaseを提案します。
 
 release pull requestをmergeすると `v<VERSION>` tagと、tagprが生成したRelease Noteを含むDraftのGitHub Releaseが作られます。同じworkflow内でtagprのtag outputをGoReleaserに渡し、GoReleaserはそのDraftを引き継いで複数platform向けarchiveと `checksums.txt` を添付し、公開します。GoReleaserの前にDraft ReleaseとそのRelease Noteが存在する必要があるため、release tagはtagprのrelease pull request経由で作成します。
 
@@ -34,14 +34,15 @@ schema versionは製品versionから独立しています。schema major release
 | CLI/plugin | 読み取れる `groups.json` | 書き出す `groups.json` |
 |---|---|---|
 | `0.3.x` | `semdiff.groups >=1.0.0, <1.1.0` | `semdiff.groups 1.0.0` |
+| `0.4.x` | `semdiff.groups >=1.0.0, <1.1.0` | `semdiff.groups 1.0.0` |
 
-数値の `version` fieldは従来formatです。CLI `0.3.x` はこのartifactをmigrationも読み取りもしません。再生成するか、artifactを作成した旧unversioned CLIを使用してください。
+数値の `version` fieldは従来formatです。CLI `0.3.x` と `0.4.x` はこのartifactをmigrationも読み取りもしません。再生成するか、artifactを作成した旧unversioned CLIを使用してください。
 
 draft schema version 4、question file version 2、answer session version 1はローカル状態のformatです。製品versionおよびfinalized artifact schemaとは独立したまま管理します。
 
 ## Release checklist
 
 1. schema対応を変える場合は、互換表とCLIのschema read/write定数を更新します。
-2. 対応するCLI minor系列が変わる場合は、同梱する両skillを更新します。
+2. tagprが `VERSION` から生成した両skillの互換範囲をrelease pull requestで確認します。`go test ./...` は、両方が製品のminor系列と一致することを検査します。
 3. `gofmt`、`go test ./...`、plugin validation、`git diff --check` を実行します。
-4. tagprのrelease pull requestをmergeします。`VERSION` とplugin manifestが更新され、`v<VERSION>` tagとRelease Note付きのDraft Releaseが作られます。その後GoReleaserがartifactを添付して公開します。
+4. tagprのrelease pull requestをmergeします。`VERSION`、plugin manifest、両skillが更新され、`v<VERSION>` tagとRelease Note付きのDraft Releaseが作られます。その後GoReleaserがartifactを添付して公開します。

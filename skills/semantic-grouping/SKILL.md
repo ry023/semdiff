@@ -9,7 +9,7 @@ description: semdiff CLI を使って Git のコミット範囲をレビュー�
 
 ## 互換性の事前確認
 
-他の `semdiff` commandより先に `semdiff version --json` を実行します。このplugin 0.3.xには、versionが `>=0.3.0, <0.4.0` のCLIが必要です。commandが見つからない、JSONを解析できない、またはversionが範囲外の場合は作業を開始せず、READMEの手順でCLIをインストールまたは更新するよう報告します。
+他の `semdiff` commandより先に `semdiff version --json` を実行します。このplugin 0.4.xには、versionが `>=0.4.0, <0.5.0` のCLIが必要です。commandが見つからない、JSONを解析できない、またはversionが範囲外の場合は作業を開始せず、READMEの手順でCLIをインストールまたは更新するよう報告します。
 
 ## 成果物の構造
 
