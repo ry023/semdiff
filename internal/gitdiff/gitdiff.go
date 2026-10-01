@@ -19,6 +19,14 @@ import (
 
 type Runner struct{ Dir string }
 
+func (r Runner) Root(ctx context.Context) (string, error) {
+	b, err := r.git(ctx, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", fmt.Errorf("find repository root: %w", err)
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
 type pullRequestRefs struct {
 	BaseRefName string `json:"baseRefName"`
 	BaseRefOID  string `json:"baseRefOid"`

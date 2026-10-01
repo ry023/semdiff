@@ -218,6 +218,28 @@ func TestParseRange(t *testing.T) {
 	}
 }
 
+func TestRunnerRootFromSubdirectory(t *testing.T) {
+	dir := t.TempDir()
+	if b, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, b)
+	}
+	nested := filepath.Join(dir, "one", "two")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	root, err := (Runner{Dir: nested}).Root(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root != want {
+		t.Fatalf("root = %q, want %q", root, want)
+	}
+}
+
 func TestParseBinaryAndQuotedPath(t *testing.T) {
 	diff := "diff --git \"a/image file.png\" \"b/image file.png\"\nnew file mode 100644\nindex 000..111\nBinary files /dev/null and b/image file.png differ\n"
 	changes, err := ParseUnified([]byte(diff), "base", "head")

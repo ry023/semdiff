@@ -11,7 +11,6 @@ import (
 
 const (
 	ProjectFile = "semdiff.yaml"
-	LocalFile   = ".semdiff/config.local.yaml"
 )
 
 type ReviewStore struct {
@@ -31,37 +30,28 @@ type File struct {
 	ReviewStore ReviewStore `yaml:"review_store"`
 }
 
-// Load merges the optional repository and local configuration files. Local
-// settings intentionally win, so a repository can share a branch convention
-// without forcing a user's private artifact repository.
-func Load(dir string) (ReviewStore, error) {
-	var result ReviewStore
-	for _, name := range []string{ProjectFile, LocalFile} {
-		path := filepath.Join(dir, name)
-		b, err := os.ReadFile(path)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return ReviewStore{}, err
-		}
-		var f File
-		decoder := yaml.NewDecoder(strings.NewReader(string(b)))
-		decoder.KnownFields(true)
-		if err := decoder.Decode(&f); err != nil {
-			return ReviewStore{}, fmt.Errorf("decode %s: %w", path, err)
-		}
-		if f.ReviewStore.Remote != "" {
-			result.Remote, result.Repository = f.ReviewStore.Remote, ""
-		}
-		if f.ReviewStore.Repository != "" {
-			result.Repository, result.Remote = f.ReviewStore.Repository, ""
-		}
-		if f.ReviewStore.Branch != "" {
-			result.Branch = f.ReviewStore.Branch
-		}
+// Load reads an explicitly selected configuration file, or semdiff.yaml from
+// the repository root when path is empty. An explicit path is required to
+// exist and replaces, rather than merges with, the repository configuration.
+func Load(repositoryRoot, path string) (ReviewStore, error) {
+	required := path != ""
+	if !required {
+		path = filepath.Join(repositoryRoot, ProjectFile)
 	}
-	return Normalize(result)
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) && !required {
+		return Normalize(ReviewStore{})
+	}
+	if err != nil {
+		return ReviewStore{}, err
+	}
+	var f File
+	decoder := yaml.NewDecoder(strings.NewReader(string(b)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&f); err != nil {
+		return ReviewStore{}, fmt.Errorf("decode %s: %w", path, err)
+	}
+	return Normalize(f.ReviewStore)
 }
 
 func Normalize(store ReviewStore) (ReviewStore, error) {

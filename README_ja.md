@@ -172,7 +172,7 @@ CI では draft 作成前にローカルの `resolve --json` と `remote resolve
 
 保存先は full SHA による `<base-sha>...<head-sha>/groups.json` です。`semdiff remote view-index` は branch の一覧を HTML で表示し、Refresh で fetch します。`semdiff remote view [<base>..<head>]` は完全一致するリモートレビューをローカルに `groups.json` を保存せず表示します。`semdiff remote pull [<base>..<head>]` は `.semdiff/reviews/` に保存します。view と pull で range を省略すると現在の range を使います。pull は既存ファイルを上書きする前に確認し、`--force` は確認なしで上書き、`--no-clobber` は確認なしでエラーにします。非対話環境で既存ファイルがある場合はどちらかの指定が必要です。旧 `publish`、`reviews view`、`reviews resolve` は help に表示しない警告付き alias として残します。
 
-任意の repository 共通 `semdiff.yaml` で保存先を指定できます。
+Git repository root に置いた任意の repository 共通 `semdiff.yaml` で保存先を指定できます。subdirectory から `semdiff` を実行した場合もこのファイルを参照します。
 
 ```yaml
 review_store:
@@ -180,7 +180,7 @@ review_store:
   branch: semdiff/reviews
 ```
 
-別 repository を使う場合は、Git 管理外の個人用 `.semdiff/config.local.yaml` に `repository` を設定できます。
+別の設定ファイルを選ぶには `--config <path>` を使います。指定した場合は `semdiff.yaml` と merge せず、そのファイルだけを設定の基底として使います。
 
 ```yaml
 review_store:
@@ -188,7 +188,7 @@ review_store:
   branch: semdiff/reviews
 ```
 
-CLI flag、ローカル設定、`semdiff.yaml`、既定値の順に優先されます。`remote` と `repository` は同時に指定できません。
+`--remote`、`--repository`、`--branch` は、選択された設定の対応する値だけを上書きします。`--config` がなければ `semdiff.yaml`、それもなければ既定値を使います。`remote` と `repository` は同時に指定できません。
 
 Viewer では semantic Group または Fragment に質問 thread を紐づけられます。同じ thread への follow-up は回答済み turn を文脈として継続し、新しい Ask は独立した context を開始します。`semdiff view` を起動したまま、AI Agent に `answer-semdiff` skill を開始させてください。skill は回答 session を開始し、pending の turn を1件ずつ claim します。Agent は回答を登録したあと次の質問を待ち、Viewer の「End answer mode」で session を終了すると skill も完了します。回答モード外では Ask button を隠し、開始方法の案内を Viewer 上部に表示します。thread の状態は `.semdiff/questions/`、現在の回答 session は `.semdiff/sessions/` に保存され、どちらも `groups.json` から分離されています。
 
