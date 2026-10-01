@@ -1,5 +1,6 @@
 [tagpr]
 releaseBranch = main
 versionFile = VERSION,.claude-plugin/plugin.json,.claude-plugin/marketplace.json,.codex-plugin/plugin.json
+postVersionCommand = python3 scripts/sync_skill_versions.py
 vPrefix = true
 release = draft

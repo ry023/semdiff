@@ -19,6 +19,8 @@ jobs:
         run: test -z "$(gofmt -l .)"
       - name: Test
         run: go test ./...
+      - name: Test release skill sync
+        run: python3 -B -m unittest discover -s scripts -p 'test_*.py'
       - name: Check diff whitespace
         run: git diff --check
       - name: Match release tag to VERSION

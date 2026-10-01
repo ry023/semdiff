@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/ry023/semdiff/internal/groups"
+	"github.com/ry023/semdiff/internal/versioning"
 )
 
 func captureStdout(t *testing.T, fn func() error) (string, error) {
@@ -95,16 +98,28 @@ func TestProductAndPluginVersionsStayInSync(t *testing.T) {
 }
 
 func TestBundledSkillsCheckCLICompatibility(t *testing.T) {
+	version, err := versioning.Parse(productVersion())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRange := fmt.Sprintf(">=%d.%d.0, <%d.%d.0", version.Major, version.Minor, version.Major, version.Minor+1)
+	wantPluginLine := fmt.Sprintf("plugin %d.%d.x", version.Major, version.Minor)
+	ranges := regexp.MustCompile(`>=\d+\.\d+\.\d+, <\d+\.\d+\.\d+`)
+	pluginLines := regexp.MustCompile(`plugin \d+\.\d+\.x`)
 	for _, path := range []string{"skills/semantic-grouping/SKILL.md", "skills/answer-semdiff/SKILL.md"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		body := string(data)
-		for _, expected := range []string{"semdiff version --json", ">=0.3.0, <0.4.0"} {
-			if !strings.Contains(body, expected) {
-				t.Fatalf("%s is missing %q", path, expected)
-			}
+		if !strings.Contains(body, "semdiff version --json") {
+			t.Fatalf("%s is missing CLI version check", path)
+		}
+		if actual := ranges.FindAllString(body, -1); len(actual) != 1 || actual[0] != wantRange {
+			t.Fatalf("%s CLI ranges = %q, want [%q]", path, actual, wantRange)
+		}
+		if actual := pluginLines.FindAllString(body, -1); len(actual) != 1 || actual[0] != wantPluginLine {
+			t.Fatalf("%s plugin lines = %q, want [%q]", path, actual, wantPluginLine)
 		}
 	}
 }
