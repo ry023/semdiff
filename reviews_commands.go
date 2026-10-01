@@ -67,9 +67,11 @@ func runReviews(ctx context.Context, args []string) error {
 
 func runRemote(ctx context.Context, runner gitdiff.Runner, args []string) error {
 	if len(args) == 0 {
-		return errors.New("remote requires view-index, view, pull, or push")
+		return errors.New("remote requires resolve, view-index, view, pull, or push")
 	}
 	switch args[0] {
+	case "resolve":
+		return runRemoteResolve(ctx, runner, args[1:])
 	case "view-index":
 		return runRemoteViewIndex(ctx, runner, args[1:])
 	case "view":
@@ -81,6 +83,58 @@ func runRemote(ctx context.Context, runner gitdiff.Runner, args []string) error 
 	default:
 		return fmt.Errorf("unknown remote subcommand %q", args[0])
 	}
+}
+
+func runRemoteResolve(ctx context.Context, runner gitdiff.Runner, args []string) error {
+	options, err := parseCommand[remoteResolveArgs]("remote resolve", args)
+	if err != nil {
+		return err
+	}
+	if options.Force && options.NoClobber {
+		return errors.New("remote resolve --force and --no-clobber cannot be used together")
+	}
+	if !options.Pull && (options.Force || options.NoClobber) {
+		return errors.New("remote resolve --force and --no-clobber require --pull")
+	}
+	var positional []string
+	if options.Range != "" {
+		positional = append(positional, options.Range)
+	}
+	base, head, err := remoteRange(ctx, runner, positional)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Load(runner.Dir)
+	if err != nil {
+		return err
+	}
+	cfg, err = config.Override(cfg, options.Remote, options.Repository, options.Branch)
+	if err != nil {
+		return err
+	}
+	store := reviews.Store{Dir: runner.Dir, Config: cfg}
+	match, err := store.Resolve(ctx, runner, base, head, options.Exact)
+	if err != nil {
+		return err
+	}
+	result := reviewResolveOutput{CurrentBaseSHA: base, CurrentHeadSHA: head}
+	if match != nil {
+		result.RemotePath = match.Path
+		if options.Pull {
+			path := localReviewPath(runner.Dir, base, match.HeadSHA)
+			if err := checkRemoteOverwrite(path, options.Force, options.NoClobber); err != nil {
+				return err
+			}
+			if err := saveRemoteArtifact(path, match.Data); err != nil {
+				return err
+			}
+			result.GroupsPath = path
+		}
+		result.Found = true
+		result.ReviewBaseSHA, result.ReviewHeadSHA = base, match.HeadSHA
+		result.Exact, result.CommitsBehind = match.HeadSHA == head, match.CommitsBehind
+	}
+	return printReviewResolution(options.JSON, result)
 }
 
 func remoteStore(remote, repository, branch string) (reviews.Store, error) {
@@ -220,6 +274,24 @@ func confirmOverwrite(path string, input io.Reader, output io.Writer, terminal b
 	return nil
 }
 
+func checkRemoteOverwrite(path string, force, noClobber bool) error {
+	exists, err := reviewFileExists(path)
+	if err != nil {
+		return err
+	}
+	if exists && noClobber {
+		return fmt.Errorf("%s already exists", path)
+	}
+	if exists && !force {
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return err
+		}
+		return confirmOverwrite(path, os.Stdin, os.Stderr, stat.Mode()&os.ModeCharDevice != 0)
+	}
+	return nil
+}
+
 func saveRemoteArtifact(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -262,21 +334,8 @@ func runRemotePull(ctx context.Context, runner gitdiff.Runner, args []string) er
 		return err
 	}
 	path := reviews.LocalPath(baseSHA, headSHA)
-	exists, err := reviewFileExists(path)
-	if err != nil {
+	if err := checkRemoteOverwrite(path, *force, *noClobber); err != nil {
 		return err
-	}
-	if exists && *noClobber {
-		return fmt.Errorf("%s already exists", path)
-	}
-	if exists && !*force {
-		stat, err := os.Stdin.Stat()
-		if err != nil {
-			return err
-		}
-		if err := confirmOverwrite(path, os.Stdin, os.Stderr, stat.Mode()&os.ModeCharDevice != 0); err != nil {
-			return err
-		}
 	}
 	store, err := remoteStore(*remote, *repository, *branch)
 	if err != nil {
@@ -346,6 +405,7 @@ func runRemotePush(ctx context.Context, runner gitdiff.Runner, args []string) er
 type reviewResolveOutput struct {
 	Found          bool   `json:"found"`
 	GroupsPath     string `json:"groups_path,omitempty"`
+	RemotePath     string `json:"remote_path,omitempty"`
 	CurrentBaseSHA string `json:"current_base_sha"`
 	CurrentHeadSHA string `json:"current_head_sha"`
 	ReviewBaseSHA  string `json:"review_base_sha,omitempty"`
@@ -417,7 +477,11 @@ func printReviewResolution(jsonOut bool, result reviewResolveOutput) error {
 	if result.Exact {
 		state = localized("exact", "完全一致")
 	}
-	fmt.Printf(localized("%s review: %s (%s..%s; %d first-parent commits behind)\n", "%sのレビュー: %s (%s..%s; first-parent 上で %d commit 前)\n"), state, result.GroupsPath, result.ReviewBaseSHA, result.ReviewHeadSHA, result.CommitsBehind)
+	path := result.GroupsPath
+	if path == "" {
+		path = result.RemotePath
+	}
+	fmt.Printf(localized("%s review: %s (%s..%s; %d first-parent commits behind)\n", "%sのレビュー: %s (%s..%s; first-parent 上で %d commit 前)\n"), state, path, result.ReviewBaseSHA, result.ReviewHeadSHA, result.CommitsBehind)
 	return nil
 }
 
