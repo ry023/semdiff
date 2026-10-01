@@ -159,7 +159,7 @@ semdiff remote view --addr 127.0.0.1:8080
 
 `remote view` serves HTML without saving the remote `groups.json` locally. To save the exact remote review under `.semdiff/reviews/`, run `semdiff remote pull [<base>..<head>]`. If the file exists, pull asks before replacing it. Use `--force` to replace it without a prompt or `--no-clobber` to fail without a prompt; non-interactive runs with an existing file require one of these flags. Refusing replacement exits with an error. With no range, `remote view` and `remote pull` use the current range, as `grouping init` does.
 
-All `remote` commands accept `--remote`, `--repository`, and `--branch` overrides. `remote push` uses the current grouping draft when no range or file is supplied; a range selects its exact local review file. It uploads only `groups.json`; local question threads are not included. The older `publish`, `reviews view`, and `reviews resolve` commands remain as warning-producing aliases and are omitted from CLI help. See [Sharing reviews](README.md#sharing-reviews) for configuration and storage details.
+All `remote` commands accept `--config <path>`. When present, that file is used instead of the repository-root `semdiff.yaml`; the two files are not merged. `--remote`, `--repository`, and `--branch` then override only their corresponding values. `remote push` uses the current grouping draft when no range or file is supplied; a range selects its exact local review file. It uploads only `groups.json`; local question threads are not included. The older `publish`, `reviews view`, and `reviews resolve` commands remain as warning-producing aliases and are omitted from CLI help. See [Sharing reviews](README.md#sharing-reviews) for configuration and storage details.
 
 ## Draft operations
 

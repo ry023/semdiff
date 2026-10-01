@@ -138,6 +138,7 @@ type questionAnswerArgs struct {
 
 type remoteViewIndexArgs struct {
 	Addr       string `default:"127.0.0.1:7363" help:"Listen address."`
+	Config     string `help:"Use only this configuration file."`
 	Remote     string `help:"Git remote name."`
 	Repository string `help:"Artifact repository URL or path."`
 	Branch     string `help:"Artifact branch."`
@@ -146,6 +147,7 @@ type remoteViewIndexArgs struct {
 type remoteViewArgs struct {
 	Range      string `arg:"" optional:"" name:"base..head"`
 	Addr       string `default:"127.0.0.1:7363" help:"Listen address."`
+	Config     string `help:"Use only this configuration file."`
 	Remote     string `help:"Git remote name."`
 	Repository string `help:"Artifact repository URL or path."`
 	Branch     string `help:"Artifact branch."`
@@ -153,6 +155,7 @@ type remoteViewArgs struct {
 
 type remotePullArgs struct {
 	Range      string `arg:"" optional:"" name:"base..head"`
+	Config     string `help:"Use only this configuration file."`
 	Remote     string `help:"Git remote name."`
 	Repository string `help:"Artifact repository URL or path."`
 	Branch     string `help:"Artifact branch."`
@@ -162,6 +165,7 @@ type remotePullArgs struct {
 
 type remotePushArgs struct {
 	Range      string `arg:"" optional:"" name:"base..head"`
+	Config     string `help:"Use only this configuration file."`
 	Remote     string `help:"Git remote name."`
 	Repository string `help:"Artifact repository URL or path."`
 	Branch     string `help:"Artifact branch."`
@@ -171,6 +175,7 @@ type remotePushArgs struct {
 
 type publishArgs struct {
 	GroupsFile string `arg:"" optional:"" name:"groups-file"`
+	Config     string `help:"Use only this configuration file."`
 	Remote     string `help:"Git remote name."`
 	Repository string `help:"Artifact repository URL or path."`
 	Branch     string `help:"Artifact branch."`
@@ -185,6 +190,7 @@ type resolveArgs struct {
 
 type remoteResolveArgs struct {
 	resolveArgs
+	Config     string `help:"Use only this configuration file."`
 	Remote     string `help:"Git remote name."`
 	Repository string `help:"Artifact repository URL or path."`
 	Branch     string `help:"Artifact branch."`

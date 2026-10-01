@@ -86,6 +86,39 @@ func inRepo(t *testing.T, repo string) {
 	t.Cleanup(func() { _ = os.Chdir(previous) })
 }
 
+func TestRemoteStoreConfigSelectionAndOverrides(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "semdiff.yaml"), []byte("review_store:\n  remote: project\n  branch: project-branch\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(repo, "nested")
+	if err := os.Mkdir(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	runner := gitdiff.Runner{Dir: nested}
+	store, err := remoteStore(context.Background(), runner, "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.Config.Remote != "project" || store.Config.Branch != "project-branch" {
+		t.Fatalf("repository config not loaded from root: %+v", store.Config)
+	}
+	explicit := filepath.Join(t.TempDir(), "explicit.yaml")
+	if err := os.WriteFile(explicit, []byte("review_store:\n  repository: ../artifacts.git\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	store, err = remoteStore(context.Background(), runner, explicit, "command-line", "", "command-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.Config.Remote != "command-line" || store.Config.Repository != "" || store.Config.Branch != "command-branch" {
+		t.Fatalf("unexpected explicit config with overrides: %+v", store.Config)
+	}
+}
+
 func TestRemotePushPullAndValidation(t *testing.T) {
 	repo, remote, base, head, runner := remoteFixture(t)
 	inRepo(t, repo)
@@ -98,7 +131,7 @@ func TestRemotePushPullAndValidation(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	store, err := remoteStore("", remote, "")
+	store, err := remoteStore(context.Background(), runner, "", "", remote, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -47,6 +47,9 @@ func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error
 	if *branch != "" {
 		translated = append(translated, "--branch", *branch)
 	}
+	if options.Config != "" {
+		translated = append(translated, "--config", options.Config)
+	}
 	return runRemotePush(ctx, runner, translated)
 }
 
@@ -104,7 +107,7 @@ func runRemoteResolve(ctx context.Context, runner gitdiff.Runner, args []string)
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(runner.Dir)
+	cfg, err := loadRemoteConfig(ctx, runner, options.Config)
 	if err != nil {
 		return err
 	}
@@ -137,8 +140,16 @@ func runRemoteResolve(ctx context.Context, runner gitdiff.Runner, args []string)
 	return printReviewResolution(options.JSON, result)
 }
 
-func remoteStore(remote, repository, branch string) (reviews.Store, error) {
-	storeConfig, err := config.Load(".")
+func loadRemoteConfig(ctx context.Context, runner gitdiff.Runner, path string) (config.ReviewStore, error) {
+	root, err := runner.Root(ctx)
+	if err != nil {
+		return config.ReviewStore{}, err
+	}
+	return config.Load(root, path)
+}
+
+func remoteStore(ctx context.Context, runner gitdiff.Runner, configPath, remote, repository, branch string) (reviews.Store, error) {
+	storeConfig, err := loadRemoteConfig(ctx, runner, configPath)
 	if err != nil {
 		return reviews.Store{}, err
 	}
@@ -146,7 +157,7 @@ func remoteStore(remote, repository, branch string) (reviews.Store, error) {
 	if err != nil {
 		return reviews.Store{}, err
 	}
-	return reviews.Store{Dir: ".", Config: storeConfig}, nil
+	return reviews.Store{Dir: runner.Dir, Config: storeConfig}, nil
 }
 
 func runRemoteViewIndex(ctx context.Context, runner gitdiff.Runner, args []string) error {
@@ -155,7 +166,7 @@ func runRemoteViewIndex(ctx context.Context, runner gitdiff.Runner, args []strin
 		return err
 	}
 	addr, remote, repository, branch := &options.Addr, &options.Remote, &options.Repository, &options.Branch
-	store, err := remoteStore(*remote, *repository, *branch)
+	store, err := remoteStore(ctx, runner, options.Config, *remote, *repository, *branch)
 	if err != nil {
 		return err
 	}
@@ -237,7 +248,7 @@ func runRemoteView(ctx context.Context, runner gitdiff.Runner, args []string) er
 	if err != nil {
 		return err
 	}
-	store, err := remoteStore(*remote, *repository, *branch)
+	store, err := remoteStore(ctx, runner, options.Config, *remote, *repository, *branch)
 	if err != nil {
 		return err
 	}
@@ -337,7 +348,7 @@ func runRemotePull(ctx context.Context, runner gitdiff.Runner, args []string) er
 	if err := checkRemoteOverwrite(path, *force, *noClobber); err != nil {
 		return err
 	}
-	store, err := remoteStore(*remote, *repository, *branch)
+	store, err := remoteStore(ctx, runner, options.Config, *remote, *repository, *branch)
 	if err != nil {
 		return err
 	}
@@ -380,7 +391,7 @@ func runRemotePush(ctx context.Context, runner gitdiff.Runner, args []string) er
 			return fmt.Errorf("locate default groups file from draft: %w", err)
 		}
 	}
-	store, err := remoteStore(*remote, *repository, *branch)
+	store, err := remoteStore(ctx, runner, options.Config, *remote, *repository, *branch)
 	if err != nil {
 		return err
 	}

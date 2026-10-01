@@ -43,6 +43,7 @@ var commandHelpJA = map[string]string{
 	"Answer session ID.":                                                  "回答セッション ID。",
 	"Read answer from stdin.":                                             "標準入力から回答を読みます。",
 	"Listen address.":                                                     "待受アドレス。",
+	"Use only this configuration file.":                                   "この設定ファイルだけを使います。",
 	"Git remote name.":                                                    "Git remote の名前。",
 	"Artifact repository URL or path.":                                    "成果物 repository の URL またはパス。",
 	"Artifact branch.":                                                    "成果物 branch。",

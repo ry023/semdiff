@@ -171,7 +171,7 @@ For CI, run local `resolve --json` and `remote resolve --json` before creating a
 
 Artifacts are stored at `<base-sha>...<head-sha>/groups.json` using full SHAs. `semdiff remote view-index` opens an HTML index of the branch, and its Refresh button fetches updates. `semdiff remote view [<base>..<head>]` opens one exact remote review without saving `groups.json` locally. `semdiff remote pull [<base>..<head>]` saves it under `.semdiff/reviews/`. View and pull use the current range when omitted. Pull confirms before replacing an existing file; `--force` overwrites without prompting, while `--no-clobber` fails without prompting. A non-interactive pull with an existing file requires one of these flags. The old `publish`, `reviews view`, and `reviews resolve` commands remain as warning-producing aliases outside CLI help.
 
-An optional repository-shared `semdiff.yaml` can specify the store:
+An optional repository-shared `semdiff.yaml` at the Git repository root can specify the store. It is found even when `semdiff` is run from a subdirectory:
 
 ```yaml
 review_store:
@@ -179,7 +179,7 @@ review_store:
   branch: semdiff/reviews
 ```
 
-For a separate artifact repository, place its URL in the Git-ignored local `.semdiff/config.local.yaml`:
+Use `--config <path>` to select a different configuration file. When specified, this file replaces `semdiff.yaml` rather than merging with it:
 
 ```yaml
 review_store:
@@ -187,7 +187,7 @@ review_store:
   branch: semdiff/reviews
 ```
 
-CLI flags override local configuration, which overrides `semdiff.yaml`, which overrides the defaults. `remote` and `repository` are mutually exclusive.
+`--remote`, `--repository`, and `--branch` override only their corresponding values from the selected configuration. Without `--config`, `semdiff.yaml` overrides the defaults. `remote` and `repository` are mutually exclusive.
 
 The viewer can attach question threads to a semantic Group or Fragment. A follow-up continues with the answered turns from that thread, while a new Ask starts an independent context. Keep `semdiff view` running, then ask an AI agent to start the `answer-semdiff` skill. The skill starts an answer session, claims pending turns one at a time, answers them, and waits again. Ending answer mode in the viewer stops the session and lets the skill finish. Outside answer mode, Ask buttons are hidden and the viewer shows instructions for starting the skill. Thread state lives under `.semdiff/questions/`; the current answer session lives separately under `.semdiff/sessions/`.
 
