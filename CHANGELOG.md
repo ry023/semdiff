@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.1](https://github.com/ry023/semdiff/compare/v0.4.0...v0.4.1) - 2026-10-01
+
+- Fix version by @ry023 in https://github.com/ry023/semdiff/pull/9
+
 ## [v0.4.0](https://github.com/ry023/semdiff/compare/v0.3.1...v0.4.0) - 2026-09-30
 
 - コマンド体系を再構成 by @ry023 in https://github.com/ry023/semdiff/pull/6
