@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.2](https://github.com/ry023/semdiff/compare/v0.4.1...v0.4.2) - 2026-10-01
+
+- `remote resolve` コマンドの追加 by @ry023 in https://github.com/ry023/semdiff/pull/11
+
 ## [v0.4.1](https://github.com/ry023/semdiff/compare/v0.4.0...v0.4.1) - 2026-10-01
 
 - Fix version by @ry023 in https://github.com/ry023/semdiff/pull/9
