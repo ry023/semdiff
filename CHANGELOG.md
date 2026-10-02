@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.4.3](https://github.com/ry023/semdiff/compare/v0.4.2...v0.4.3) - 2026-10-02
+
+- configの読み込みパスを修正 by @ry023 in https://github.com/ry023/semdiff/pull/13
+- 他のリポジトリをリモートにしたときにpushがうまくいかない件を解消 by @ry023 in https://github.com/ry023/semdiff/pull/15
+- remote view コマンドを削除 by @ry023 in https://github.com/ry023/semdiff/pull/16
+- viewは自動でブラウザ立ち上げる by @ry023 in https://github.com/ry023/semdiff/pull/17
+
 ## [v0.4.2](https://github.com/ry023/semdiff/compare/v0.4.1...v0.4.2) - 2026-10-01
 
 - `remote resolve` コマンドの追加 by @ry023 in https://github.com/ry023/semdiff/pull/11
