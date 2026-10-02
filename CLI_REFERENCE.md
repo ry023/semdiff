@@ -149,17 +149,16 @@ semdiff remote push <base>..<head>
 semdiff remote push --groups-file path/to/groups.json
 ```
 
-Open an HTML index of all reviews stored on that branch, or open one exact remote review directly:
+Fetch the exact or nearest compatible remote review and open it with the local viewer:
 
 ```sh
-semdiff remote view-index
-semdiff remote view <base>..<head>
-semdiff remote view --addr 127.0.0.1:8080
+semdiff remote resolve --pull
+semdiff view
 ```
 
-`remote view` serves HTML without saving the remote `groups.json` locally. To save the exact remote review under `.semdiff/reviews/`, run `semdiff remote pull [<base>..<head>]`. If the file exists, pull asks before replacing it. Use `--force` to replace it without a prompt or `--no-clobber` to fail without a prompt; non-interactive runs with an existing file require one of these flags. Refusing replacement exits with an error. With no range, `remote view` and `remote pull` use the current range, as `grouping init` does.
+To save only an exact remote review under `.semdiff/reviews/`, run `semdiff remote pull [<base>..<head>]`. If the file exists, pull asks before replacing it. Use `--force` to replace it without a prompt or `--no-clobber` to fail without a prompt; non-interactive runs with an existing file require one of these flags. Refusing replacement exits with an error. With no range, `remote pull` uses the current range, as `grouping init` does.
 
-All `remote` commands accept `--config <path>`. When present, that file is used instead of the repository-root `semdiff.yaml`; the two files are not merged. `--remote`, `--repository`, and `--branch` then override only their corresponding values. `remote push` uses the current grouping draft when no range or file is supplied; a range selects its exact local review file. It uploads only `groups.json`; local question threads are not included. Remote operations keep repository-and-branch-specific bare caches under `.semdiff/cache/review-stores/` instead of fetching artifact refs and objects into the source repository. These caches may be deleted safely. The older `publish`, `reviews view`, and `reviews resolve` commands remain as warning-producing aliases and are omitted from CLI help. See [Sharing reviews](README.md#sharing-reviews) for configuration and storage details.
+All `remote` commands accept `--config <path>`. When present, that file is used instead of the repository-root `semdiff.yaml`; the two files are not merged. `--remote`, `--repository`, and `--branch` then override only their corresponding values. `remote push` uses the current grouping draft when no range or file is supplied; a range selects its exact local review file. It uploads only `groups.json`; local question threads are not included. Remote operations keep repository-and-branch-specific bare caches under `.semdiff/cache/review-stores/` instead of fetching artifact refs and objects into the source repository. These caches may be deleted safely. The older `publish` and `reviews resolve` commands remain as warning-producing aliases and are omitted from CLI help. See [Sharing reviews](README.md#sharing-reviews) for configuration and storage details.
 
 ## Draft operations
 

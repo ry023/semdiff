@@ -53,7 +53,7 @@ func TestHelpExplainsCommandsAndHidesDeprecatedAliases(t *testing.T) {
 		}
 		for _, expected := range []string{
 			"Start a draft from Git changes",
-			"Serve one remote review without saving it",
+			"Find the exact or nearest remote review",
 			"asks",
 			"--force/--no-clobber",
 			"--remote/--repository/--branch",
@@ -62,7 +62,7 @@ func TestHelpExplainsCommandsAndHidesDeprecatedAliases(t *testing.T) {
 				t.Fatalf("%s help is missing %q", arg, expected)
 			}
 		}
-		for _, hidden := range []string{"reviews resolve", "reviews view", "semdiff publish"} {
+		for _, hidden := range []string{"reviews resolve", "semdiff publish"} {
 			if strings.Contains(output, hidden) {
 				t.Fatalf("%s help contains deprecated command %q", arg, hidden)
 			}

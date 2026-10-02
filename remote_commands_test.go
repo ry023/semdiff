@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -139,21 +137,8 @@ func TestRemotePushPullAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := strings.TrimSuffix(reviews.Path(base, head), "/groups.json")
-	request := httptest.NewRequest(http.MethodGet, "/review/"+key+"/", nil)
-	response := httptest.NewRecorder()
-	handler := reviewIndexHandler(ctx, runner, store)
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "<title>Semantic Changes</title>") {
-		t.Fatalf("remote review HTML: status=%d", response.Code)
-	}
-	indexResponse := httptest.NewRecorder()
-	handler.ServeHTTP(indexResponse, httptest.NewRequest(http.MethodGet, "/", nil))
-	if indexResponse.Code != http.StatusOK || !strings.Contains(indexResponse.Body.String(), key) {
-		t.Fatalf("remote index HTML: status=%d", indexResponse.Code)
-	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("view preparation saved a local review: %v", err)
+		t.Fatalf("remote artifact read saved a local review: %v", err)
 	}
 	if err := runRemotePull(ctx, runner, []string{rangeSpec, "--repository", remote}); err != nil {
 		t.Fatal(err)
@@ -280,8 +265,8 @@ func TestDeprecatedCommandsAreHiddenAndWarn(t *testing.T) {
 	os.Stderr = writer
 	defer func() { os.Stderr = oldStderr }()
 	usage()
-	if err := run(context.Background(), []string{"reviews", "view", "unexpected"}); err == nil {
-		t.Fatal("legacy view should reject a positional argument")
+	if err := run(context.Background(), []string{"reviews", "view"}); err == nil || !strings.Contains(err.Error(), "unknown reviews subcommand") {
+		t.Fatalf("removed legacy view error = %v", err)
 	}
 	if err := run(context.Background(), []string{"publish", "missing-groups.json"}); err == nil {
 		t.Fatal("legacy publish should report a missing file")
@@ -295,9 +280,19 @@ func TestDeprecatedCommandsAreHiddenAndWarn(t *testing.T) {
 	if strings.Contains(text, "\tsemdiff publish ") || strings.Contains(text, "\tsemdiff reviews ") {
 		t.Fatalf("deprecated commands appear in help: %s", text)
 	}
-	for _, warning := range []string{"use semdiff remote view-index", "use semdiff remote push"} {
+	for _, warning := range []string{"use semdiff remote push"} {
 		if !strings.Contains(text, warning) {
 			t.Fatalf("missing warning %q", warning)
+		}
+	}
+}
+
+func TestRemovedRemoteViewCommandsAreRejected(t *testing.T) {
+	runner := gitdiff.Runner{Dir: t.TempDir()}
+	for _, command := range []string{"view", "view-index"} {
+		err := runRemote(context.Background(), runner, []string{command})
+		if err == nil || !strings.Contains(err.Error(), "unknown remote subcommand") {
+			t.Fatalf("remote %s error = %v", command, err)
 		}
 	}
 }

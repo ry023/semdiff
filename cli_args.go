@@ -136,23 +136,6 @@ type questionAnswerArgs struct {
 	Draft string   `default:".semdiff/grouping-draft.json" help:"Draft used to locate the default groups file."`
 }
 
-type remoteViewIndexArgs struct {
-	Addr       string `default:"127.0.0.1:7363" help:"Listen address."`
-	Config     string `help:"Use only this configuration file."`
-	Remote     string `help:"Git remote name."`
-	Repository string `help:"Artifact repository URL or path."`
-	Branch     string `help:"Artifact branch."`
-}
-
-type remoteViewArgs struct {
-	Range      string `arg:"" optional:"" name:"base..head"`
-	Addr       string `default:"127.0.0.1:7363" help:"Listen address."`
-	Config     string `help:"Use only this configuration file."`
-	Remote     string `help:"Git remote name."`
-	Repository string `help:"Artifact repository URL or path."`
-	Branch     string `help:"Artifact branch."`
-}
-
 type remotePullArgs struct {
 	Range      string `arg:"" optional:"" name:"base..head"`
 	Config     string `help:"Use only this configuration file."`
