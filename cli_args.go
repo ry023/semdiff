@@ -76,6 +76,7 @@ type validateArgs struct {
 type viewArgs struct {
 	GroupsFile     string  `arg:"" optional:"" name:"groups-file"`
 	Addr           *string `help:"Viewer listen address."`
+	NoOpen         bool    `name:"no-open" help:"Do not open the viewer in a browser."`
 	HTML           string  `help:"Write a self-contained HTML file instead of serving the viewer."`
 	IncludeAnswers bool    `name:"include-answers" help:"Include answered questions in an HTML export."`
 	Draft          *string `help:"Use a draft to locate the groups file."`

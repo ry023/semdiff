@@ -162,6 +162,8 @@ range を省略した `grouping init` は、`gh` で現在の PR を特定でき
 
 groups file と `--draft` の両方を省略した `semdiff view` は、`grouping init` と同じロジックで現在の range を独立に計算します。完全一致する確定済み review があればそれを開き、なければ現在の head の first-parent history をたどって、同じ merge-base を持つ最も近い review を開きます。古い snapshot を表示する場合は HEAD より遅れていることを明示し、未レビューの commit と変更 path を別枠に表示します。古い Fragment range を現在の diff に適用することはありません。fallback を許可しない場合は `--exact`、特定の snapshot を選ぶ場合は groups file または `--draft <path>` を指定します。
 
+Viewer はサーバー起動後にデフォルトブラウザで開きます。ブラウザを起動しない場合は `--no-open` を指定します。
+
 `semdiff resolve --json` は、scriptやskill向けに同じ現在rangeの選択結果を返します。返された `groups_path` を `semdiff grouping init --from <groups-path> --force` に渡すと、最も近い互換reviewから現在range用のdraftをseedできます。sourceは同一base SHAで、headが現在のfirst-parent history上にある必要があります。新draftではGit由来の事実を常に再計算するため、finalize前に改めてvalidateされます。
 
 `semdiff remote resolve [<base>..<head>] --json` は設定された artifact branch から完全一致するレビュー、なければ同じ base の first-parent 上で最も近い祖先レビューを探します。`--exact` は祖先への fallback を無効にします。`--pull` を付けなければ groups file を保存せず、一致した成果物を `remote_path` で返します。`groups_path` は省略されます。`--pull` を付けると、検証済みのレビューを `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存し、`groups_path` を返します。既存ファイルがある場合は `remote pull` と同様に上書きを確認し、`--force` または `--no-clobber` を指定できます。CI ではローカルレビューを保持するなら `--no-clobber`、置き換えるなら `--force` を使えます。一致なしや artifact branch が未作成の場合は正常終了して `found: false` を返します。fetch・認証失敗や不正な成果物はエラーです。
