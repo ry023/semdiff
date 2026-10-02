@@ -69,6 +69,59 @@ func TestPublishCreatesAndPreservesArtifactBranch(t *testing.T) {
 	if !strings.Contains(tree, Path(first.BaseSHA, first.HeadSHA)) || !strings.Contains(tree, Path(second.BaseSHA, second.HeadSHA)) {
 		t.Fatalf("artifact tree missing published files: %s", tree)
 	}
+	if _, err := exec.Command("git", "-C", repo, "rev-parse", "--verify", cacheRef).CombinedOutput(); err == nil {
+		t.Fatalf("publish stored artifact cache ref in source repository")
+	}
+	matches, err := filepath.Glob(filepath.Join(repo, ".semdiff", "cache", "review-stores", "*", "repo.git", "HEAD"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("bare review cache = %v, %v; want one cache", matches, err)
+	}
+}
+
+func TestPublishSeparatesRepositoryCaches(t *testing.T) {
+	repo := t.TempDir()
+	remoteA := filepath.Join(t.TempDir(), "a.git")
+	remoteB := filepath.Join(t.TempDir(), "b.git")
+	git := func(dir string, args ...string) string {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git(repo, "init", "-q")
+	git(repo, "config", "user.name", "Test")
+	git(repo, "config", "user.email", "test@example.com")
+	for _, remote := range []string{remoteA, remoteB} {
+		if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+			t.Fatalf("git init --bare: %v: %s", err, out)
+		}
+	}
+	publish := func(remote, base, head string) {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "groups.json")
+		if err := os.WriteFile(path, []byte(`{"version":2}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		store := Store{Dir: repo, Config: config.ReviewStore{Repository: remote, Branch: "semdiff/reviews"}}
+		if _, err := store.Publish(context.Background(), path, model.GroupsFile{BaseSHA: base, HeadSHA: head}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	baseA, headA := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	baseB, headB := strings.Repeat("c", 40), strings.Repeat("d", 40)
+	publish(remoteA, baseA, headA)
+	publish(remoteB, baseB, headB)
+	treeA := git(remoteA, "ls-tree", "-r", "--name-only", "semdiff/reviews")
+	treeB := git(remoteB, "ls-tree", "-r", "--name-only", "semdiff/reviews")
+	if treeA != Path(baseA, headA) || treeB != Path(baseB, headB) {
+		t.Fatalf("artifact repositories were mixed:\nA: %s\nB: %s", treeA, treeB)
+	}
+	matches, err := filepath.Glob(filepath.Join(repo, ".semdiff", "cache", "review-stores", "*", "repo.git", "HEAD"))
+	if err != nil || len(matches) != 2 {
+		t.Fatalf("bare review caches = %v, %v; want two caches", matches, err)
+	}
 }
 
 func TestLocalPathUsesIgnoredStructuredDirectory(t *testing.T) {

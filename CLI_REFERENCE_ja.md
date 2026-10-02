@@ -159,7 +159,7 @@ semdiff remote view --addr 127.0.0.1:8080
 
 `remote view` は HTML を表示し、リモートの `groups.json` をローカルに保存しません。完全一致するリモートレビューを `.semdiff/reviews/` に保存するには `semdiff remote pull [<base>..<head>]` を使います。保存先が既にある場合は上書きを確認します。`--force` は確認なしで上書きし、`--no-clobber` は確認なしでエラーにします。非対話環境で保存先がある場合は、どちらかのフラグが必要です。上書きを拒否した場合もエラーで終了します。`remote view` と `remote pull` で range を省略すると、`grouping init` と同じ現在の range を使います。
 
-すべての `remote` command は `--config <path>` を受け付けます。指定した場合は repository root の `semdiff.yaml` の代わりにそのファイルだけを使い、両者を merge しません。その後、`--remote`、`--repository`、`--branch` が対応する値だけを上書きします。`remote push` は range と file の両方を省略すると現在の grouping draft から保存元を特定し、range を指定すると完全一致するローカルのレビューを使います。upload するのは `groups.json` だけで、ローカルの質問 thread は含まれません。旧 `publish`、`reviews view`、`reviews resolve` は警告付きの alias として残し、help には表示しません。設定と保存方法は [レビューを共有する](README_ja.md#レビューを共有する) を参照してください。
+すべての `remote` command は `--config <path>` を受け付けます。指定した場合は repository root の `semdiff.yaml` の代わりにそのファイルだけを使い、両者を merge しません。その後、`--remote`、`--repository`、`--branch` が対応する値だけを上書きします。`remote push` は range と file の両方を省略すると現在の grouping draft から保存元を特定し、range を指定すると完全一致するローカルのレビューを使います。upload するのは `groups.json` だけで、ローカルの質問 thread は含まれません。リモート操作では source repository に成果物の ref や object を fetch せず、`.semdiff/cache/review-stores/` 配下の repository・branch 別 bare cache を使います。この cache は安全に削除できます。旧 `publish`、`reviews view`、`reviews resolve` は警告付きの alias として残し、help には表示しません。設定と保存方法は [レビューを共有する](README_ja.md#レビューを共有する) を参照してください。
 
 ## Draft 操作
 
