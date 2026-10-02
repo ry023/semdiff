@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -417,8 +420,9 @@ func run(ctx context.Context, args []string) (err error) {
 			defer cancel()
 			_ = srv.Shutdown(shutdownCtx)
 		}()
-		log.Printf("Semantic Diff Viewer: http://%s", *addr)
-		err = srv.ListenAndServe()
+		url := "http://" + *addr
+		log.Printf("Semantic Diff Viewer: %s", url)
+		err = serveHTTPAndOpen(srv, url, options.NoOpen)
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
@@ -427,6 +431,45 @@ func run(ctx context.Context, args []string) (err error) {
 		usage()
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func browserCommand(goos, url string) (string, []string, error) {
+	switch goos {
+	case "darwin":
+		return "open", []string{url}, nil
+	case "windows":
+		return "rundll32", []string{"url.dll,FileProtocolHandler", url}, nil
+	case "linux":
+		return "xdg-open", []string{url}, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported operating system %q", goos)
+	}
+}
+
+func openBrowser(url string) error {
+	name, args, err := browserCommand(runtime.GOOS, url)
+	if err != nil {
+		return err
+	}
+	command := exec.Command(name, args...)
+	if err := command.Start(); err != nil {
+		return err
+	}
+	go func() { _ = command.Wait() }()
+	return nil
+}
+
+func serveHTTPAndOpen(srv *http.Server, url string, noOpen bool) error {
+	listener, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		return err
+	}
+	if !noOpen {
+		if err := openBrowser(url); err != nil {
+			log.Printf(localized("warning: could not open browser: %v", "警告: ブラウザを開けませんでした: %v"), err)
+		}
+	}
+	return srv.Serve(listener)
 }
 
 func printJSON(v any) error {

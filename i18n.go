@@ -29,6 +29,7 @@ var commandHelpJA = map[string]string{
 	"Read a grouping draft instead of a finalized review.":                "確定済みレビューの代わりに grouping draft を読みます。",
 	"Draft used to locate the default groups file.":                       "既定の groups file を特定するための draft。",
 	"Viewer listen address.":                                              "Viewer の待受アドレス。",
+	"Do not open the viewer in a browser.":                                "Viewer をブラウザで開きません。",
 	"Write a self-contained HTML file instead of serving the viewer.":     "サーバを起動せず、自己完結型の HTML ファイルを書き出します。",
 	"Include answered questions in an HTML export.":                       "HTML 出力に回答済みの質問を含めます。",
 	"Use a draft to locate the groups file.":                              "draft から groups file を特定します。",

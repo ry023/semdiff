@@ -28,11 +28,11 @@ func TestKongParserKeepsStdinMarker(t *testing.T) {
 }
 
 func TestKongParserPreservesInterspersedFlagsAndExplicitViewOptions(t *testing.T) {
-	view, err := parseCommand[viewArgs]("view", []string{"groups.json", "--addr", "127.0.0.1:9000", "--draft", "draft.json", "--include-answers"})
+	view, err := parseCommand[viewArgs]("view", []string{"groups.json", "--addr", "127.0.0.1:9000", "--draft", "draft.json", "--include-answers", "--no-open"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view.GroupsFile != "groups.json" || view.Addr == nil || *view.Addr != "127.0.0.1:9000" || view.Draft == nil || *view.Draft != "draft.json" || !view.IncludeAnswers {
+	if view.GroupsFile != "groups.json" || view.Addr == nil || *view.Addr != "127.0.0.1:9000" || view.Draft == nil || *view.Draft != "draft.json" || !view.IncludeAnswers || !view.NoOpen {
 		t.Fatalf("view options = %+v", view)
 	}
 	pull, err := parseCommand[remotePullArgs]("remote pull", []string{"main..HEAD", "--no-clobber", "--repository", "artifact.git"})
@@ -41,6 +41,26 @@ func TestKongParserPreservesInterspersedFlagsAndExplicitViewOptions(t *testing.T
 	}
 	if pull.Range != "main..HEAD" || !pull.NoClobber || pull.Repository != "artifact.git" {
 		t.Fatalf("pull options = %+v", pull)
+	}
+}
+
+func TestBrowserCommandUsesPlatformLauncher(t *testing.T) {
+	url := "http://127.0.0.1:7363/review/"
+	for _, test := range []struct {
+		goos, name string
+		args       []string
+	}{
+		{"darwin", "open", []string{url}},
+		{"linux", "xdg-open", []string{url}},
+		{"windows", "rundll32", []string{"url.dll,FileProtocolHandler", url}},
+	} {
+		name, args, err := browserCommand(test.goos, url)
+		if err != nil || name != test.name || strings.Join(args, "\x00") != strings.Join(test.args, "\x00") {
+			t.Fatalf("browserCommand(%q) = %q, %q, %v", test.goos, name, args, err)
+		}
+	}
+	if _, _, err := browserCommand("plan9", url); err == nil {
+		t.Fatal("unsupported operating system should fail")
 	}
 }
 

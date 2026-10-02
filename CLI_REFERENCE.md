@@ -99,7 +99,10 @@ Start the interactive viewer on the default address, or choose another listen ad
 ```sh
 semdiff view
 semdiff view --addr 127.0.0.1:8080
+semdiff view --no-open
 ```
+
+The viewer opens in the default browser after the server binds its listen address. Use `--no-open` to serve it without launching a browser.
 
 Without a groups file or `--draft`, `view` infers the current pull-request range with the same logic as `grouping init`. It prefers an exact finalized review. If none exists, it opens the nearest same-base review on the current head's first-parent history and clearly lists the commits and paths that have not been semantically grouped. Use `semdiff view --exact` to require an exact review.
 
