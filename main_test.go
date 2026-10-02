@@ -14,6 +14,7 @@ import (
 	"github.com/ry023/semdiff/internal/groupingdraft"
 	"github.com/ry023/semdiff/internal/groups"
 	"github.com/ry023/semdiff/internal/model"
+	"github.com/ry023/semdiff/internal/questions"
 	"github.com/ry023/semdiff/internal/reviews"
 )
 
@@ -446,6 +447,44 @@ func TestViewWithoutDraftFallsBackToAncestorReviewAndShowsDrift(t *testing.T) {
 	}
 	if _, err := os.Stat(defaultGroupingDraftPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("view should not require or create a grouping draft, stat error = %v", err)
+	}
+
+	questionStore := questions.Store{
+		Path:        questions.DefaultPath(groupsPath, base, reviewedHead),
+		SessionPath: questions.DefaultSessionPath(groupsPath, base, reviewedHead),
+		BaseSHA:     base,
+		HeadSHA:     reviewedHead,
+	}
+	if _, err := questionStore.Sessions().Start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), []string{"view", groupsPath, "--html", htmlPath}); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := questionStore.Sessions().IsActive(); err != nil || !active {
+		t.Fatalf("HTML export changed answer session: active=%t err=%v", active, err)
+	}
+
+}
+
+func TestStopActiveQuestionSession(t *testing.T) {
+	store := questions.Store{Path: filepath.Join(t.TempDir(), "questions.json"), BaseSHA: "base", HeadSHA: "head"}
+	if err := stopActiveQuestionSession(store); err != nil {
+		t.Fatalf("stop without a session: %v", err)
+	}
+	session, err := store.Sessions().Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stopActiveQuestionSession(store); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := store.Sessions().Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || got.ID != session.ID || got.Status != questions.SessionStopped {
+		t.Fatalf("session was not stopped: %+v found=%t", got, found)
 	}
 }
 

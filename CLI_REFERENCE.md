@@ -103,6 +103,8 @@ semdiff view --addr 127.0.0.1:8080
 
 Without a groups file or `--draft`, `view` infers the current pull-request range with the same logic as `grouping init`. It prefers an exact finalized review. If none exists, it opens the nearest same-base review on the current head's first-parent history and clearly lists the commits and paths that have not been semantically grouped. Use `semdiff view --exact` to require an exact review.
 
+Starting the interactive viewer stops any answer session left active for the selected review. Static HTML export does not change the session.
+
 Use `resolve` when a script or skill needs the same selection without starting the viewer. It returns `found`, `groups_path`, the current and selected SHAs, whether the match is exact, and the first-parent commit distance:
 
 ```sh

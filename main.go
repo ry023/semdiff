@@ -404,6 +404,9 @@ func run(ctx context.Context, args []string) (err error) {
 			fmt.Printf(localized("wrote %s\n", "%s を書き出しました\n"), *htmlPath)
 			return nil
 		}
+		if err := stopActiveQuestionSession(questionStore); err != nil {
+			return err
+		}
 		h, err := viewer.HandlerWithQuestions(page, questionStore)
 		if err != nil {
 			return err
@@ -427,6 +430,13 @@ func run(ctx context.Context, args []string) (err error) {
 		usage()
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func stopActiveQuestionSession(store questions.Store) error {
+	if _, err := store.Sessions().Stop(); err != nil && !errors.Is(err, questions.ErrNoActiveSession) {
+		return fmt.Errorf("stop active question session: %w", err)
+	}
+	return nil
 }
 
 func printJSON(v any) error {

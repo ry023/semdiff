@@ -103,6 +103,8 @@ semdiff view --addr 127.0.0.1:8080
 
 groups file と `--draft` の両方を省略した `view` は、`grouping init` と同じロジックで現在の pull request range を計算します。完全一致する確定済み review を優先し、なければ現在の head の first-parent history 上にある同一 base の最も近い review を開きます。その場合、semantic grouping に未反映の commit と path を明示します。完全一致を必須にするには `semdiff view --exact` を使います。
 
+対話型 Viewer の起動時に、選択したレビューで active なまま残っている回答 session を停止します。静的 HTML の出力は session を変更しません。
+
 scriptやskillからViewerと同じ選択結果を使うには `resolve` を使います。`found`、`groups_path`、現在と選択されたSHA、完全一致かどうか、first-parent上のcommit距離を返します。
 
 ```sh

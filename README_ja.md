@@ -190,7 +190,7 @@ review_store:
 
 `--remote`、`--repository`、`--branch` は、選択された設定の対応する値だけを上書きします。`--config` がなければ `semdiff.yaml`、それもなければ既定値を使います。`remote` と `repository` は同時に指定できません。
 
-Viewer では semantic Group または Fragment に質問 thread を紐づけられます。同じ thread への follow-up は回答済み turn を文脈として継続し、新しい Ask は独立した context を開始します。`semdiff view` を起動したまま、AI Agent に `answer-semdiff` skill を開始させてください。skill は回答 session を開始し、pending の turn を1件ずつ claim します。Agent は回答を登録したあと次の質問を待ち、Viewer の「End answer mode」で session を終了すると skill も完了します。回答モード外では Ask button を隠し、開始方法の案内を Viewer 上部に表示します。thread の状態は `.semdiff/questions/`、現在の回答 session は `.semdiff/sessions/` に保存され、どちらも `groups.json` から分離されています。
+Viewer では semantic Group または Fragment に質問 thread を紐づけられます。同じ thread への follow-up は回答済み turn を文脈として継続し、新しい Ask は独立した context を開始します。`semdiff view` の起動時に、そのレビューで active なまま残っている回答 session を停止します。Viewer 起動後に AI Agent に `answer-semdiff` skill を開始させてください。skill は回答 session を開始し、pending の turn を1件ずつ claim します。Agent は回答を登録したあと次の質問を待ち、Viewer の「End answer mode」で session を終了すると skill も完了します。回答モード外では Ask button を隠し、開始方法の案内を Viewer 上部に表示します。thread の状態は `.semdiff/questions/`、現在の回答 session は `.semdiff/sessions/` に保存され、どちらも `groups.json` から分離されています。
 
 `semdiff view --html review.html` は Viewer を自己完結型の読み取り専用 HTML として出力します。`--include-answers` を追加すると、回答済み turn の snapshot も含めます。静的 HTML では Ask、follow-up、回答 session の操作は利用できません。
 
