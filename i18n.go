@@ -89,8 +89,6 @@ Viewer の質問への回答:
 
 Git の成果物 branch でレビューを共有:
   remote resolve [<base>..<head>]     完全一致または最も近いリモートレビューを探します。--pull で保存します。
-  remote view-index                   リモートレビューの HTML 一覧を表示します。
-  remote view [<base>..<head>]        保存せずにリモートレビューを表示します。
   remote pull [<base>..<head>]        リモートレビューをローカルに保存します。
                                       上書き時は確認します（--force/--no-clobber）。
   remote push [<base>..<head>]        ローカルレビューを共有します。省略時は

@@ -170,7 +170,7 @@ CI では draft 作成前にローカルの `resolve --json` と `remote resolve
 
 `remote push` はレビュー成果物である `groups.json` だけを Git の artifact branch に保存します。通常は現在の grouping draft を使い、`<base>..<head>` で完全一致するローカルレビュー、`--groups-file` で任意の保存元も指定できます。質問 thread はローカルのままで、共有・upload されません。設定なしでは現在の repository の `origin` と `semdiff/reviews` branch を使います。branch がまだなければ最初の push 時に orphan branch として作成されます。リモート成果物の操作には `.semdiff/cache/review-stores/` 配下の永続 bare cache を repository と branch ごとに分けて使うため、source repository へ ref や object を fetch しません。この cache は安全に削除でき、必要時に再作成されます。
 
-保存先は full SHA による `<base-sha>...<head-sha>/groups.json` です。`semdiff remote view-index` は branch の一覧を HTML で表示し、Refresh で fetch します。`semdiff remote view [<base>..<head>]` は完全一致するリモートレビューをローカルに `groups.json` を保存せず表示します。`semdiff remote pull [<base>..<head>]` は `.semdiff/reviews/` に保存します。view と pull で range を省略すると現在の range を使います。pull は既存ファイルを上書きする前に確認し、`--force` は確認なしで上書き、`--no-clobber` は確認なしでエラーにします。非対話環境で既存ファイルがある場合はどちらかの指定が必要です。旧 `publish`、`reviews view`、`reviews resolve` は help に表示しない警告付き alias として残します。
+保存先は full SHA による `<base-sha>...<head-sha>/groups.json` です。現在の range に最適なリモートレビューを取得して表示するには、`semdiff remote resolve --pull` に続けて `semdiff view` を実行します。完全一致する成果物を明示的に取得する場合は `semdiff remote pull [<base>..<head>]` も利用できます。pull は既存ファイルを上書きする前に確認し、`--force` は確認なしで上書き、`--no-clobber` は確認なしでエラーにします。非対話環境で既存ファイルがある場合はどちらかの指定が必要です。旧 `publish`、`reviews resolve` は help に表示しない警告付き alias として残します。
 
 Git repository root に置いた任意の repository 共通 `semdiff.yaml` で保存先を指定できます。subdirectory から `semdiff` を実行した場合もこのファイルを参照します。
 

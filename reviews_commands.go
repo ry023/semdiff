@@ -4,21 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"io"
-	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/ry023/semdiff/internal/config"
 	"github.com/ry023/semdiff/internal/gitdiff"
 	"github.com/ry023/semdiff/internal/groups"
-	"github.com/ry023/semdiff/internal/questions"
 	"github.com/ry023/semdiff/internal/reviews"
-	"github.com/ry023/semdiff/internal/viewer"
 )
 
 func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error {
@@ -55,30 +49,22 @@ func runPublish(ctx context.Context, runner gitdiff.Runner, args []string) error
 
 func runReviews(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("reviews requires the subcommand resolve or view")
+		return errors.New("reviews requires the subcommand resolve")
 	}
 	if args[0] == "resolve" {
 		fmt.Fprintln(os.Stderr, localized("warning: semdiff reviews resolve is deprecated; use semdiff resolve", "警告: semdiff reviews resolve は非推奨です。semdiff resolve を使ってください"))
 		return runReviewsResolve(ctx, gitdiff.Runner{Dir: "."}, args[1:])
 	}
-	if args[0] != "view" {
-		return fmt.Errorf("unknown reviews subcommand %q", args[0])
-	}
-	fmt.Fprintln(os.Stderr, localized("warning: semdiff reviews view is deprecated; use semdiff remote view-index", "警告: semdiff reviews view は非推奨です。semdiff remote view-index を使ってください"))
-	return runRemoteViewIndex(ctx, gitdiff.Runner{Dir: "."}, args[1:])
+	return fmt.Errorf("unknown reviews subcommand %q", args[0])
 }
 
 func runRemote(ctx context.Context, runner gitdiff.Runner, args []string) error {
 	if len(args) == 0 {
-		return errors.New("remote requires resolve, view-index, view, pull, or push")
+		return errors.New("remote requires resolve, pull, or push")
 	}
 	switch args[0] {
 	case "resolve":
 		return runRemoteResolve(ctx, runner, args[1:])
-	case "view-index":
-		return runRemoteViewIndex(ctx, runner, args[1:])
-	case "view":
-		return runRemoteView(ctx, runner, args[1:])
 	case "pull":
 		return runRemotePull(ctx, runner, args[1:])
 	case "push":
@@ -160,25 +146,6 @@ func remoteStore(ctx context.Context, runner gitdiff.Runner, configPath, remote,
 	return reviews.Store{Dir: runner.Dir, Config: storeConfig}, nil
 }
 
-func runRemoteViewIndex(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	options, err := parseCommand[remoteViewIndexArgs]("remote view-index", args)
-	if err != nil {
-		return err
-	}
-	addr, remote, repository, branch := &options.Addr, &options.Remote, &options.Repository, &options.Branch
-	store, err := remoteStore(ctx, runner, options.Config, *remote, *repository, *branch)
-	if err != nil {
-		return err
-	}
-	if err := store.Fetch(ctx); err != nil {
-		return err
-	}
-	h := reviewIndexHandler(ctx, runner, store)
-	srv := &http.Server{Addr: *addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("Semantic Diff Reviews: http://%s", *addr)
-	return srv.ListenAndServe()
-}
-
 func remoteRange(ctx context.Context, runner gitdiff.Runner, positional []string) (string, string, error) {
 	if len(positional) > 1 {
 		return "", "", errors.New("accepts at most one <base>..<head>")
@@ -232,42 +199,6 @@ func remoteArtifact(ctx context.Context, runner gitdiff.Runner, store reviews.St
 		return nil, fmt.Errorf("remote groups file is invalid: %s", strings.Join(report.Errors, "; "))
 	}
 	return data, nil
-}
-
-func runRemoteView(ctx context.Context, runner gitdiff.Runner, args []string) error {
-	options, err := parseCommand[remoteViewArgs]("remote view", args)
-	if err != nil {
-		return err
-	}
-	addr, remote, repository, branch := &options.Addr, &options.Remote, &options.Repository, &options.Branch
-	positional := []string{}
-	if options.Range != "" {
-		positional = append(positional, options.Range)
-	}
-	baseSHA, headSHA, err := remoteRange(ctx, runner, positional)
-	if err != nil {
-		return err
-	}
-	store, err := remoteStore(ctx, runner, options.Config, *remote, *repository, *branch)
-	if err != nil {
-		return err
-	}
-	if _, err := remoteArtifact(ctx, runner, store, baseSHA, headSHA); err != nil {
-		return err
-	}
-	key := strings.TrimSuffix(reviews.Path(baseSHA, headSHA), "/groups.json")
-	path := "/review/" + key + "/"
-	index := reviewIndexHandler(ctx, runner, store)
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, path, http.StatusSeeOther)
-			return
-		}
-		index.ServeHTTP(w, r)
-	})
-	srv := &http.Server{Addr: *addr, Handler: h, ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("Semantic Diff Review: http://%s%s", *addr, path)
-	return srv.ListenAndServe()
 }
 
 func confirmOverwrite(path string, input io.Reader, output io.Writer, terminal bool) error {
@@ -494,92 +425,4 @@ func printReviewResolution(jsonOut bool, result reviewResolveOutput) error {
 	}
 	fmt.Printf(localized("%s review: %s (%s..%s; %d first-parent commits behind)\n", "%sのレビュー: %s (%s..%s; first-parent 上で %d commit 前)\n"), state, path, result.ReviewBaseSHA, result.ReviewHeadSHA, result.CommitsBehind)
 	return nil
-}
-
-func reviewIndexHandler(ctx context.Context, runner gitdiff.Runner, store reviews.Store) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		entries, err := store.List(ctx)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, "<!doctype html><title>Semantic Diff Reviews</title><style>body{font:16px system-ui;margin:3rem;max-width:55rem}code{font-family:ui-monospace}li{margin:.7rem 0}button{margin-left:1rem}</style><h1>Semantic Diff Reviews</h1><p>"+html.EscapeString(store.Config.Branch)+" <button onclick=\"location='/refresh'\">Refresh</button></p><ul>")
-		for _, entry := range entries {
-			label := entry.BaseSHA[:12] + "..." + entry.HeadSHA[:12]
-			key := strings.TrimSuffix(entry.Path, "/groups.json")
-			fmt.Fprintf(w, "<li><a href=\"/review/%s/\"><code>%s</code></a></li>", key, label)
-		}
-		fmt.Fprint(w, "</ul>")
-	})
-	mux.HandleFunc("/refresh", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost && r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if err := store.Fetch(r.Context()); err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-	})
-	mux.HandleFunc("/review/", func(w http.ResponseWriter, r *http.Request) {
-		key := strings.Trim(strings.TrimPrefix(r.URL.Path, "/review/"), "/")
-		if strings.Contains(key, "/") || key == "" {
-			http.NotFound(w, r)
-			return
-		}
-		path := key + "/groups.json"
-		b, err := store.Read(r.Context(), path)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		g, err := groups.Parse(b)
-		if err != nil {
-			status := http.StatusInternalServerError
-			var compatibilityError *groups.CompatibilityError
-			if errors.As(err, &compatibilityError) {
-				status = http.StatusConflict
-			}
-			http.Error(w, err.Error(), status)
-			return
-		}
-		changes, err := runner.Changes(r.Context(), g.BaseSHA+".."+g.HeadSHA)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
-		}
-		report := groups.ValidateReport(g, changes)
-		if len(report.Errors) > 0 {
-			http.Error(w, "groups file is invalid: "+strings.Join(report.Errors, "; "), http.StatusConflict)
-			return
-		}
-		paths := make([]string, 0, len(changes.Changes))
-		for _, fragment := range changes.Changes {
-			paths = append(paths, fragment.Path)
-		}
-		questionPath := filepath.Join(".semdiff", "reviews", filepath.Dir(path), "groups.json")
-		questionStore := questions.Store{Path: questions.DefaultPath(questionPath, g.BaseSHA, g.HeadSHA), SessionPath: questions.DefaultSessionPath(questionPath, g.BaseSHA, g.HeadSHA), BaseSHA: g.BaseSHA, HeadSHA: g.HeadSHA}
-		basePath := "/review/" + key + "/"
-		h, err := viewer.HandlerWithQuestionsAt(viewer.Build(g, gitdiff.Materialize(changes, groups.Fragments(g)), runner.FileContents(r.Context(), changes.BaseSHA, changes.HeadSHA, paths)), questionStore, basePath)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		copy := r.Clone(r.Context())
-		copy.URL.Path = strings.TrimPrefix(r.URL.Path, basePath)
-		if copy.URL.Path == "" {
-			copy.URL.Path = "/"
-		} else {
-			copy.URL.Path = "/" + copy.URL.Path
-		}
-		h.ServeHTTP(w, copy)
-	})
-	return mux
 }
