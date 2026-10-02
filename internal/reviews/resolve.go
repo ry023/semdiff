@@ -1,7 +1,6 @@
 package reviews
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -21,8 +20,8 @@ type Resolution struct {
 // and then the nearest first-parent ancestor with the same base.
 func (s Store) Resolve(ctx context.Context, runner gitdiff.Runner, base, head string, exact bool) (*Resolution, error) {
 	if err := s.Fetch(ctx); err != nil {
-		out, probeErr := s.git(ctx, nil, "ls-remote", "--heads", s.endpoint(), "refs/heads/"+s.Config.Branch)
-		if probeErr == nil && len(bytes.TrimSpace(out)) == 0 {
+		exists, probeErr := s.branchExists(ctx)
+		if probeErr == nil && !exists {
 			return nil, nil
 		}
 		return nil, err
