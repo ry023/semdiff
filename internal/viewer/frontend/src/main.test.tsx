@@ -176,14 +176,32 @@ describe("viewer regressions", () => {
   });
 
   it("keeps group and step summaries in their collapsible headers", () => {
-    const { container } = render(<App bootstrap={bootstrap()} />);
+    const data = bootstrap();
+    data.page.groups![0].summary =
+      "Why: First line.\n\n- What: First item.\n- So what: Second item.";
+    data.page.groups![0].steps![0].summary =
+      "First paragraph.\n\n- First item.\n- Second item.";
+    const { container } = render(<App bootstrap={data} />);
 
-    expect(
-      container.querySelector(".guided-group > summary .summary-preview"),
-    ).toHaveTextContent("Group summary");
-    expect(
-      container.querySelector(".review-step > summary .summary-preview"),
-    ).toHaveTextContent("Start with the UI.");
+    const group = container.querySelector(".guided-group")!;
+    const step = container.querySelector(".review-step")!;
+    fireEvent.click(group.querySelector(":scope > summary")!);
+    expect(group).not.toHaveAttribute("open");
+    const groupSummary = group.querySelector(
+      ":scope > summary .summary-preview",
+    )!;
+    expect(groupSummary.querySelector("p")).toHaveTextContent(
+      "Why: First line.",
+    );
+    expect(groupSummary.querySelectorAll("li")).toHaveLength(2);
+    expect(step).not.toHaveAttribute("open");
+    const stepSummary = step.querySelector(
+      ":scope > summary .summary-preview",
+    )!;
+    expect(stepSummary.querySelector("p")).toHaveTextContent(
+      "First paragraph.",
+    );
+    expect(stepSummary.querySelectorAll("li")).toHaveLength(2);
     expect(container.querySelector(".group-summary")).toBeNull();
     expect(container.querySelector(".step-summary")).toBeNull();
   });

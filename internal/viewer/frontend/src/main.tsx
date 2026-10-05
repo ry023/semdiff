@@ -726,7 +726,7 @@ function GuidedGroup({
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
         <div className="summary-preview">
-          <Markdown inline source={group.summary} />
+          <Markdown source={group.summary} />
         </div>
         <span className="count">
           {list(group.steps).length} steps · {group.fragment_count} fragments
@@ -756,7 +756,7 @@ function GuidedGroup({
                 {step.number}. {step.title}
               </h3>
               <div className="summary-preview">
-                <Markdown inline source={step.summary} />
+                <Markdown source={step.summary} />
               </div>
               <Ask anchor={anchor} questions={questions} />
             </summary>
@@ -901,7 +901,7 @@ function FilesGroup({
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
         <div className="summary-preview">
-          <Markdown inline source={group.summary} />
+          <Markdown source={group.summary} />
         </div>
         <span className="count">
           {files.length} files · {group.fragment_count} fragments

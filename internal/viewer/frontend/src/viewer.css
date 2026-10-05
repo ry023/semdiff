@@ -139,9 +139,10 @@ summary::-webkit-details-marker {
   top: 52px;
   z-index: 12;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 9px;
-  height: 42px;
+  min-height: 42px;
   padding: 9px 14px;
   border-left: 4px solid #cba6f7;
   border-radius: 7px 7px 0 0;
@@ -168,20 +169,20 @@ summary::-webkit-details-marker {
 }
 .summary-preview {
   min-width: 0;
-  flex: 1;
-  overflow: hidden;
+  flex: 0 0 calc(100% - 28px);
+  order: 1;
+  margin-left: 28px;
   color: var(--muted);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
-.summary-preview::before {
-  content: "— ";
+.summary-preview .markdown > :not(:last-child) {
+  margin-bottom: 4px;
 }
-.summary-preview .markdown,
-.summary-preview .markdown > * {
-  display: inline;
-  margin: 0;
+.summary-preview .markdown ul,
+.summary-preview .markdown ol {
+  padding-left: 20px;
 }
 .summary {
   color: #bac2de;
@@ -234,13 +235,11 @@ summary::-webkit-details-marker {
   cursor: pointer;
 }
 .review-step > summary {
-  position: sticky;
-  top: 42px;
-  z-index: 11;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  height: 42px;
+  min-height: 42px;
   padding: 8px;
   background: var(--panel);
 }
