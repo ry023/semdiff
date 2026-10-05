@@ -295,11 +295,14 @@ summary::-webkit-details-marker {
 }
 .guided-file {
   margin: var(--space-2) var(--space-1) var(--space-4);
-  padding: 0;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: #181825;
   scroll-margin-top: 92px;
+}
+.guided-file[open] {
+  padding: 0;
 }
 .guided-file > summary,
 .file > summary {
@@ -335,6 +338,7 @@ summary::-webkit-details-marker {
 }
 .guided-file > pre {
   margin: 0;
+  padding: 0;
   border: 0;
   border-top: 1px solid var(--line);
   border-radius: 0 0 5px 5px;

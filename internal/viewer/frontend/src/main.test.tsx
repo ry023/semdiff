@@ -379,11 +379,14 @@ describe("viewer regressions", () => {
     const groupHeader = container.querySelector<HTMLElement>(
       ".guided-group > summary",
     )!;
+    const fragment = container.querySelector(".guided-file")!;
+    expect(fragment).not.toHaveAttribute("open");
+    expect(getComputedStyle(fragment).padding).toBe("8px");
+
     fireEvent.click(
       within(groupHeader).getByRole("button", { name: "Open all" }),
     );
 
-    const fragment = container.querySelector(".guided-file")!;
     const header = fragment.querySelector(":scope > summary")!;
     const diff = fragment.querySelector(":scope > pre")!;
 
@@ -391,6 +394,8 @@ describe("viewer regressions", () => {
     expect(getComputedStyle(fragment).padding).toBe("0px");
     expect(getComputedStyle(header).margin).toBe("0px");
     expect(getComputedStyle(diff).marginTop).toBe("0px");
+    expect(getComputedStyle(diff).paddingTop).toBe("0px");
+    expect(getComputedStyle(diff).paddingBottom).toBe("0px");
   });
 
   it("measures wrapped sticky headers into their descendant offsets", () => {
