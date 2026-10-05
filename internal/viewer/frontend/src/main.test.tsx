@@ -374,6 +374,25 @@ describe("viewer regressions", () => {
     expect(getComputedStyle(fragmentHeader).position).toBe("sticky");
   });
 
+  it("connects the open Fragment header directly to its Diff", () => {
+    const { container } = render(<App bootstrap={bootstrap()} />);
+    const groupHeader = container.querySelector<HTMLElement>(
+      ".guided-group > summary",
+    )!;
+    fireEvent.click(
+      within(groupHeader).getByRole("button", { name: "Open all" }),
+    );
+
+    const fragment = container.querySelector(".guided-file")!;
+    const header = fragment.querySelector(":scope > summary")!;
+    const diff = fragment.querySelector(":scope > pre")!;
+
+    expect(fragment).toHaveAttribute("open");
+    expect(getComputedStyle(fragment).padding).toBe("0px");
+    expect(getComputedStyle(header).margin).toBe("0px");
+    expect(getComputedStyle(diff).marginTop).toBe("0px");
+  });
+
   it("measures wrapped sticky headers into their descendant offsets", () => {
     const shell = document.createElement("div");
     shell.innerHTML = `
