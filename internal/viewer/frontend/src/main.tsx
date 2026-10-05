@@ -1032,6 +1032,7 @@ function FilesGroup({
         <span className="count">
           {t(locale, "filesFragments", {
             files: files.length,
+            fileLabel: pluralTerm(files.length, "File"),
             fragments: group.fragment_count,
             fragmentLabel: pluralTerm(group.fragment_count, "Fragment"),
           })}
@@ -1561,6 +1562,7 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
                     "Group",
                   ),
                   files: bootstrap.page.file_count,
+                  fileLabel: pluralTerm(bootstrap.page.file_count, "File"),
                   fragments: bootstrap.page.fragment_count,
                   fragmentLabel: pluralTerm(
                     bootstrap.page.fragment_count,

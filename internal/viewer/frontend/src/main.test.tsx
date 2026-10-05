@@ -161,7 +161,7 @@ describe("viewer regressions", () => {
         "Semantic Review",
       );
       expect(container.querySelector(".stats")).toHaveTextContent(
-        "1 Group · 1 ファイル · 1 Fragment",
+        "1 Group · 1 File · 1 Fragment",
       );
       expect(
         screen.getByRole("button", { name: "Guided" }),
@@ -189,6 +189,13 @@ describe("viewer regressions", () => {
       expect(
         container.querySelector(".guided-file .category-badge-label"),
       ).toHaveTextContent("ロジック");
+      fireEvent.click(screen.getByRole("button", { name: "Files" }));
+      expect(
+        container.querySelector(".files-group > summary .count"),
+      ).toHaveTextContent("1 File · 1 Fragment");
+      expect(
+        container.querySelector(".files-group .file-status-icon"),
+      ).toHaveAttribute("title", "Updated File");
       expect(document.documentElement.lang).toBe("ja");
       unmount();
     } finally {
