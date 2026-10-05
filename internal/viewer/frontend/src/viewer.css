@@ -205,12 +205,8 @@ summary::-webkit-details-marker {
     monospace;
 }
 .group-summary {
-  margin: 12px 18px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  background: #181825;
+  margin: 7px 18px 12px 42px;
+  color: var(--muted);
 }
 .review-step {
   margin: 0;
