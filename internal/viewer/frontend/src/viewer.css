@@ -115,7 +115,9 @@ summary::-webkit-details-marker {
 }
 .disclosure-actions {
   display: inline-flex;
+  flex: none;
   gap: 5px;
+  margin-left: auto;
 }
 .disclosure-actions button {
   padding: 4px 7px;

@@ -601,8 +601,8 @@ function DisclosureActions({ selector }: { selector: string }) {
   const setOpen = (event: React.MouseEvent, open: boolean) => {
     event.preventDefault();
     event.stopPropagation();
-    const owner = event.currentTarget.closest("details");
-    owner
+    event.currentTarget
+      .closest("details")
       ?.querySelectorAll<HTMLDetailsElement>(selector)
       .forEach((details) => (details.open = open));
   };

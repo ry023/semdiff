@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Bootstrap, DiffItem, FragmentView } from "./types";
 import { App, expandContext } from "./main";
@@ -219,6 +225,63 @@ describe("viewer regressions", () => {
       screen.getByRole("button", { name: "Unified" }),
     );
     expect(container.querySelector(".app-shell > .page-header")).toBeNull();
+  });
+
+  it("keeps disclosure controls in each group header and scopes their action", async () => {
+    const { container } = render(<App bootstrap={bootstrap()} />);
+    const header = container.querySelector(".viewer-shell > .page-header")!;
+    const guidedGroup = container.querySelector(".guided-group")!;
+    const step = container.querySelector(".review-step")!;
+    const guidedFile = container.querySelector(".guided-file")!;
+    const sidebarStep = container.querySelector(".sidebar .nav-step")!;
+    const guidedSummary =
+      guidedGroup.querySelector<HTMLElement>(":scope > summary")!;
+    const guidedOpenAll = within(guidedSummary).getByRole("button", {
+      name: "Open all",
+    });
+    const guidedCloseAll = within(guidedSummary).getByRole("button", {
+      name: "Close all",
+    });
+
+    expect(header).not.toContainElement(guidedOpenAll);
+    expect(header).not.toContainElement(guidedCloseAll);
+    fireEvent.click(guidedOpenAll);
+    expect(guidedGroup).toHaveAttribute("open");
+    expect(guidedFile).toHaveAttribute("open");
+    await waitFor(() => {
+      expect(step).toHaveAttribute("open");
+      expect(sidebarStep).toHaveAttribute("open");
+    });
+
+    fireEvent.click(guidedCloseAll);
+    expect(guidedGroup).toHaveAttribute("open");
+    expect(guidedFile).not.toHaveAttribute("open");
+    await waitFor(() => {
+      expect(step).not.toHaveAttribute("open");
+      expect(sidebarStep).not.toHaveAttribute("open");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Files" }));
+    const filesGroup = container.querySelector(".files-group")!;
+    const category = container.querySelector(".category")!;
+    const file = container.querySelector(".main-file")!;
+    const filesSummary =
+      filesGroup.querySelector<HTMLElement>(":scope > summary")!;
+    const filesOpenAll = within(filesSummary).getByRole("button", {
+      name: "Open all",
+    });
+    const filesCloseAll = within(filesSummary).getByRole("button", {
+      name: "Close all",
+    });
+    fireEvent.click(filesOpenAll);
+    expect(filesGroup).toHaveAttribute("open");
+    expect(category).toHaveAttribute("open");
+    expect(file).toHaveAttribute("open");
+
+    fireEvent.click(filesCloseAll);
+    expect(filesGroup).toHaveAttribute("open");
+    expect(category).not.toHaveAttribute("open");
+    expect(file).not.toHaveAttribute("open");
   });
 
   it("renders guided and sidebar category markers without fragment internals", () => {
