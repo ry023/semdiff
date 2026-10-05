@@ -73,7 +73,8 @@ type Messages = Record<MessageKey, string>;
 const japanese: Messages = {
   semanticChanges: "Semantic Review",
   invalidViewerData: "ビューアーデータが不正です: {error}",
-  stats: "{groups} グループ · {files} ファイル · {fragments} フラグメント",
+  stats:
+    "{groups} {groupLabel} · {files} ファイル · {fragments} {fragmentLabel}",
   guided: "Guided",
   files: "Files",
   unified: "Unified",
@@ -92,8 +93,8 @@ const japanese: Messages = {
   answerLabel: "回答",
   openAll: "すべて開く",
   closeAll: "すべて閉じる",
-  stepsFragments: "{steps} ステップ · {fragments} フラグメント",
-  filesFragments: "{files} ファイル · {fragments} フラグメント",
+  stepsFragments: "{steps} {stepLabel} · {fragments} {fragmentLabel}",
+  filesFragments: "{files} ファイル · {fragments} {fragmentLabel}",
   added: "{count} 追加",
   updated: "{count} 更新",
   deleted: "{count} 削除",

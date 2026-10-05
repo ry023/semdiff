@@ -161,7 +161,7 @@ describe("viewer regressions", () => {
         "Semantic Review",
       );
       expect(container.querySelector(".stats")).toHaveTextContent(
-        "1 グループ · 1 ファイル · 1 フラグメント",
+        "1 Group · 1 ファイル · 1 Fragment",
       );
       expect(
         screen.getByRole("button", { name: "Guided" }),
@@ -177,6 +177,9 @@ describe("viewer regressions", () => {
       expect(
         container.querySelector(".review-step > summary h3"),
       ).toHaveTextContent("Step 1. Review the shell");
+      expect(
+        container.querySelector(".guided-group > summary .count"),
+      ).toHaveTextContent("1 Step · 1 Fragment");
       expect(
         container.querySelector(".guided-group > summary .importance"),
       ).toHaveTextContent("Core");

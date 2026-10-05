@@ -92,6 +92,8 @@ const list = <T,>(value: T[] | null | undefined): T[] => value ?? [];
 const DiffModeContext = React.createContext<"unified" | "split">("unified");
 const maxHighlightedLineLength = 10_000;
 const maxRenderedLineLength = 20_000;
+const pluralTerm = (count: number, term: string) =>
+  `${term}${count === 1 ? "" : "s"}`;
 
 const importanceMessageKeys: Record<
   string,
@@ -836,7 +838,9 @@ function GuidedGroup({
         <span className="count">
           {t(locale, "stepsFragments", {
             steps: list(group.steps).length,
+            stepLabel: pluralTerm(list(group.steps).length, "Step"),
             fragments: group.fragment_count,
+            fragmentLabel: pluralTerm(group.fragment_count, "Fragment"),
           })}
         </span>
         <DisclosureActions selector=".review-step,.guided-file" />
@@ -1029,6 +1033,7 @@ function FilesGroup({
           {t(locale, "filesFragments", {
             files: files.length,
             fragments: group.fragment_count,
+            fragmentLabel: pluralTerm(group.fragment_count, "Fragment"),
           })}
         </span>
         <DisclosureActions selector=".category,.file" />
@@ -1551,8 +1556,16 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
               <div className="stats">
                 {t(locale, "stats", {
                   groups: list(bootstrap.page.groups).length,
+                  groupLabel: pluralTerm(
+                    list(bootstrap.page.groups).length,
+                    "Group",
+                  ),
                   files: bootstrap.page.file_count,
                   fragments: bootstrap.page.fragment_count,
+                  fragmentLabel: pluralTerm(
+                    bootstrap.page.fragment_count,
+                    "Fragment",
+                  ),
                 })}
               </div>
               <div className="toolbar">
