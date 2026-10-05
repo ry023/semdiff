@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Bootstrap, DiffItem, FragmentView } from "./types";
 import { App, expandContext } from "./main";
@@ -144,6 +144,22 @@ describe("expandContext", () => {
 });
 
 describe("viewer regressions", () => {
+  it("renders the review controls in one page-wide header", () => {
+    const { container } = render(<App bootstrap={bootstrap()} />);
+    const header = container.querySelector(".viewer-shell > .page-header");
+
+    expect(header).toHaveTextContent("Semantic Changes");
+    expect(header).toHaveTextContent("base → head");
+    expect(header).toHaveTextContent("1 groups · 1 files · 1 fragments");
+    expect(header).toContainElement(
+      screen.getByRole("button", { name: "Guided" }),
+    );
+    expect(header).toContainElement(
+      screen.getByRole("button", { name: "Unified" }),
+    );
+    expect(container.querySelector(".app-shell > .page-header")).toBeNull();
+  });
+
   it("renders guided and sidebar category markers without fragment internals", () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
 
@@ -174,7 +190,7 @@ describe("viewer regressions", () => {
     expect(container.querySelectorAll(".split-cell")).toHaveLength(4);
   });
 
-  it("switches between guided review and categorized files", () => {
+  it("switches between guided review and categorized files", async () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
 
     expect(container.querySelector(".guided-group")).toBeInTheDocument();
@@ -182,6 +198,18 @@ describe("viewer regressions", () => {
     expect(container.querySelector(".sidebar .nav-step")).toHaveTextContent(
       "1. Review the shell",
     );
+    expect(container.querySelector(".sidebar .nav-step")).not.toHaveAttribute(
+      "open",
+    );
+    const mainStep = container.querySelector(".review-step");
+    const sidebarStep = container.querySelector(".sidebar .nav-step");
+    expect(mainStep).not.toHaveAttribute("open");
+    fireEvent.click(mainStep!.querySelector("summary")!);
+    expect(mainStep).toHaveAttribute("open");
+    await waitFor(() => expect(sidebarStep).toHaveAttribute("open"));
+    fireEvent.click(sidebarStep!.querySelector("summary")!);
+    expect(sidebarStep).not.toHaveAttribute("open");
+    await waitFor(() => expect(mainStep).not.toHaveAttribute("open"));
     expect(
       container.querySelector(".sidebar .nav-step .nav-file-directory"),
     ).toHaveTextContent("frontend/src/");

@@ -689,9 +689,13 @@ function GuidedFragment({
 function GuidedGroup({
   group,
   questions,
+  openSteps,
+  setStepOpen,
 }: {
   group: GroupView;
   questions: Questions;
+  openSteps: ReadonlySet<string>;
+  setStepOpen: (key: string, open: boolean) => void;
 }) {
   const groupAnchor: Anchor = { type: "group", group_id: group.id };
   const fragments = new Map(
@@ -729,6 +733,7 @@ function GuidedGroup({
       <Ask anchor={groupAnchor} questions={questions} />
       <QuestionPanel anchor={groupAnchor} questions={questions} />
       {list(group.steps).map((step) => {
+        const stepKey = `${group.id}\0${step.id}`;
         const anchor: Anchor = {
           type: "step",
           group_id: group.id,
@@ -739,7 +744,8 @@ function GuidedGroup({
             id={step.anchor_id}
             className="review-step"
             key={step.id}
-            open
+            open={openSteps.has(stepKey)}
+            onToggle={(event) => setStepOpen(stepKey, event.currentTarget.open)}
           >
             <summary>
               <DisclosureIcon />
@@ -1049,9 +1055,13 @@ function GroupDirectory({
 function GuidedSidebarGroup({
   group,
   activeKey,
+  openSteps,
+  setStepOpen,
 }: {
   group: GroupView;
   activeKey: string;
+  openSteps: ReadonlySet<string>;
+  setStepOpen: (key: string, open: boolean) => void;
 }) {
   const fragments = new Map(
     list(group.categories).flatMap((category) =>
@@ -1072,7 +1082,14 @@ function GuidedSidebarGroup({
       </summary>
       <div className="nav-group-files">
         {list(group.steps).map((step) => (
-          <details className="nav-step" key={step.id} open>
+          <details
+            className="nav-step"
+            key={step.id}
+            open={openSteps.has(`${group.id}\0${step.id}`)}
+            onToggle={(event) =>
+              setStepOpen(`${group.id}\0${step.id}`, event.currentTarget.open)
+            }
+          >
             <summary>
               <DisclosureIcon />
               <span>
@@ -1117,9 +1134,13 @@ function GuidedSidebarGroup({
 function Sidebar({
   bootstrap,
   reviewMode,
+  openSteps,
+  setStepOpen,
 }: {
   bootstrap: Bootstrap;
   reviewMode: "guided" | "files";
+  openSteps: ReadonlySet<string>;
+  setStepOpen: (key: string, open: boolean) => void;
 }) {
   const [activeKey, setActiveKey] = useState("");
   const [width, setWidth] = useState(() => {
@@ -1188,6 +1209,8 @@ function Sidebar({
               <GuidedSidebarGroup
                 group={group}
                 activeKey={activeKey}
+                openSteps={openSteps}
+                setStepOpen={setStepOpen}
                 key={group.id}
               />
             );
@@ -1334,7 +1357,17 @@ export function expandContext(
 export function App({ bootstrap }: { bootstrap: Bootstrap }) {
   const [reviewMode, setReviewMode] = useState<"guided" | "files">("guided");
   const [diffMode, setDiffMode] = useState<"unified" | "split">("unified");
+  const [openSteps, setOpenSteps] = useState<Set<string>>(() => new Set());
   const questions = useQuestions(bootstrap);
+  const setStepOpen = (key: string, open: boolean) => {
+    setOpenSteps((current) => {
+      if (current.has(key) === open) return current;
+      const next = new Set(current);
+      if (open) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  };
   useEffect(() => {
     document.body.dataset.view = diffMode;
   }, [diffMode]);
@@ -1356,32 +1389,17 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
   }, []);
   return (
     <DiffModeContext.Provider value={diffMode}>
-      <div className="app-shell">
-        <Sidebar bootstrap={bootstrap} reviewMode={reviewMode} />
-        <main className="wrap">
-          <header className="page-header">
-            <div>
-              <h1>Semantic Changes</h1>
-              <code>
-                {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
-              </code>
-            </div>
-            {questions.mode === "interactive" && (
-              <button
-                type="button"
-                disabled={!questions.active}
-                onClick={questions.stop}
-              >
-                {questions.active ? "End answer mode" : "Answer mode stopped"}
-              </button>
-            )}
-          </header>
+      <div className="viewer-shell">
+        <header className="page-header">
+          <h1>Semantic Changes</h1>
+          <code className="revision-range">
+            {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
+          </code>
           <div className="stats">
             {list(bootstrap.page.groups).length} groups ·{" "}
             {bootstrap.page.file_count} files · {bootstrap.page.fragment_count}{" "}
             fragments
           </div>
-          <Drift bootstrap={bootstrap} />
           <div className="toolbar">
             <div>
               {(["guided", "files"] as const).map((mode) => (
@@ -1406,14 +1424,45 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
               ))}
             </div>
           </div>
-          {list(bootstrap.page.groups).map((group) =>
-            reviewMode === "guided" ? (
-              <GuidedGroup group={group} questions={questions} key={group.id} />
-            ) : (
-              <FilesGroup group={group} questions={questions} key={group.id} />
-            ),
+          {questions.mode === "interactive" && (
+            <button
+              className="answer-mode"
+              type="button"
+              disabled={!questions.active}
+              onClick={questions.stop}
+            >
+              {questions.active ? "End answer mode" : "Answer mode stopped"}
+            </button>
           )}
-        </main>
+        </header>
+        <div className="app-shell">
+          <Sidebar
+            bootstrap={bootstrap}
+            reviewMode={reviewMode}
+            openSteps={openSteps}
+            setStepOpen={setStepOpen}
+          />
+          <main className="wrap">
+            <Drift bootstrap={bootstrap} />
+            {list(bootstrap.page.groups).map((group) =>
+              reviewMode === "guided" ? (
+                <GuidedGroup
+                  group={group}
+                  questions={questions}
+                  openSteps={openSteps}
+                  setStepOpen={setStepOpen}
+                  key={group.id}
+                />
+              ) : (
+                <FilesGroup
+                  group={group}
+                  questions={questions}
+                  key={group.id}
+                />
+              ),
+            )}
+          </main>
+        </div>
       </div>
     </DiffModeContext.Provider>
   );

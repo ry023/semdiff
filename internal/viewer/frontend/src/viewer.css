@@ -41,43 +41,62 @@ summary::-webkit-details-marker {
 .app-shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  min-height: 100vh;
+  min-height: calc(100vh - 52px);
 }
 .wrap {
   width: 100%;
   max-width: 1500px;
   margin: auto;
-  padding: 28px 22px;
+  padding: 14px 22px 28px;
   min-width: 0;
 }
 .page-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 20px;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
 }
 .page-header h1 {
-  margin: 0 0 7px;
-  font-size: 27px;
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 18px;
+  white-space: nowrap;
 }
-.page-header code,
+.revision-range,
 .stats {
   color: var(--muted);
 }
+.revision-range {
+  min-width: 8ch;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .stats {
-  margin: 18px 0;
+  flex: 0 0 auto;
+  font-size: 12px;
+  white-space: nowrap;
 }
 .toolbar {
   display: flex;
-  justify-content: space-between;
-  margin: 16px 0 22px;
+  flex: 0 0 auto;
+  gap: 8px;
+  margin-left: auto;
 }
 .toolbar > div {
   display: flex;
 }
 .toolbar button,
-.page-header button {
-  padding: 6px 12px;
+.answer-mode {
+  padding: 4px 9px;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--muted);
@@ -117,7 +136,7 @@ summary::-webkit-details-marker {
 }
 .group > summary {
   position: sticky;
-  top: 0;
+  top: 52px;
   z-index: 12;
   display: flex;
   align-items: center;
@@ -601,8 +620,8 @@ body[data-view="split"] .diff-row.add .new-code {
 }
 .sidebar {
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 52px;
+  height: calc(100vh - 52px);
   min-width: 0;
   border-right: 1px solid var(--line);
   background: var(--panel);
@@ -614,7 +633,7 @@ body[data-view="split"] .diff-row.add .new-code {
   cursor: col-resize;
 }
 .sidebar-pane {
-  height: 100vh;
+  height: calc(100vh - 52px);
   overflow: auto;
   padding: 12px 10px;
 }
@@ -812,8 +831,24 @@ body[data-view="split"] .diff-row.add .new-code {
   .app-shell {
     display: block;
   }
+  .page-header {
+    position: relative;
+    flex-wrap: wrap;
+    gap: 7px 12px;
+  }
+  .group > summary {
+    top: 0;
+  }
+  .revision-range {
+    order: 5;
+    width: 100%;
+  }
+  .toolbar {
+    margin-left: auto;
+  }
   .sidebar {
     position: relative;
+    top: auto;
     width: auto !important;
     height: auto;
     border-right: 0;
