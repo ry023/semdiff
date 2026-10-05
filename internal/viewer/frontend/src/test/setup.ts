@@ -35,6 +35,6 @@ afterEach(() => {
   document.body.replaceChildren();
   document.body.removeAttribute("data-view");
   document.documentElement.lang = "en";
-  document.title = "Semantic Changes";
+  document.title = "Semantic Review";
   history.replaceState(null, "", "/");
 });

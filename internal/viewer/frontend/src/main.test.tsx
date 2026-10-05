@@ -158,20 +158,31 @@ describe("viewer regressions", () => {
     try {
       const { container, unmount } = render(<App bootstrap={bootstrap()} />);
       expect(container.querySelector(".page-header h1")).toHaveTextContent(
-        "意味単位の変更レビュー",
+        "Semantic Review",
       );
       expect(container.querySelector(".stats")).toHaveTextContent(
         "1 グループ · 1 ファイル · 1 フラグメント",
       );
       expect(
-        screen.getByRole("button", { name: "ガイド" }),
+        screen.getByRole("button", { name: "Guided" }),
       ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Files" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Unified" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Split" })).toBeInTheDocument();
+      expect(
+        container.querySelector(".guided-group > summary h2"),
+      ).toHaveTextContent("Group 1. Group title");
+      expect(
+        container.querySelector(".review-step > summary h3"),
+      ).toHaveTextContent("Step 1. Review the shell");
       expect(
         container.querySelector(".guided-group > summary .importance"),
-      ).toHaveTextContent("中核");
+      ).toHaveTextContent("Core");
       expect(
         container.querySelector(".guided-file .review-level"),
-      ).toHaveAttribute("aria-label", "丁寧に確認");
+      ).toHaveAttribute("aria-label", "Careful");
       expect(
         container.querySelector(".guided-file .category-badge-label"),
       ).toHaveTextContent("ロジック");
@@ -188,7 +199,7 @@ describe("viewer regressions", () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
     const header = container.querySelector(".viewer-shell > .page-header");
 
-    expect(header).toHaveTextContent("Semantic Changes");
+    expect(header).toHaveTextContent("Semantic Review");
     expect(header).toHaveTextContent("base → head");
     expect(header).toHaveTextContent("1 groups · 1 files · 1 fragments");
     expect(header).toContainElement(
