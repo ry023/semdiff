@@ -49,6 +49,12 @@ import type {
   Thread,
 } from "./types";
 import { Markdown } from "./markdown";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./tooltip";
 import "./viewer.css";
 
 for (const [name, language] of Object.entries({
@@ -77,10 +83,33 @@ const list = <T,>(value: T[] | null | undefined): T[] => value ?? [];
 const DiffModeContext = React.createContext<"unified" | "split">("unified");
 const maxHighlightedLineLength = 10_000;
 const maxRenderedLineLength = 20_000;
+const importanceDescriptions: Record<string, string> = {
+  core: "Defines the PR's purpose or essential behavior.",
+  supporting: "Implements, adapts, or verifies the core change.",
+  side: "A separate meaningful change, not needed for the core purpose.",
+};
+const reviewLevelDescriptions: Record<string, string> = {
+  careful: "Read this fragment closely.",
+  normal: "Review this fragment at an ordinary level.",
+  skim: "A quick check is enough for this fragment.",
+};
 
 function Importance({ value }: { value: string }) {
   return value ? (
-    <span className={`importance importance-${value}`}>{value}</span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={`importance importance-${value}`}
+          tabIndex={0}
+          onClick={(event) => event.preventDefault()}
+        >
+          {value}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <strong>{value}</strong> — {importanceDescriptions[value] ?? value}
+      </TooltipContent>
+    </Tooltip>
   ) : null;
 }
 
@@ -93,12 +122,21 @@ function Level({ value }: { value: ReviewLevel }) {
         ? CircleDashed
         : Circle;
   return (
-    <span
-      className={`review-level review-level-${value}`}
-      title={`${value} review`}
-    >
-      <Icon size={16} aria-hidden="true" />
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={`review-level review-level-${value}`}
+          tabIndex={0}
+          aria-label={`${value} review`}
+          onClick={(event) => event.preventDefault()}
+        >
+          <Icon size={16} aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <strong>{value}</strong> — {reviewLevelDescriptions[value] ?? value}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1406,85 +1444,87 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
     return () => document.removeEventListener("click", expand);
   }, []);
   return (
-    <DiffModeContext.Provider value={diffMode}>
-      <div className="viewer-shell">
-        <header className="page-header">
-          <h1>Semantic Changes</h1>
-          <code className="revision-range">
-            {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
-          </code>
-          <div className="stats">
-            {list(bootstrap.page.groups).length} groups ·{" "}
-            {bootstrap.page.file_count} files · {bootstrap.page.fragment_count}{" "}
-            fragments
-          </div>
-          <div className="toolbar">
-            <div>
-              {(["guided", "files"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  aria-pressed={reviewMode === mode}
-                  onClick={() => setReviewMode(mode)}
-                >
-                  {mode === "guided" ? "Guided" : "Files"}
-                </button>
-              ))}
+    <TooltipProvider delayDuration={300}>
+      <DiffModeContext.Provider value={diffMode}>
+        <div className="viewer-shell">
+          <header className="page-header">
+            <h1>Semantic Changes</h1>
+            <code className="revision-range">
+              {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
+            </code>
+            <div className="stats">
+              {list(bootstrap.page.groups).length} groups ·{" "}
+              {bootstrap.page.file_count} files ·{" "}
+              {bootstrap.page.fragment_count} fragments
             </div>
-            <div>
-              {(["unified", "split"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  aria-pressed={diffMode === mode}
-                  onClick={() => setDiffMode(mode)}
-                >
-                  {mode === "unified" ? "Unified" : "Split"}
-                </button>
-              ))}
+            <div className="toolbar">
+              <div>
+                {(["guided", "files"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    aria-pressed={reviewMode === mode}
+                    onClick={() => setReviewMode(mode)}
+                  >
+                    {mode === "guided" ? "Guided" : "Files"}
+                  </button>
+                ))}
+              </div>
+              <div>
+                {(["unified", "split"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    aria-pressed={diffMode === mode}
+                    onClick={() => setDiffMode(mode)}
+                  >
+                    {mode === "unified" ? "Unified" : "Split"}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          {questions.mode === "interactive" && (
-            <button
-              className="answer-mode"
-              type="button"
-              disabled={!questions.active}
-              onClick={questions.stop}
-            >
-              {questions.active ? "End answer mode" : "Answer mode stopped"}
-            </button>
-          )}
-        </header>
-        <div className="app-shell">
-          <Sidebar
-            bootstrap={bootstrap}
-            reviewMode={reviewMode}
-            openSteps={openSteps}
-            setStepOpen={setStepOpen}
-          />
-          <main className="wrap">
-            <Drift bootstrap={bootstrap} />
-            {list(bootstrap.page.groups).map((group, index) =>
-              reviewMode === "guided" ? (
-                <GuidedGroup
-                  group={group}
-                  number={index + 1}
-                  questions={questions}
-                  openSteps={openSteps}
-                  setStepOpen={setStepOpen}
-                  key={group.id}
-                />
-              ) : (
-                <FilesGroup
-                  group={group}
-                  number={index + 1}
-                  questions={questions}
-                  key={group.id}
-                />
-              ),
+            {questions.mode === "interactive" && (
+              <button
+                className="answer-mode"
+                type="button"
+                disabled={!questions.active}
+                onClick={questions.stop}
+              >
+                {questions.active ? "End answer mode" : "Answer mode stopped"}
+              </button>
             )}
-          </main>
+          </header>
+          <div className="app-shell">
+            <Sidebar
+              bootstrap={bootstrap}
+              reviewMode={reviewMode}
+              openSteps={openSteps}
+              setStepOpen={setStepOpen}
+            />
+            <main className="wrap">
+              <Drift bootstrap={bootstrap} />
+              {list(bootstrap.page.groups).map((group, index) =>
+                reviewMode === "guided" ? (
+                  <GuidedGroup
+                    group={group}
+                    number={index + 1}
+                    questions={questions}
+                    openSteps={openSteps}
+                    setStepOpen={setStepOpen}
+                    key={group.id}
+                  />
+                ) : (
+                  <FilesGroup
+                    group={group}
+                    number={index + 1}
+                    questions={questions}
+                    key={group.id}
+                  />
+                ),
+              )}
+            </main>
+          </div>
         </div>
-      </div>
-    </DiffModeContext.Provider>
+      </DiffModeContext.Provider>
+    </TooltipProvider>
   );
 }
 

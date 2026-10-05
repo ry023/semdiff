@@ -596,6 +596,30 @@ body[data-view="split"] .diff-row.add .new-code {
   border-radius: 999px;
   font: 700 10px system-ui;
   text-transform: uppercase;
+  cursor: help;
+}
+.importance:focus-visible,
+.review-level:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tooltip-content {
+  z-index: 100;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--text);
+  box-shadow: 0 6px 20px #0008;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.tooltip-content strong {
+  text-transform: capitalize;
+}
+.tooltip-arrow {
+  fill: var(--raised);
 }
 .importance-core {
   color: #79c0ff;
@@ -613,6 +637,7 @@ body[data-view="split"] .diff-row.add .new-code {
   place-items: center;
   border-radius: 50%;
   font-weight: 700;
+  cursor: help;
 }
 .review-level-careful {
   color: #ffb86c;

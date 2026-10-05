@@ -175,6 +175,28 @@ describe("viewer regressions", () => {
     expect(screen.queryByText(/diff --git/)).not.toBeInTheDocument();
   });
 
+  it("explains importance and review level on keyboard focus", async () => {
+    const { container } = render(<App bootstrap={bootstrap()} />);
+
+    const importance = container.querySelector<HTMLElement>(
+      ".guided-group > summary .importance",
+    )!;
+    importance.focus();
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Defines the PR's purpose or essential behavior.",
+    );
+
+    const level = container.querySelector<HTMLElement>(
+      ".guided-file .review-level",
+    )!;
+    level.focus();
+    await waitFor(() =>
+      expect(screen.getByRole("tooltip")).toHaveTextContent(
+        "Read this fragment closely.",
+      ),
+    );
+  });
+
   it("keeps group and step summaries in their collapsible headers", () => {
     const data = bootstrap();
     data.page.groups![0].summary =
