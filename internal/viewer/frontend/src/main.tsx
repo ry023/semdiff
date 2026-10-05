@@ -652,6 +652,7 @@ function GuidedFragment({
   ];
   return (
     <details
+      id={`guided-${groupID}-${fragment.id}`}
       className={`guided-file ${reviewed ? "is-reviewed" : ""}`}
       data-group-id={groupID}
       data-file-path={fragment.path}
@@ -1045,6 +1046,74 @@ function GroupDirectory({
   );
 }
 
+function GuidedSidebarGroup({
+  group,
+  activeKey,
+}: {
+  group: GroupView;
+  activeKey: string;
+}) {
+  const fragments = new Map(
+    list(group.categories).flatMap((category) =>
+      list(category.files).flatMap((file) =>
+        list(file.fragments).map(
+          (fragment) => [fragment.id, { fragment, category }] as const,
+        ),
+      ),
+    ),
+  );
+  return (
+    <details className="nav-group" open>
+      <summary>
+        <DisclosureIcon />
+        <span>{group.title}</span>
+        <Importance value={group.importance} />
+        <small>{list(group.steps).length}</small>
+      </summary>
+      <div className="nav-group-files">
+        {list(group.steps).map((step) => (
+          <details className="nav-step" key={step.id} open>
+            <summary>
+              <DisclosureIcon />
+              <span>
+                {step.number}. {step.title}
+              </span>
+              <small>{list(step.fragment_ids).length}</small>
+            </summary>
+            <div className="nav-children">
+              {list(step.fragment_ids).map((fragmentID) => {
+                const entry = fragments.get(fragmentID);
+                if (!entry) return null;
+                const { fragment, category } = entry;
+                return (
+                  <button
+                    className={`nav-link nav-group-file ${activeKey === `${group.id}\0${fragment.path}` ? "is-active" : ""}`}
+                    type="button"
+                    onClick={() =>
+                      navigate(`guided-${group.id}-${fragment.id}`)
+                    }
+                    key={fragment.id}
+                  >
+                    <StatusIcon status={fragment.status} />
+                    <CategoryIcon name={category.icon} title={category.name} />
+                    <span className="nav-file-path">
+                      <span className="nav-file-directory">
+                        {fragment.directory}
+                      </span>
+                      <span className="nav-file-name">{fragment.name}</span>
+                    </span>
+                    <Level value={fragment.review_level} />
+                  </button>
+                );
+              })}
+            </div>
+          </details>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function Sidebar({
   bootstrap,
   reviewMode,
@@ -1114,6 +1183,15 @@ function Sidebar({
     <aside className="sidebar" style={{ width }}>
       <nav className="sidebar-pane">
         {list(bootstrap.page.groups).map((group) => {
+          if (reviewMode === "guided") {
+            return (
+              <GuidedSidebarGroup
+                group={group}
+                activeKey={activeKey}
+                key={group.id}
+              />
+            );
+          }
           const files = list(group.categories).flatMap((category) =>
             list(category.files),
           );

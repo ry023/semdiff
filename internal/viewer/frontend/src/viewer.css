@@ -619,11 +619,13 @@ body[data-view="split"] .diff-row.add .new-code {
   padding: 12px 10px;
 }
 .nav-group,
+.nav-step,
 .nav-directory,
 .nav-file-node {
   margin: 2px 0;
 }
 .nav-group > summary,
+.nav-step > summary,
 .nav-directory > summary,
 .nav-file-node > summary {
   display: grid;
@@ -635,15 +637,22 @@ body[data-view="split"] .diff-row.add .new-code {
   cursor: pointer;
 }
 .nav-group > summary,
+.nav-step > summary,
 .nav-directory > summary {
   list-style: none;
 }
 .nav-group > summary::-webkit-details-marker,
+.nav-step > summary::-webkit-details-marker,
 .nav-directory > summary::-webkit-details-marker {
   display: none;
 }
 .nav-group > summary {
   grid-template-columns: 18px minmax(0, 1fr) auto auto;
+}
+.nav-step > summary {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  color: var(--text);
+  font-weight: 600;
 }
 .nav-directory > summary {
   grid-template-columns: 18px 18px minmax(0, 1fr) auto;
@@ -689,6 +698,16 @@ body[data-view="split"] .diff-row.add .new-code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.nav-file-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-file-directory {
+  color: var(--muted);
+  font-size: 11px;
 }
 .nav-link:hover,
 .nav-link.is-active,

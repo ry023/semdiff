@@ -179,11 +179,25 @@ describe("viewer regressions", () => {
 
     expect(container.querySelector(".guided-group")).toBeInTheDocument();
     expect(container.querySelector(".files-group")).not.toBeInTheDocument();
+    expect(container.querySelector(".sidebar .nav-step")).toHaveTextContent(
+      "1. Review the shell",
+    );
+    expect(
+      container.querySelector(".sidebar .nav-step .nav-file-directory"),
+    ).toHaveTextContent("frontend/src/");
+    expect(
+      container.querySelector(".sidebar .nav-step .nav-file-name"),
+    ).toHaveTextContent("App.tsx");
+    expect(container.querySelector(".sidebar .nav-directory")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Files" }));
 
     expect(container.querySelector(".guided-group")).not.toBeInTheDocument();
     expect(container.querySelector(".files-group")).toBeInTheDocument();
+    expect(container.querySelector(".sidebar .nav-step")).toBeNull();
+    expect(
+      container.querySelector(".sidebar .nav-directory"),
+    ).toHaveTextContent("frontend/src");
     expect(container.querySelector(".category > summary")).toHaveTextContent(
       "logic",
     );
