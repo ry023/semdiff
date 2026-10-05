@@ -691,11 +691,13 @@ function GuidedFragment({
 
 function GuidedGroup({
   group,
+  number,
   questions,
   openSteps,
   setStepOpen,
 }: {
   group: GroupView;
+  number: number;
   questions: Questions;
   openSteps: ReadonlySet<string>;
   setStepOpen: (key: string, open: boolean) => void;
@@ -723,7 +725,9 @@ function GuidedGroup({
     >
       <summary>
         <DisclosureIcon />
-        <h2>{group.title}</h2>
+        <h2>
+          Group {number}. {group.title}
+        </h2>
         <Importance value={group.importance} />
         <div className="summary-preview">
           <Markdown source={group.summary} />
@@ -886,9 +890,11 @@ function Category({
 
 function FilesGroup({
   group,
+  number,
   questions,
 }: {
   group: GroupView;
+  number: number;
   questions: Questions;
 }) {
   const files = list(group.categories).flatMap((category) =>
@@ -898,7 +904,9 @@ function FilesGroup({
     <details id={group.anchor_id} className="group files-group" open>
       <summary>
         <DisclosureIcon />
-        <h2>{group.title}</h2>
+        <h2>
+          Group {number}. {group.title}
+        </h2>
         <Importance value={group.importance} />
         <div className="summary-preview">
           <Markdown source={group.summary} />
@@ -1057,11 +1065,13 @@ function GroupDirectory({
 
 function GuidedSidebarGroup({
   group,
+  number,
   activeKey,
   openSteps,
   setStepOpen,
 }: {
   group: GroupView;
+  number: number;
   activeKey: string;
   openSteps: ReadonlySet<string>;
   setStepOpen: (key: string, open: boolean) => void;
@@ -1079,7 +1089,9 @@ function GuidedSidebarGroup({
     <details className="nav-group" open>
       <summary>
         <DisclosureIcon />
-        <span>{group.title}</span>
+        <span>
+          Group {number}. {group.title}
+        </span>
         <Importance value={group.importance} />
         <small>{list(group.steps).length}</small>
       </summary>
@@ -1206,11 +1218,12 @@ function Sidebar({
   return (
     <aside className="sidebar" style={{ width }}>
       <nav className="sidebar-pane">
-        {list(bootstrap.page.groups).map((group) => {
+        {list(bootstrap.page.groups).map((group, index) => {
           if (reviewMode === "guided") {
             return (
               <GuidedSidebarGroup
                 group={group}
+                number={index + 1}
                 activeKey={activeKey}
                 openSteps={openSteps}
                 setStepOpen={setStepOpen}
@@ -1233,7 +1246,9 @@ function Sidebar({
             <details className="nav-group" key={group.id} open>
               <summary>
                 <DisclosureIcon />
-                <span>{group.title}</span>
+                <span>
+                  Group {index + 1}. {group.title}
+                </span>
                 <Importance value={group.importance} />
                 <small>{files.length}</small>
               </summary>
@@ -1447,10 +1462,11 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
           />
           <main className="wrap">
             <Drift bootstrap={bootstrap} />
-            {list(bootstrap.page.groups).map((group) =>
+            {list(bootstrap.page.groups).map((group, index) =>
               reviewMode === "guided" ? (
                 <GuidedGroup
                   group={group}
+                  number={index + 1}
                   questions={questions}
                   openSteps={openSteps}
                   setStepOpen={setStepOpen}
@@ -1459,6 +1475,7 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
               ) : (
                 <FilesGroup
                   group={group}
+                  number={index + 1}
                   questions={questions}
                   key={group.id}
                 />

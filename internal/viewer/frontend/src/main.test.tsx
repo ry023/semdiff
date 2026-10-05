@@ -226,6 +226,12 @@ describe("viewer regressions", () => {
 
     expect(container.querySelector(".guided-group")).toBeInTheDocument();
     expect(container.querySelector(".files-group")).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".guided-group > summary h2"),
+    ).toHaveTextContent("Group 1. Group title");
+    expect(
+      container.querySelector(".sidebar .nav-group > summary"),
+    ).toHaveTextContent("Group 1. Group title");
     expect(container.querySelector(".sidebar .nav-step")).toHaveTextContent(
       "Step 1. Review the shell",
     );
@@ -256,6 +262,9 @@ describe("viewer regressions", () => {
 
     expect(container.querySelector(".guided-group")).not.toBeInTheDocument();
     expect(container.querySelector(".files-group")).toBeInTheDocument();
+    expect(
+      container.querySelector(".files-group > summary h2"),
+    ).toHaveTextContent("Group 1. Group title");
     expect(container.querySelector(".sidebar .nav-step")).toBeNull();
     expect(
       container.querySelector(".sidebar .nav-directory"),
