@@ -161,8 +161,8 @@ summary::-webkit-details-marker {
 }
 .group {
   display: block;
-  margin: var(--space-4) 0;
-  border: 1px solid var(--line);
+  margin: var(--space-5) 0;
+  border: 1px solid var(--line-subtle);
   border-radius: var(--radius-md);
   background: var(--panel);
   scroll-margin-top: 8px;
@@ -175,7 +175,7 @@ summary::-webkit-details-marker {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  min-height: 44px;
+  min-height: 48px;
   padding: 10px var(--space-4);
   border-left: 4px solid #cba6f7;
   border-radius: 7px 7px 0 0;
@@ -191,13 +191,14 @@ summary::-webkit-details-marker {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: 17px;
+  font-size: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .count {
   flex: none;
   color: var(--muted);
+  font-size: 12px;
   white-space: nowrap;
 }
 .summary-preview {
@@ -205,9 +206,9 @@ summary::-webkit-details-marker {
   flex: 0 0 calc(100% - 28px);
   order: 1;
   margin-left: 26px;
-  color: var(--muted);
+  color: #b3bad3;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .summary-preview .markdown > :not(:last-child) {
@@ -258,7 +259,7 @@ summary::-webkit-details-marker {
 }
 .review-step {
   margin: 0;
-  padding: var(--space-2) var(--space-4) var(--space-3);
+  padding: 0 var(--space-4) var(--space-5);
   border-top: 1px solid var(--line-subtle);
 }
 .review-step > summary,
@@ -275,8 +276,8 @@ summary::-webkit-details-marker {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-1);
+  min-height: 44px;
+  padding: 10px var(--space-1) 8px;
   background: var(--panel);
 }
 .review-step > summary h3 {
@@ -285,7 +286,8 @@ summary::-webkit-details-marker {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -294,11 +296,12 @@ summary::-webkit-details-marker {
   padding-block: 3px;
 }
 .guided-file {
-  margin: var(--space-2) var(--space-1) var(--space-4);
+  margin: var(--space-2) var(--space-1) var(--space-5);
   padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: #181825;
+  border: 0;
+  border-top: 1px solid var(--line-subtle);
+  border-radius: 0;
+  background: transparent;
   scroll-margin-top: 92px;
 }
 .guided-file[open] {
@@ -333,7 +336,7 @@ summary::-webkit-details-marker {
       var(--step-header-height)
   );
   padding: var(--space-2);
-  border-radius: 5px 5px 0 0;
+  border-radius: 0;
 }
 .file[open] > summary {
   top: calc(
@@ -347,7 +350,7 @@ summary::-webkit-details-marker {
   margin: 0;
   padding: 0;
   border: 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-subtle);
   border-radius: 0;
 }
 .file-heading {
@@ -463,7 +466,7 @@ details[open] > summary > .disclosure-icon {
   align-items: center;
   gap: var(--space-2);
   margin: var(--space-2) 0 0 27px;
-  color: var(--muted);
+  color: #b3bad3;
   font-size: 12px;
 }
 .fragment-description p {
@@ -637,7 +640,7 @@ body[data-view="split"] .diff-row.add .new-code {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 40px;
+  min-height: 44px;
   padding: var(--space-2) var(--space-4);
   background: var(--panel);
 }
@@ -771,7 +774,7 @@ body[data-view="split"] .diff-row.add .new-code {
 }
 .nav-group > summary {
   margin-top: 6px;
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid #cba6f7;
   background: var(--raised);
   font-weight: 700;
 }
