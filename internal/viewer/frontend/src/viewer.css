@@ -179,7 +179,7 @@ summary::-webkit-details-marker {
   padding: 10px var(--space-4);
   border-left: 4px solid #cba6f7;
   border-radius: 7px 7px 0 0;
-  background: var(--raised);
+  background: var(--panel);
   cursor: pointer;
 }
 .group:not([open]) > summary {
@@ -327,7 +327,7 @@ summary::-webkit-details-marker {
   position: sticky;
   z-index: 10;
   margin: 0;
-  background: var(--raised);
+  background: var(--panel);
   border: 0;
 }
 .guided-file[open] > summary {
