@@ -374,7 +374,7 @@ describe("viewer regressions", () => {
     expect(getComputedStyle(fragmentHeader).position).toBe("sticky");
   });
 
-  it("connects the open Fragment header directly to its Diff", () => {
+  it("connects Guided Fragment and Files headers directly to their Diffs", () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
     const groupHeader = container.querySelector<HTMLElement>(
       ".guided-group > summary",
@@ -396,6 +396,18 @@ describe("viewer regressions", () => {
     expect(getComputedStyle(diff).marginTop).toBe("0px");
     expect(getComputedStyle(diff).paddingTop).toBe("0px");
     expect(getComputedStyle(diff).paddingBottom).toBe("0px");
+
+    fireEvent.click(screen.getByRole("button", { name: "Files" }));
+    const file = container.querySelector(".main-file")!;
+    const fileHeader = file.querySelector<HTMLElement>(":scope > summary")!;
+    const fileDiff = file.querySelector(":scope > pre")!;
+
+    expect(file).toHaveAttribute("open");
+    expect(getComputedStyle(file).padding).toBe("0px");
+    expect(getComputedStyle(fileHeader).margin).toBe("0px");
+    expect(getComputedStyle(fileDiff).marginTop).toBe("0px");
+    expect(getComputedStyle(fileDiff).paddingTop).toBe("0px");
+    expect(getComputedStyle(fileDiff).paddingBottom).toBe("0px");
   });
 
   it("measures wrapped sticky headers into their descendant offsets", () => {
