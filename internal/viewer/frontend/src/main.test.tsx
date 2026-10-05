@@ -188,7 +188,7 @@ describe("viewer regressions", () => {
       ).toHaveAttribute("aria-label", "Careful");
       expect(
         container.querySelector(".guided-file .category-badge-label"),
-      ).toHaveTextContent("ロジック");
+      ).toHaveTextContent("logic");
       fireEvent.click(screen.getByRole("button", { name: "Files" }));
       expect(
         container.querySelector(".files-group > summary .count"),
