@@ -175,6 +175,19 @@ describe("viewer regressions", () => {
     expect(screen.queryByText(/diff --git/)).not.toBeInTheDocument();
   });
 
+  it("keeps group and step summaries in their collapsible headers", () => {
+    const { container } = render(<App bootstrap={bootstrap()} />);
+
+    expect(
+      container.querySelector(".guided-group > summary .summary-preview"),
+    ).toHaveTextContent("Group summary");
+    expect(
+      container.querySelector(".review-step > summary .summary-preview"),
+    ).toHaveTextContent("Start with the UI.");
+    expect(container.querySelector(".group-summary")).toBeNull();
+    expect(container.querySelector(".step-summary")).toBeNull();
+  });
+
   it("limits giant lines and only mounts the selected diff layout", () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
 

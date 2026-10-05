@@ -153,6 +153,7 @@ summary::-webkit-details-marker {
 }
 .group > summary h2 {
   display: inline;
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -161,9 +162,26 @@ summary::-webkit-details-marker {
   white-space: nowrap;
 }
 .count {
-  margin-left: auto;
+  flex: none;
   color: var(--muted);
   white-space: nowrap;
+}
+.summary-preview {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.summary-preview::before {
+  content: "— ";
+}
+.summary-preview .markdown,
+.summary-preview .markdown > * {
+  display: inline;
+  margin: 0;
 }
 .summary {
   color: #bac2de;
@@ -204,10 +222,6 @@ summary::-webkit-details-marker {
     Menlo,
     monospace;
 }
-.group-summary {
-  margin: 7px 18px 12px 42px;
-  color: var(--muted);
-}
 .review-step {
   margin: 0;
   padding: 12px 16px;
@@ -232,7 +246,7 @@ summary::-webkit-details-marker {
 }
 .review-step > summary h3 {
   display: inline;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -243,10 +257,6 @@ summary::-webkit-details-marker {
 .review-step > summary > .ask-button {
   flex: none;
   padding-block: 3px;
-}
-.step-summary {
-  margin: 7px 8px 0 28px;
-  color: var(--muted);
 }
 .guided-file {
   margin: 14px 0 22px;

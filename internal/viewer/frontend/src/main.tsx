@@ -725,14 +725,14 @@ function GuidedGroup({
         <DisclosureIcon />
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
+        <div className="summary-preview">
+          <Markdown inline source={group.summary} />
+        </div>
         <span className="count">
           {list(group.steps).length} steps · {group.fragment_count} fragments
         </span>
         <DisclosureActions selector=".review-step,.guided-file" />
       </summary>
-      <div className="summary group-summary">
-        <Markdown source={group.summary} />
-      </div>
       <Ask anchor={groupAnchor} questions={questions} />
       <QuestionPanel anchor={groupAnchor} questions={questions} />
       {list(group.steps).map((step) => {
@@ -755,11 +755,11 @@ function GuidedGroup({
               <h3>
                 {step.number}. {step.title}
               </h3>
+              <div className="summary-preview">
+                <Markdown inline source={step.summary} />
+              </div>
               <Ask anchor={anchor} questions={questions} />
             </summary>
-            <div className="step-summary">
-              <Markdown source={step.summary} />
-            </div>
             <QuestionPanel anchor={anchor} questions={questions} />
             {list(step.fragment_ids).map((fragmentID) => {
               const fragment = fragments.get(fragmentID);
@@ -900,14 +900,14 @@ function FilesGroup({
         <DisclosureIcon />
         <h2>{group.title}</h2>
         <Importance value={group.importance} />
+        <div className="summary-preview">
+          <Markdown inline source={group.summary} />
+        </div>
         <span className="count">
           {files.length} files · {group.fragment_count} fragments
         </span>
         <DisclosureActions selector=".category,.file" />
       </summary>
-      <div className="summary group-summary">
-        <Markdown source={group.summary} />
-      </div>
       {list(group.categories).map((category) => (
         <Category
           category={category}
