@@ -1503,6 +1503,34 @@ export function expandContext(
     });
 }
 
+const elementHeight = (element: Element | null, fallback: number) =>
+  Math.max(fallback, Math.ceil(element?.getBoundingClientRect().height ?? 0));
+
+export function syncStickyOffsets(shell: HTMLElement): void {
+  shell.style.setProperty(
+    "--page-header-height",
+    `${elementHeight(shell.querySelector(":scope > .page-header"), 52)}px`,
+  );
+  shell.querySelectorAll<HTMLElement>(".group").forEach((group) => {
+    group.style.setProperty(
+      "--group-header-height",
+      `${elementHeight(group.querySelector(":scope > summary"), 44)}px`,
+    );
+  });
+  shell.querySelectorAll<HTMLElement>(".review-step").forEach((step) => {
+    step.style.setProperty(
+      "--step-header-height",
+      `${elementHeight(step.querySelector(":scope > summary"), 40)}px`,
+    );
+  });
+  shell.querySelectorAll<HTMLElement>(".category").forEach((category) => {
+    category.style.setProperty(
+      "--category-header-height",
+      `${elementHeight(category.querySelector(":scope > summary"), 40)}px`,
+    );
+  });
+}
+
 export function App({ bootstrap }: { bootstrap: Bootstrap }) {
   const [locale, setLocale] = useState<Locale>(() => detectLocale());
   const [reviewMode, setReviewMode] = useState<"guided" | "files">("guided");
@@ -1531,6 +1559,19 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
   useEffect(() => {
     if (location.hash)
       requestAnimationFrame(() => navigate(location.hash.slice(1)));
+  }, [reviewMode]);
+  useEffect(() => {
+    const shell = document.querySelector<HTMLElement>(".viewer-shell");
+    if (!shell) return;
+    const sync = () => syncStickyOffsets(shell);
+    const observer = new ResizeObserver(sync);
+    sync();
+    shell
+      .querySelectorAll<HTMLElement>(
+        ":scope > .page-header,.group > summary,.review-step > summary,.category > summary",
+      )
+      .forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
   }, [reviewMode]);
   useEffect(() => {
     const expand = (event: MouseEvent) => {

@@ -18,6 +18,10 @@
   --space-5: 24px;
   --radius-sm: 6px;
   --radius-md: 8px;
+  --page-header-height: 52px;
+  --group-header-height: 44px;
+  --step-header-height: 40px;
+  --category-header-height: 40px;
   font:
     14px/1.5 system-ui,
     sans-serif;
@@ -165,7 +169,7 @@ summary::-webkit-details-marker {
 }
 .group > summary {
   position: sticky;
-  top: 52px;
+  top: var(--page-header-height);
   z-index: 12;
   display: flex;
   flex-wrap: wrap;
@@ -264,6 +268,9 @@ summary::-webkit-details-marker {
   cursor: pointer;
 }
 .review-step > summary {
+  position: sticky;
+  top: calc(var(--page-header-height) + var(--group-header-height));
+  z-index: 11;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -310,13 +317,24 @@ summary::-webkit-details-marker {
 .file[open] > summary,
 .guided-file[open] > summary {
   position: sticky;
-  top: 84px;
   z-index: 10;
   margin: -5px -5px 8px;
   padding: var(--space-2);
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: 6px;
+}
+.guided-file[open] > summary {
+  top: calc(
+    var(--page-header-height) + var(--group-header-height) +
+      var(--step-header-height)
+  );
+}
+.file[open] > summary {
+  top: calc(
+    var(--page-header-height) + var(--group-header-height) +
+      var(--category-header-height)
+  );
 }
 .file-heading {
   display: inline-flex;
@@ -600,7 +618,7 @@ body[data-view="split"] .diff-row.add .new-code {
 }
 .category > summary {
   position: sticky;
-  top: 42px;
+  top: calc(var(--page-header-height) + var(--group-header-height));
   z-index: 11;
   display: flex;
   align-items: center;
@@ -901,6 +919,16 @@ body[data-view="split"] .diff-row.add .new-code {
   }
   .group > summary {
     top: 0;
+  }
+  .review-step > summary,
+  .category > summary {
+    top: var(--group-header-height);
+  }
+  .guided-file[open] > summary {
+    top: calc(var(--group-header-height) + var(--step-header-height));
+  }
+  .file[open] > summary {
+    top: calc(var(--group-header-height) + var(--category-header-height));
   }
   .revision-range {
     order: 5;

@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Bootstrap, DiffItem, FragmentView } from "./types";
-import { App, expandContext } from "./main";
+import { App, expandContext, syncStickyOffsets } from "./main";
 import { detectLocale } from "./i18n";
 
 const line = (id: string) => {
@@ -350,6 +350,71 @@ describe("viewer regressions", () => {
     expect(stepSummary.querySelectorAll("li")).toHaveLength(2);
     expect(container.querySelector(".group-summary")).toBeNull();
     expect(container.querySelector(".step-summary")).toBeNull();
+  });
+
+  it("keeps Group, Step, and Fragment headers sticky in the stack", () => {
+    const { container } = render(<App bootstrap={bootstrap()} />);
+    const group = container.querySelector(".guided-group")!;
+    const groupHeader = group.querySelector<HTMLElement>(":scope > summary")!;
+    const step = container.querySelector(".review-step")!;
+    const stepHeader = step.querySelector<HTMLElement>(":scope > summary")!;
+    const fragment = container.querySelector(".guided-file")!;
+    const fragmentHeader =
+      fragment.querySelector<HTMLElement>(":scope > summary")!;
+
+    expect(getComputedStyle(groupHeader).position).toBe("sticky");
+    expect(getComputedStyle(stepHeader).position).toBe("sticky");
+    expect(getComputedStyle(fragmentHeader).position).toBe("static");
+
+    fireEvent.click(
+      within(groupHeader).getByRole("button", { name: "Open all" }),
+    );
+
+    expect(fragment).toHaveAttribute("open");
+    expect(getComputedStyle(fragmentHeader).position).toBe("sticky");
+  });
+
+  it("measures wrapped sticky headers into their descendant offsets", () => {
+    const shell = document.createElement("div");
+    shell.innerHTML = `
+      <header class="page-header"></header>
+      <details class="group"><summary></summary>
+        <details class="review-step"><summary></summary>
+          <details class="guided-file"><summary></summary></details>
+        </details>
+        <details class="category"><summary></summary>
+          <details class="file"><summary></summary></details>
+        </details>
+      </details>`;
+    const setHeight = (element: Element | null, height: number) => {
+      Object.defineProperty(element, "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ height }),
+      });
+    };
+    setHeight(shell.querySelector(":scope > .page-header"), 76);
+    setHeight(shell.querySelector(".group > summary"), 68);
+    setHeight(shell.querySelector(".review-step > summary"), 52);
+    setHeight(shell.querySelector(".category > summary"), 48);
+
+    syncStickyOffsets(shell);
+
+    expect(shell.style.getPropertyValue("--page-header-height")).toBe("76px");
+    expect(
+      shell
+        .querySelector<HTMLElement>(".group")
+        ?.style.getPropertyValue("--group-header-height"),
+    ).toBe("68px");
+    expect(
+      shell
+        .querySelector<HTMLElement>(".review-step")
+        ?.style.getPropertyValue("--step-header-height"),
+    ).toBe("52px");
+    expect(
+      shell
+        .querySelector<HTMLElement>(".category")
+        ?.style.getPropertyValue("--category-header-height"),
+    ).toBe("48px");
   });
 
   it("limits giant lines and only mounts the selected diff layout", () => {
