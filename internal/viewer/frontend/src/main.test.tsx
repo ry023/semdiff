@@ -239,8 +239,10 @@ describe("viewer regressions", () => {
       ".guided-file .file-review-toggle",
     );
 
-    expect(fragment).toHaveAttribute("open");
+    expect(fragment).not.toHaveAttribute("open");
     expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(fragment!.querySelector("summary")!);
+    expect(fragment).toHaveAttribute("open");
     fireEvent.click(toggle!);
 
     expect(fragment).not.toHaveAttribute("open");

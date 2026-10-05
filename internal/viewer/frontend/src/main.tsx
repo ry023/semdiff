@@ -645,6 +645,7 @@ function GuidedFragment({
     fragment_id: fragment.id,
   };
   const [reviewed, setReviewed] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const diff = [
     ...list(fragment.upper_context),
     ...list(fragment.hunk),
@@ -652,11 +653,11 @@ function GuidedFragment({
   ];
   return (
     <details
+      ref={detailsRef}
       id={`guided-${groupID}-${fragment.id}`}
       className={`guided-file ${reviewed ? "is-reviewed" : ""}`}
       data-group-id={groupID}
       data-file-path={fragment.path}
-      open={!reviewed}
     >
       <summary>
         <DisclosureIcon />
@@ -668,6 +669,8 @@ function GuidedFragment({
           onClick={(event) => {
             event.preventDefault();
             setReviewed(!reviewed);
+            if (!reviewed && detailsRef.current)
+              detailsRef.current.open = false;
           }}
         >
           <Check size={16} aria-hidden="true" />
