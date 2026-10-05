@@ -227,13 +227,16 @@ describe("viewer regressions", () => {
     expect(container.querySelector(".guided-group")).toBeInTheDocument();
     expect(container.querySelector(".files-group")).not.toBeInTheDocument();
     expect(container.querySelector(".sidebar .nav-step")).toHaveTextContent(
-      "1. Review the shell",
+      "Step 1. Review the shell",
     );
     expect(container.querySelector(".sidebar .nav-step")).not.toHaveAttribute(
       "open",
     );
     const mainStep = container.querySelector(".review-step");
     const sidebarStep = container.querySelector(".sidebar .nav-step");
+    expect(mainStep!.querySelector("h3")).toHaveTextContent(
+      "Step 1. Review the shell",
+    );
     expect(mainStep).not.toHaveAttribute("open");
     fireEvent.click(mainStep!.querySelector("summary")!);
     expect(mainStep).toHaveAttribute("open");

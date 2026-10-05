@@ -753,7 +753,7 @@ function GuidedGroup({
             <summary>
               <DisclosureIcon />
               <h3>
-                {step.number}. {step.title}
+                Step {step.number}. {step.title}
               </h3>
               <div className="summary-preview">
                 <Markdown source={step.summary} />
@@ -1096,7 +1096,7 @@ function GuidedSidebarGroup({
             <summary>
               <DisclosureIcon />
               <span>
-                {step.number}. {step.title}
+                Step {step.number}. {step.title}
               </span>
               <small>{list(step.fragment_ids).length}</small>
             </summary>
