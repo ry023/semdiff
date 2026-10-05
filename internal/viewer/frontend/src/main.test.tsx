@@ -402,6 +402,8 @@ describe("viewer regressions", () => {
     const fileHeader = file.querySelector<HTMLElement>(":scope > summary")!;
     const fileDiff = file.querySelector(":scope > pre")!;
 
+    expect(fragment).toHaveClass("diff-view");
+    expect(file).toHaveClass("diff-view");
     expect(file).toHaveAttribute("open");
     expect(getComputedStyle(file).padding).toBe("0px");
     expect(getComputedStyle(fileHeader).margin).toBe("0px");

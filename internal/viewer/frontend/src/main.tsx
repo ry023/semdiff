@@ -459,6 +459,14 @@ function DiffItems({
   );
 }
 
+function FileDiff({ items, path }: { items: DiffItem[]; path: string }) {
+  return (
+    <pre className="file-diff">
+      <DiffItems items={items} path={path} />
+    </pre>
+  );
+}
+
 const sameAnchor = (a: Anchor, b: Anchor) =>
   a.type === b.type &&
   a.group_id === b.group_id &&
@@ -756,7 +764,7 @@ function GuidedFragment({
     <details
       ref={detailsRef}
       id={`guided-${groupID}-${fragment.id}`}
-      className={`guided-file ${reviewed ? "is-reviewed" : ""}`}
+      className={`guided-file diff-view ${reviewed ? "is-reviewed" : ""}`}
       data-group-id={groupID}
       data-file-path={fragment.path}
     >
@@ -783,9 +791,7 @@ function GuidedFragment({
           questions={questions}
         />
       </summary>
-      <pre>
-        <DiffItems items={diff} path={fragment.path} />
-      </pre>
+      <FileDiff items={diff} path={fragment.path} />
       <QuestionPanel anchor={anchor} questions={questions} />
     </details>
   );
@@ -913,7 +919,7 @@ function FileDetails({
   return (
     <details
       id={file.anchor_id}
-      className={`file main-file ${reviewed ? "is-reviewed" : ""}`}
+      className={`file main-file diff-view ${reviewed ? "is-reviewed" : ""}`}
       data-group-id={groupID}
       data-file-path={file.path}
       open
@@ -946,9 +952,7 @@ function FileDetails({
           />
         ))}
       </summary>
-      <pre>
-        <DiffItems items={body} path={file.path} />
-      </pre>
+      <FileDiff items={body} path={file.path} />
       {list(file.fragments).map((fragment) => (
         <QuestionPanel
           anchor={{

@@ -317,42 +317,33 @@ summary::-webkit-details-marker {
   border-top: 1px solid var(--line-subtle);
   scroll-margin-top: 52px;
 }
-.file[open] > summary,
-.guided-file[open] > summary {
+.diff-view[open] {
+  padding: 0;
+}
+.diff-view[open] > summary {
   position: sticky;
   z-index: 10;
+  margin: 0;
   background: var(--raised);
+  border: 0;
 }
 .guided-file[open] > summary {
   top: calc(
     var(--page-header-height) + var(--group-header-height) +
       var(--step-header-height)
   );
-  margin: 0;
-  border: 0;
+  padding: var(--space-2);
   border-radius: 5px 5px 0 0;
-}
-.guided-file > pre {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 5px 5px;
 }
 .file[open] > summary {
   top: calc(
     var(--page-header-height) + var(--group-header-height) +
       var(--category-header-height)
   );
-  margin: 0;
   padding: var(--space-2) var(--space-4);
-  border: 0;
   border-radius: 0;
 }
-.file[open] {
-  padding: 0;
-}
-.file > pre {
+.file-diff {
   margin: 0;
   padding: 0;
   border: 0;
