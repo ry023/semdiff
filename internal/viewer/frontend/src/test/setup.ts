@@ -34,5 +34,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   document.body.replaceChildren();
   document.body.removeAttribute("data-view");
+  document.documentElement.lang = "en";
+  document.title = "Semantic Changes";
   history.replaceState(null, "", "/");
 });

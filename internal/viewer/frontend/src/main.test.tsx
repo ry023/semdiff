@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Bootstrap, DiffItem, FragmentView } from "./types";
 import { App, expandContext } from "./main";
+import { detectLocale } from "./i18n";
 
 const line = (id: string) => {
   const element = document.createElement("span");
@@ -144,6 +145,45 @@ describe("expandContext", () => {
 });
 
 describe("viewer regressions", () => {
+  it("uses Japanese when it appears in browser language preferences", () => {
+    expect(detectLocale(["fr-FR", "ja-JP", "en-US"])).toBe("ja");
+    const originalLanguages = Object.getOwnPropertyDescriptor(
+      navigator,
+      "languages",
+    );
+    Object.defineProperty(navigator, "languages", {
+      configurable: true,
+      value: ["ja-JP", "en-US"],
+    });
+    try {
+      const { container, unmount } = render(<App bootstrap={bootstrap()} />);
+      expect(container.querySelector(".page-header h1")).toHaveTextContent(
+        "意味単位の変更レビュー",
+      );
+      expect(container.querySelector(".stats")).toHaveTextContent(
+        "1 グループ · 1 ファイル · 1 フラグメント",
+      );
+      expect(
+        screen.getByRole("button", { name: "ガイド" }),
+      ).toBeInTheDocument();
+      expect(
+        container.querySelector(".guided-group > summary .importance"),
+      ).toHaveTextContent("中核");
+      expect(
+        container.querySelector(".guided-file .review-level"),
+      ).toHaveAttribute("aria-label", "丁寧に確認");
+      expect(
+        container.querySelector(".guided-file .category-badge-label"),
+      ).toHaveTextContent("ロジック");
+      expect(document.documentElement.lang).toBe("ja");
+      unmount();
+    } finally {
+      if (originalLanguages)
+        Object.defineProperty(navigator, "languages", originalLanguages);
+      else delete (navigator as { languages?: readonly string[] }).languages;
+    }
+  });
+
   it("renders the review controls in one page-wide header", () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
     const header = container.querySelector(".viewer-shell > .page-header");

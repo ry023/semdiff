@@ -48,6 +48,15 @@ import type {
   ReviewLevel,
   Thread,
 } from "./types";
+import {
+  categoryName,
+  detectLocale,
+  LocaleContext,
+  t,
+  type Locale,
+  type MessageKey,
+  useLocale,
+} from "./i18n";
 import { Markdown } from "./markdown";
 import {
   Tooltip,
@@ -83,18 +92,31 @@ const list = <T,>(value: T[] | null | undefined): T[] => value ?? [];
 const DiffModeContext = React.createContext<"unified" | "split">("unified");
 const maxHighlightedLineLength = 10_000;
 const maxRenderedLineLength = 20_000;
-const importanceDescriptions: Record<string, string> = {
-  core: "Defines the PR's purpose or essential behavior.",
-  supporting: "Implements, adapts, or verifies the core change.",
-  side: "A separate meaningful change, not needed for the core purpose.",
+
+const importanceMessageKeys: Record<
+  string,
+  { label: MessageKey; description: MessageKey }
+> = {
+  core: { label: "importanceCore", description: "importanceCoreDescription" },
+  supporting: {
+    label: "importanceSupporting",
+    description: "importanceSupportingDescription",
+  },
+  side: { label: "importanceSide", description: "importanceSideDescription" },
 };
-const reviewLevelDescriptions: Record<string, string> = {
-  careful: "Read this fragment closely.",
-  normal: "Review this fragment at an ordinary level.",
-  skim: "A quick check is enough for this fragment.",
+const reviewMessageKeys: Record<
+  ReviewLevel,
+  { label: MessageKey; description: MessageKey }
+> = {
+  careful: { label: "reviewCareful", description: "reviewCarefulDescription" },
+  normal: { label: "reviewNormal", description: "reviewNormalDescription" },
+  skim: { label: "reviewSkim", description: "reviewSkimDescription" },
+  "": { label: "reviewNormal", description: "reviewNormalDescription" },
 };
 
 function Importance({ value }: { value: string }) {
+  const locale = useLocale();
+  const keys = importanceMessageKeys[value];
   return value ? (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -103,11 +125,12 @@ function Importance({ value }: { value: string }) {
           tabIndex={0}
           onClick={(event) => event.preventDefault()}
         >
-          {value}
+          {keys ? t(locale, keys.label) : value}
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        <strong>{value}</strong> — {importanceDescriptions[value] ?? value}
+        <strong>{keys ? t(locale, keys.label) : value}</strong> —{" "}
+        {keys ? t(locale, keys.description) : value}
       </TooltipContent>
     </Tooltip>
   ) : null;
@@ -115,6 +138,8 @@ function Importance({ value }: { value: string }) {
 
 function Level({ value }: { value: ReviewLevel }) {
   if (!value) return null;
+  const locale = useLocale();
+  const keys = reviewMessageKeys[value];
   const Icon =
     value === "careful"
       ? CircleAlert
@@ -127,26 +152,33 @@ function Level({ value }: { value: ReviewLevel }) {
         <span
           className={`review-level review-level-${value}`}
           tabIndex={0}
-          aria-label={`${value} review`}
+          aria-label={t(locale, keys.label)}
           onClick={(event) => event.preventDefault()}
         >
           <Icon size={16} aria-hidden="true" />
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        <strong>{value}</strong> — {reviewLevelDescriptions[value] ?? value}
+        <strong>{t(locale, keys.label)}</strong> — {t(locale, keys.description)}
       </TooltipContent>
     </Tooltip>
   );
 }
 
 function StatusIcon({ status }: { status: string }) {
+  const locale = useLocale();
   const Icon =
     status === "new" ? FilePlus : status === "deleted" ? FileMinus : FileCheck;
+  const statusLabel =
+    status === "new"
+      ? t(locale, "newFile")
+      : status === "deleted"
+        ? t(locale, "deletedFile")
+        : t(locale, "updatedFile");
   return (
     <span
       className={`file-status-icon ${status}`}
-      title={`${status} file`}
+      title={statusLabel}
       aria-hidden="true"
     >
       <Icon size={20} />
@@ -166,9 +198,14 @@ const categoryIcons: Record<string, LucideIcon> = {
 };
 
 function CategoryIcon({ name, title }: { name: string; title?: string }) {
+  const locale = useLocale();
   const Icon = categoryIcons[name] ?? Tag;
   return (
-    <span className="category-icon" title={title} aria-hidden="true">
+    <span
+      className="category-icon"
+      title={title ? categoryName(locale, title) : undefined}
+      aria-hidden="true"
+    >
       <Icon size={18} />
     </span>
   );
@@ -177,10 +214,13 @@ function CategoryIcon({ name, title }: { name: string; title?: string }) {
 type CategoryLike = Pick<CategoryView, "name" | "icon">;
 
 function CategoryBadge({ category }: { category: CategoryLike }) {
+  const locale = useLocale();
   return (
     <span className="category-badge">
       <CategoryIcon name={category.icon} />
-      <span className="category-badge-label">{category.name}</span>
+      <span className="category-badge-label">
+        {categoryName(locale, category.name)}
+      </span>
     </span>
   );
 }
@@ -274,7 +314,11 @@ const escapeHTML = (value: string) =>
       ] ?? character,
   );
 
-export function highlightDiffText(item: DiffItem, path: string): string {
+export function highlightDiffText(
+  item: DiffItem,
+  path: string,
+  locale: Locale = detectLocale(),
+): string {
   const line = item.text ?? "";
   if (item.class === "meta") return escapeHTML(line);
   let prefix = "";
@@ -290,7 +334,7 @@ export function highlightDiffText(item: DiffItem, path: string): string {
   }
   const omitted = Math.max(0, source.length - maxRenderedLineLength);
   if (omitted > 0)
-    source = `${source.slice(0, maxRenderedLineLength)} … [${omitted} characters omitted]`;
+    source = `${source.slice(0, maxRenderedLineLength)} … ${t(locale, "omittedCharacters", { count: omitted })}`;
   const language = languageForPath(path);
   let highlighted = escapeHTML(source);
   if (
@@ -316,6 +360,7 @@ function DiffItems({
   path: string;
 }) {
   const diffMode = useContext(DiffModeContext);
+  const locale = useLocale();
   const renderItem = (item: DiffItem, index: number) => {
     if (item.kind === "expand") {
       const direction = item.direction === "up" ? "up" : "down";
@@ -326,13 +371,14 @@ function DiffItems({
           data-direction={direction}
           key={`expand-${index}`}
         >
-          {direction === "up" ? "↑" : "↓"} Show {item.count ?? 0} lines{" "}
-          {direction === "up" ? "above" : "below"}
+          {t(locale, direction === "up" ? "expandAbove" : "expandBelow", {
+            count: item.count ?? 0,
+          })}
         </button>
       );
     }
     const rowClass = item.class ?? "ctx";
-    const highlighted = highlightDiffText(item, path);
+    const highlighted = highlightDiffText(item, path, locale);
     const oldNumber = item.old_number ?? "";
     const newNumber = item.new_number ?? "";
     const unifiedNumber = newNumber || oldNumber;
@@ -536,18 +582,20 @@ function useQuestions(bootstrap: Bootstrap): Questions {
 }
 
 function Ask({ anchor, questions }: { anchor: Anchor; questions: Questions }) {
+  const locale = useLocale();
   return questions.mode === "interactive" && questions.active ? (
     <button
       className="ask-button"
       type="button"
       onClick={() => questions.compose(anchor)}
     >
-      Ask
+      {t(locale, "ask")}
     </button>
   ) : null;
 }
 
 function DisclosureActions({ selector }: { selector: string }) {
+  const locale = useLocale();
   const setOpen = (event: React.MouseEvent, open: boolean) => {
     event.preventDefault();
     event.stopPropagation();
@@ -559,10 +607,10 @@ function DisclosureActions({ selector }: { selector: string }) {
   return (
     <span className="disclosure-actions">
       <button type="button" onClick={(event) => setOpen(event, true)}>
-        Open all
+        {t(locale, "openAll")}
       </button>
       <button type="button" onClick={(event) => setOpen(event, false)}>
-        Close all
+        {t(locale, "closeAll")}
       </button>
     </span>
   );
@@ -575,6 +623,7 @@ function QuestionPanel({
   anchor: Anchor;
   questions: Questions;
 }) {
+  const locale = useLocale();
   const threads = questions.threads.filter((thread) =>
     sameAnchor(thread.anchor, anchor),
   );
@@ -589,28 +638,39 @@ function QuestionPanel({
             <DisclosureIcon />
             <span
               className="qa-thread-title"
-              title={list(thread.turns)[0]?.question ?? "Question"}
+              title={list(thread.turns)[0]?.question ?? t(locale, "question")}
             >
-              Q. {list(thread.turns)[0]?.question ?? "Question"}
+              {t(locale, "questionLabel")}.{" "}
+              {list(thread.turns)[0]?.question ?? t(locale, "question")}
             </span>
           </summary>
           {list(thread.turns).map((turn, index) => (
             <div className="qa-turn" key={turn.id}>
               {index > 0 && (
                 <>
-                  <strong className="qa-label qa-question">Q</strong>
+                  <strong className="qa-label qa-question">
+                    {t(locale, "questionLabel")}
+                  </strong>
                   <Markdown source={turn.question} />
                 </>
               )}
               {turn.answer ? (
                 <>
-                  <strong className="qa-label qa-answer">A</strong>
+                  <strong className="qa-label qa-answer">
+                    {t(locale, "answerLabel")}
+                  </strong>
                   <Markdown source={turn.answer} />
                 </>
               ) : (
                 <>
                   <span />
-                  <small>{turn.status}</small>
+                  <small>
+                    {turn.status === "pending" ||
+                    turn.status === "claimed" ||
+                    turn.status === "answered"
+                      ? t(locale, turn.status)
+                      : turn.status}
+                  </small>
                 </>
               )}
             </div>
@@ -621,7 +681,7 @@ function QuestionPanel({
               type="button"
               onClick={() => questions.compose(anchor, thread.id)}
             >
-              Ask follow-up
+              {t(locale, "askFollowUp")}
             </button>
           )}
         </details>
@@ -636,10 +696,10 @@ function QuestionPanel({
           {questions.error && <div className="qa-error">{questions.error}</div>}
           <div className="qa-compose-actions">
             <button type="button" onClick={questions.cancel}>
-              Cancel
+              {t(locale, "cancel")}
             </button>
             <button type="submit" disabled={!questions.draft.trim()}>
-              Ask
+              {t(locale, "ask")}
             </button>
           </div>
         </form>
@@ -677,6 +737,7 @@ function GuidedFragment({
   groupID: string;
   questions: Questions;
 }) {
+  const locale = useLocale();
   const anchor: Anchor = {
     type: "fragment",
     group_id: groupID,
@@ -704,6 +765,7 @@ function GuidedFragment({
           className="file-review-toggle"
           type="button"
           aria-pressed={reviewed}
+          aria-label={t(locale, reviewed ? "markUnreviewed" : "markReviewed")}
           onClick={(event) => {
             event.preventDefault();
             setReviewed(!reviewed);
@@ -740,6 +802,7 @@ function GuidedGroup({
   openSteps: ReadonlySet<string>;
   setStepOpen: (key: string, open: boolean) => void;
 }) {
+  const locale = useLocale();
   const groupAnchor: Anchor = { type: "group", group_id: group.id };
   const fragments = new Map(
     list(group.categories).flatMap((category) =>
@@ -764,14 +827,17 @@ function GuidedGroup({
       <summary>
         <DisclosureIcon />
         <h2>
-          Group {number}. {group.title}
+          {t(locale, "groupNumber", { number })} {group.title}
         </h2>
         <Importance value={group.importance} />
         <div className="summary-preview">
           <Markdown source={group.summary} />
         </div>
         <span className="count">
-          {list(group.steps).length} steps · {group.fragment_count} fragments
+          {t(locale, "stepsFragments", {
+            steps: list(group.steps).length,
+            fragments: group.fragment_count,
+          })}
         </span>
         <DisclosureActions selector=".review-step,.guided-file" />
       </summary>
@@ -795,7 +861,7 @@ function GuidedGroup({
             <summary>
               <DisclosureIcon />
               <h3>
-                Step {step.number}. {step.title}
+                {t(locale, "stepNumber", { number: step.number })} {step.title}
               </h3>
               <div className="summary-preview">
                 <Markdown source={step.summary} />
@@ -831,6 +897,7 @@ function FileDetails({
   groupID: string;
   questions: Questions;
 }) {
+  const locale = useLocale();
   const [reviewed, setReviewed] = useState(false);
   const body = [
     ...list(file.fragments).flatMap((fragment) => [
@@ -854,6 +921,7 @@ function FileDetails({
           className="file-review-toggle"
           type="button"
           aria-pressed={reviewed}
+          aria-label={t(locale, reviewed ? "markUnreviewed" : "markReviewed")}
           onClick={(event) => {
             event.preventDefault();
             setReviewed(!reviewed);
@@ -901,16 +969,23 @@ function Category({
   groupID: string;
   questions: Questions;
 }) {
+  const locale = useLocale();
   return (
     <details className="category" open>
       <summary>
         <DisclosureIcon />
         <CategoryIcon name={category.icon} />
-        <strong>{category.name}</strong>
+        <strong>{categoryName(locale, category.name)}</strong>
         <span className="category-stats">
-          {category.added ? `${category.added} added ` : ""}
-          {category.updated ? `${category.updated} updated ` : ""}
-          {category.deleted ? `${category.deleted} deleted` : ""}
+          {category.added
+            ? `${t(locale, "added", { count: category.added })} `
+            : ""}
+          {category.updated
+            ? `${t(locale, "updated", { count: category.updated })} `
+            : ""}
+          {category.deleted
+            ? t(locale, "deleted", { count: category.deleted })
+            : ""}
         </span>
         <DisclosureActions selector=":scope > .file" />
       </summary>
@@ -935,6 +1010,7 @@ function FilesGroup({
   number: number;
   questions: Questions;
 }) {
+  const locale = useLocale();
   const files = list(group.categories).flatMap((category) =>
     list(category.files),
   );
@@ -943,14 +1019,17 @@ function FilesGroup({
       <summary>
         <DisclosureIcon />
         <h2>
-          Group {number}. {group.title}
+          {t(locale, "groupNumber", { number })} {group.title}
         </h2>
         <Importance value={group.importance} />
         <div className="summary-preview">
           <Markdown source={group.summary} />
         </div>
         <span className="count">
-          {files.length} files · {group.fragment_count} fragments
+          {t(locale, "filesFragments", {
+            files: files.length,
+            fragments: group.fragment_count,
+          })}
         </span>
         <DisclosureActions selector=".category,.file" />
       </summary>
@@ -1114,6 +1193,7 @@ function GuidedSidebarGroup({
   openSteps: ReadonlySet<string>;
   setStepOpen: (key: string, open: boolean) => void;
 }) {
+  const locale = useLocale();
   const fragments = new Map(
     list(group.categories).flatMap((category) =>
       list(category.files).flatMap((file) =>
@@ -1128,7 +1208,7 @@ function GuidedSidebarGroup({
       <summary>
         <DisclosureIcon />
         <span>
-          Group {number}. {group.title}
+          {t(locale, "groupNumber", { number })} {group.title}
         </span>
         <Importance value={group.importance} />
         <small>{list(group.steps).length}</small>
@@ -1146,7 +1226,7 @@ function GuidedSidebarGroup({
             <summary>
               <DisclosureIcon />
               <span>
-                Step {step.number}. {step.title}
+                {t(locale, "stepNumber", { number: step.number })} {step.title}
               </span>
               <small>{list(step.fragment_ids).length}</small>
             </summary>
@@ -1195,6 +1275,7 @@ function Sidebar({
   openSteps: ReadonlySet<string>;
   setStepOpen: (key: string, open: boolean) => void;
 }) {
+  const locale = useLocale();
   const [activeKey, setActiveKey] = useState("");
   const [width, setWidth] = useState(() => {
     try {
@@ -1285,7 +1366,8 @@ function Sidebar({
               <summary>
                 <DisclosureIcon />
                 <span>
-                  Group {index + 1}. {group.title}
+                  {t(locale, "groupNumber", { number: index + 1 })}{" "}
+                  {group.title}
                 </span>
                 <Importance value={group.importance} />
                 <small>{files.length}</small>
@@ -1331,20 +1413,20 @@ function Sidebar({
 }
 
 function Drift({ bootstrap }: { bootstrap: Bootstrap }) {
+  const locale = useLocale();
   const drift = bootstrap.page.drift;
   if (!drift) return null;
   return (
     <section className="review-drift">
       <strong>
-        This semantic review is {list(drift.commits).length} unreviewed commits
-        behind HEAD.
+        {t(locale, "reviewBehind", { count: list(drift.commits).length })}
       </strong>
       <p>
-        Groups cover{" "}
+        {t(locale, "groupsCover")}{" "}
         <code>
           {bootstrap.page.base_sha}...{bootstrap.page.head_sha}
         </code>
-        . Current range:{" "}
+        . {t(locale, "currentRange")}{" "}
         <code>
           {drift.current_base_sha}...{drift.current_head_sha}
         </code>
@@ -1353,7 +1435,7 @@ function Drift({ bootstrap }: { bootstrap: Bootstrap }) {
       <details>
         <summary>
           <DisclosureIcon />
-          Changes since this review
+          {t(locale, "changesSinceReview")}
         </summary>
         <div className="drift-columns">
           <ul>
@@ -1379,6 +1461,7 @@ function Drift({ bootstrap }: { bootstrap: Bootstrap }) {
 export function expandContext(
   button: HTMLButtonElement,
   container: Element,
+  locale: Locale = detectLocale(),
 ): void {
   const hidden = Array.from(
     container.querySelectorAll<HTMLElement>(".context-hidden[hidden]"),
@@ -1406,15 +1489,27 @@ export function expandContext(
     .querySelectorAll<HTMLButtonElement>(".expand-lines")
     .forEach((item) => {
       const itemDirection = item.dataset.direction === "up" ? "up" : "down";
-      item.textContent = `${itemDirection === "up" ? "↑" : "↓"} Show ${remaining} lines ${itemDirection === "up" ? "above" : "below"}`;
+      item.textContent = t(
+        locale,
+        itemDirection === "up" ? "expandAbove" : "expandBelow",
+        { count: remaining },
+      );
     });
 }
 
 export function App({ bootstrap }: { bootstrap: Bootstrap }) {
+  const [locale, setLocale] = useState<Locale>(() => detectLocale());
   const [reviewMode, setReviewMode] = useState<"guided" | "files">("guided");
   const [diffMode, setDiffMode] = useState<"unified" | "split">("unified");
   const [openSteps, setOpenSteps] = useState<Set<string>>(() => new Set());
   const questions = useQuestions(bootstrap);
+  useEffect(() => {
+    const updateLocale = () => setLocale(detectLocale());
+    window.addEventListener("languagechange", updateLocale);
+    document.documentElement.lang = locale;
+    document.title = t(locale, "semanticChanges");
+    return () => window.removeEventListener("languagechange", updateLocale);
+  }, [locale]);
   const setStepOpen = (key: string, open: boolean) => {
     setOpenSteps((current) => {
       if (current.has(key) === open) return current;
@@ -1438,93 +1533,100 @@ export function App({ bootstrap }: { bootstrap: Bootstrap }) {
       )?.closest<HTMLButtonElement>(".expand-lines");
       const container = button?.closest(".context-expand");
       if (!button || !container) return;
-      expandContext(button, container);
+      expandContext(button, container, locale);
     };
     document.addEventListener("click", expand);
     return () => document.removeEventListener("click", expand);
-  }, []);
+  }, [locale]);
   return (
-    <TooltipProvider delayDuration={300}>
-      <DiffModeContext.Provider value={diffMode}>
-        <div className="viewer-shell">
-          <header className="page-header">
-            <h1>Semantic Changes</h1>
-            <code className="revision-range">
-              {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
-            </code>
-            <div className="stats">
-              {list(bootstrap.page.groups).length} groups ·{" "}
-              {bootstrap.page.file_count} files ·{" "}
-              {bootstrap.page.fragment_count} fragments
-            </div>
-            <div className="toolbar">
-              <div>
-                {(["guided", "files"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    aria-pressed={reviewMode === mode}
-                    onClick={() => setReviewMode(mode)}
-                  >
-                    {mode === "guided" ? "Guided" : "Files"}
-                  </button>
-                ))}
+    <LocaleContext.Provider value={locale}>
+      <TooltipProvider delayDuration={300}>
+        <DiffModeContext.Provider value={diffMode}>
+          <div className="viewer-shell">
+            <header className="page-header">
+              <h1>{t(locale, "semanticChanges")}</h1>
+              <code className="revision-range">
+                {bootstrap.page.base_sha} → {bootstrap.page.head_sha}
+              </code>
+              <div className="stats">
+                {t(locale, "stats", {
+                  groups: list(bootstrap.page.groups).length,
+                  files: bootstrap.page.file_count,
+                  fragments: bootstrap.page.fragment_count,
+                })}
               </div>
-              <div>
-                {(["unified", "split"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    aria-pressed={diffMode === mode}
-                    onClick={() => setDiffMode(mode)}
-                  >
-                    {mode === "unified" ? "Unified" : "Split"}
-                  </button>
-                ))}
+              <div className="toolbar">
+                <div>
+                  {(["guided", "files"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      aria-pressed={reviewMode === mode}
+                      onClick={() => setReviewMode(mode)}
+                    >
+                      {t(locale, mode)}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  {(["unified", "split"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      aria-pressed={diffMode === mode}
+                      onClick={() => setDiffMode(mode)}
+                    >
+                      {t(locale, mode)}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            {questions.mode === "interactive" && (
-              <button
-                className="answer-mode"
-                type="button"
-                disabled={!questions.active}
-                onClick={questions.stop}
-              >
-                {questions.active ? "End answer mode" : "Answer mode stopped"}
-              </button>
-            )}
-          </header>
-          <div className="app-shell">
-            <Sidebar
-              bootstrap={bootstrap}
-              reviewMode={reviewMode}
-              openSteps={openSteps}
-              setStepOpen={setStepOpen}
-            />
-            <main className="wrap">
-              <Drift bootstrap={bootstrap} />
-              {list(bootstrap.page.groups).map((group, index) =>
-                reviewMode === "guided" ? (
-                  <GuidedGroup
-                    group={group}
-                    number={index + 1}
-                    questions={questions}
-                    openSteps={openSteps}
-                    setStepOpen={setStepOpen}
-                    key={group.id}
-                  />
-                ) : (
-                  <FilesGroup
-                    group={group}
-                    number={index + 1}
-                    questions={questions}
-                    key={group.id}
-                  />
-                ),
+              {questions.mode === "interactive" && (
+                <button
+                  className="answer-mode"
+                  type="button"
+                  disabled={!questions.active}
+                  onClick={questions.stop}
+                >
+                  {t(
+                    locale,
+                    questions.active ? "endAnswerMode" : "answerModeStopped",
+                  )}
+                </button>
               )}
-            </main>
+            </header>
+            <div className="app-shell">
+              <Sidebar
+                bootstrap={bootstrap}
+                reviewMode={reviewMode}
+                openSteps={openSteps}
+                setStepOpen={setStepOpen}
+              />
+              <main className="wrap">
+                <Drift bootstrap={bootstrap} />
+                {list(bootstrap.page.groups).map((group, index) =>
+                  reviewMode === "guided" ? (
+                    <GuidedGroup
+                      group={group}
+                      number={index + 1}
+                      questions={questions}
+                      openSteps={openSteps}
+                      setStepOpen={setStepOpen}
+                      key={group.id}
+                    />
+                  ) : (
+                    <FilesGroup
+                      group={group}
+                      number={index + 1}
+                      questions={questions}
+                      key={group.id}
+                    />
+                  ),
+                )}
+              </main>
+            </div>
           </div>
-        </div>
-      </DiffModeContext.Provider>
-    </TooltipProvider>
+        </DiffModeContext.Provider>
+      </TooltipProvider>
+    </LocaleContext.Provider>
   );
 }
 
@@ -1536,10 +1638,13 @@ if (root && data?.textContent) {
       <App bootstrap={JSON.parse(data.textContent) as Bootstrap} />,
     );
   } catch (error) {
+    const locale = detectLocale();
+    document.documentElement.lang = locale;
+    document.title = t(locale, "semanticChanges");
     createRoot(root).render(
       <main className="bootstrap-error">
-        <h1>Semantic Changes</h1>
-        <p>Viewer data is invalid: {String(error)}</p>
+        <h1>{t(locale, "semanticChanges")}</h1>
+        <p>{t(locale, "invalidViewerData", { error: String(error) })}</p>
       </main>,
     );
   }
