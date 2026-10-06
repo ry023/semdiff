@@ -296,13 +296,17 @@ summary::-webkit-details-marker {
   padding-block: 3px;
 }
 .guided-file {
+  --diff-header-top: calc(
+    var(--page-header-height) + var(--group-header-height) +
+      var(--step-header-height)
+  );
   margin: var(--space-2) var(--space-1) var(--space-5);
   padding: 8px;
   border: 0;
   border-top: 1px solid var(--line-subtle);
   border-radius: 0;
   background: transparent;
-  scroll-margin-top: 92px;
+  scroll-margin-top: var(--diff-header-top);
 }
 .guided-file[open] {
   padding: 0;
@@ -316,9 +320,13 @@ summary::-webkit-details-marker {
   display: none;
 }
 .file {
+  --diff-header-top: calc(
+    var(--page-header-height) + var(--group-header-height) +
+      var(--category-header-height)
+  );
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--line-subtle);
-  scroll-margin-top: 52px;
+  scroll-margin-top: var(--diff-header-top);
 }
 .diff-view[open] {
   padding: 0;
@@ -331,18 +339,12 @@ summary::-webkit-details-marker {
   border: 0;
 }
 .guided-file[open] > summary {
-  top: calc(
-    var(--page-header-height) + var(--group-header-height) +
-      var(--step-header-height)
-  );
+  top: var(--diff-header-top);
   padding: var(--space-2);
   border-radius: 0;
 }
 .file[open] > summary {
-  top: calc(
-    var(--page-header-height) + var(--group-header-height) +
-      var(--category-header-height)
-  );
+  top: var(--diff-header-top);
   padding: var(--space-2) var(--space-4);
   border-radius: 0;
 }
@@ -964,10 +966,20 @@ body[data-view="split"] .diff-row.add .new-code {
     top: var(--group-header-height);
   }
   .guided-file[open] > summary {
-    top: calc(var(--group-header-height) + var(--step-header-height));
+    top: var(--diff-header-top);
   }
   .file[open] > summary {
-    top: calc(var(--group-header-height) + var(--category-header-height));
+    top: var(--diff-header-top);
+  }
+  .guided-file {
+    --diff-header-top: calc(
+      var(--group-header-height) + var(--step-header-height)
+    );
+  }
+  .file {
+    --diff-header-top: calc(
+      var(--group-header-height) + var(--category-header-height)
+    );
   }
   .revision-range {
     order: 5;

@@ -372,6 +372,10 @@ describe("viewer regressions", () => {
 
     expect(fragment).toHaveAttribute("open");
     expect(getComputedStyle(fragmentHeader).position).toBe("sticky");
+    expect(getComputedStyle(fragment).scrollMarginTop).toBe(
+      "var(--diff-header-top)",
+    );
+    expect(getComputedStyle(fragmentHeader).top).toBe("var(--diff-header-top)");
   });
 
   it("connects Guided Fragment and Files headers directly to their Diffs", () => {
@@ -405,6 +409,10 @@ describe("viewer regressions", () => {
     expect(fragment).toHaveClass("diff-view");
     expect(file).toHaveClass("diff-view");
     expect(file).toHaveAttribute("open");
+    expect(getComputedStyle(file).scrollMarginTop).toBe(
+      "var(--diff-header-top)",
+    );
+    expect(getComputedStyle(fileHeader).top).toBe("var(--diff-header-top)");
     expect(getComputedStyle(file).padding).toBe("0px");
     expect(getComputedStyle(fileHeader).margin).toBe("0px");
     expect(getComputedStyle(fileDiff).marginTop).toBe("0px");
