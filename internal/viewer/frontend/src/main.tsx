@@ -1334,6 +1334,32 @@ function GuidedSidebarGroup({
   );
 }
 
+export function activeReviewTarget(
+  targets: readonly HTMLElement[],
+  viewportHeight = window.innerHeight,
+): HTMLElement | undefined {
+  let current: { target: HTMLElement; distance: number } | undefined;
+  let upcoming: { target: HTMLElement; distance: number } | undefined;
+  targets.forEach((target) => {
+    const rect = target.getBoundingClientRect();
+    if (rect.bottom <= 0 || rect.top >= viewportHeight) return;
+    const measuredTop = Number.parseFloat(
+      getComputedStyle(target).scrollMarginTop,
+    );
+    const stickyTop = Number.isFinite(measuredTop) ? measuredTop : 80;
+    const distance = rect.top - stickyTop;
+    if (distance <= 0 && rect.bottom > stickyTop) {
+      if (!current || distance > current.distance)
+        current = { target, distance };
+      return;
+    }
+    if (distance > 0 && (!upcoming || distance < upcoming.distance)) {
+      upcoming = { target, distance };
+    }
+  });
+  return current?.target ?? upcoming?.target;
+}
+
 function Sidebar({
   bootstrap,
   reviewMode,
@@ -1356,33 +1382,57 @@ function Sidebar({
   });
   const [resizing, setResizing] = useState(false);
   useEffect(() => {
-    let observer: IntersectionObserver | undefined;
+    let observers: IntersectionObserver[] = [];
     const observe = () => {
-      observer?.disconnect();
-      const bottomMargin = Math.max(0, window.innerHeight - 81);
-      observer = new IntersectionObserver(
-        (entries) => {
-          const file = entries
-            .filter((entry) => entry.isIntersecting)
-            .sort(
-              (left, right) =>
-                Math.abs(left.boundingClientRect.top - 80) -
-                Math.abs(right.boundingClientRect.top - 80),
-            )[0]?.target as HTMLElement | undefined;
-          if (file)
-            setActiveKey(`${file.dataset.groupId}\0${file.dataset.filePath}`);
-        },
-        { rootMargin: `-80px 0px -${bottomMargin}px 0px` },
+      observers.forEach((observer) => observer.disconnect());
+      observers = [];
+      const targets = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          ".main-file,.guided-file[data-group-id]",
+        ),
       );
-      document
-        .querySelectorAll<HTMLElement>(".main-file,.guided-file[data-group-id]")
-        .forEach((file) => observer?.observe(file));
+      const targetsByStickyTop = new Map<number, HTMLElement[]>();
+      targets.forEach((target) => {
+        const measuredTop = Number.parseFloat(
+          getComputedStyle(target).scrollMarginTop,
+        );
+        const stickyTop = Number.isFinite(measuredTop) ? measuredTop : 80;
+        const peers = targetsByStickyTop.get(stickyTop) ?? [];
+        peers.push(target);
+        targetsByStickyTop.set(stickyTop, peers);
+      });
+      targetsByStickyTop.forEach((peers, stickyTop) => {
+        const intersecting = new Set<HTMLElement>();
+        const bottomMargin = Math.max(0, window.innerHeight - stickyTop - 1);
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              const file = entry.target as HTMLElement;
+              if (entry.isIntersecting) intersecting.add(file);
+              else intersecting.delete(file);
+            });
+            const file = activeReviewTarget(Array.from(intersecting));
+            if (file)
+              setActiveKey(`${file.dataset.groupId}\0${file.dataset.filePath}`);
+          },
+          { rootMargin: `-${stickyTop}px 0px -${bottomMargin}px 0px` },
+        );
+        peers.forEach((file) => observer.observe(file));
+        observers.push(observer);
+      });
     };
+    const resizeObserver = new ResizeObserver(observe);
     observe();
+    document
+      .querySelectorAll<HTMLElement>(
+        ".group > summary,.review-step > summary,.category > summary",
+      )
+      .forEach((header) => resizeObserver.observe(header));
     window.addEventListener("resize", observe);
     return () => {
       window.removeEventListener("resize", observe);
-      observer?.disconnect();
+      resizeObserver.disconnect();
+      observers.forEach((observer) => observer.disconnect());
     };
   }, [reviewMode]);
   useEffect(() => {

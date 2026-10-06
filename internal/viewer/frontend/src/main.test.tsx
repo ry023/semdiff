@@ -7,7 +7,12 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Bootstrap, DiffItem, FragmentView } from "./types";
-import { App, expandContext, syncStickyOffsets } from "./main";
+import {
+  activeReviewTarget,
+  App,
+  expandContext,
+  syncStickyOffsets,
+} from "./main";
 import { detectLocale } from "./i18n";
 
 const line = (id: string) => {
@@ -147,6 +152,39 @@ describe("expandContext", () => {
     expect(button).toHaveTextContent("Show 2 lines above");
     expect(lines.slice(0, 2).every((item) => item.hidden)).toBe(true);
     expect(lines.slice(2).every((item) => !item.hidden)).toBe(true);
+  });
+});
+
+describe("activeReviewTarget", () => {
+  const target = (top: number, bottom: number) => {
+    const element = document.createElement("div");
+    element.style.scrollMarginTop = "200px";
+    vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+      top,
+      bottom,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: bottom - top,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    });
+    return element;
+  };
+
+  it("activates the Fragment aligned with the bottom of the sticky stack", () => {
+    const previous = target(-400, 230);
+    const selected = target(200, 700);
+
+    expect(activeReviewTarget([previous, selected], 800)).toBe(selected);
+  });
+
+  it("keeps the current Fragment until the next reaches its sticky position", () => {
+    const current = target(-400, 260);
+    const upcoming = target(240, 700);
+
+    expect(activeReviewTarget([current, upcoming], 800)).toBe(current);
   });
 });
 
