@@ -496,7 +496,11 @@ describe("viewer regressions", () => {
     fireEvent.click(mainStep!.querySelector("summary")!);
     expect(mainStep).toHaveAttribute("open");
     await waitFor(() => expect(sidebarStep).toHaveAttribute("open"));
-    fireEvent.click(sidebarStep!.querySelector("summary")!);
+    fireEvent.click(
+      within(sidebarStep!.querySelector("summary")!).getByRole("button", {
+        name: "Toggle Step",
+      }),
+    );
     expect(sidebarStep).not.toHaveAttribute("open");
     await waitFor(() => expect(mainStep).not.toHaveAttribute("open"));
     expect(
@@ -521,6 +525,71 @@ describe("viewer regressions", () => {
     expect(container.querySelector(".category > summary")).toHaveTextContent(
       "logic",
     );
+  });
+
+  it("uses sidebar chevrons for disclosure and header text for navigation", async () => {
+    const { container } = render(<App bootstrap={bootstrap()} />);
+    const mainGroup = container.querySelector<HTMLElement>(".guided-group")!;
+    const mainStep = container.querySelector<HTMLElement>(".review-step")!;
+    const sidebarGroup = container.querySelector<HTMLDetailsElement>(
+      ".sidebar .nav-group",
+    )!;
+    const sidebarStep =
+      container.querySelector<HTMLDetailsElement>(".sidebar .nav-step")!;
+    mainGroup.scrollIntoView = vi.fn();
+    mainStep.scrollIntoView = vi.fn();
+
+    fireEvent.click(sidebarGroup.querySelector(":scope > summary > span")!);
+    expect(sidebarGroup).toHaveAttribute("open");
+    expect(location.hash).toBe("#guided-group-0");
+    expect(mainGroup.scrollIntoView).toHaveBeenCalled();
+
+    fireEvent.click(sidebarStep.querySelector(":scope > summary > span")!);
+    expect(sidebarStep).not.toHaveAttribute("open");
+    expect(mainStep).not.toHaveAttribute("open");
+    expect(location.hash).toBe("#step-0-0");
+    expect(mainStep.scrollIntoView).toHaveBeenCalled();
+
+    fireEvent.click(
+      within(sidebarStep.querySelector(":scope > summary")!).getByRole(
+        "button",
+        { name: "Toggle Step" },
+      ),
+    );
+    await waitFor(() => {
+      expect(sidebarStep).toHaveAttribute("open");
+      expect(mainStep).toHaveAttribute("open");
+    });
+
+    fireEvent.click(
+      within(sidebarGroup.querySelector(":scope > summary")!).getByRole(
+        "button",
+        { name: "Toggle Group" },
+      ),
+    );
+    expect(sidebarGroup).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByRole("button", { name: "Files" }));
+    const filesGroup = container.querySelector<HTMLElement>(".files-group")!;
+    const filesSidebarGroup = container.querySelector<HTMLDetailsElement>(
+      ".sidebar .nav-group",
+    )!;
+    filesGroup.scrollIntoView = vi.fn();
+
+    fireEvent.click(
+      filesSidebarGroup.querySelector(":scope > summary > span")!,
+    );
+    expect(filesSidebarGroup).toHaveAttribute("open");
+    expect(location.hash).toBe("#group-0");
+    expect(filesGroup.scrollIntoView).toHaveBeenCalled();
+
+    fireEvent.click(
+      within(filesSidebarGroup.querySelector(":scope > summary")!).getByRole(
+        "button",
+        { name: "Toggle Group" },
+      ),
+    );
+    expect(filesSidebarGroup).not.toHaveAttribute("open");
   });
 
   it("marks a guided fragment reviewed and collapses its diff", () => {

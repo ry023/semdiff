@@ -431,6 +431,9 @@ summary::-webkit-details-marker {
 details[open] > summary > .disclosure-icon {
   transform: rotate(90deg);
 }
+details[open] > summary > .nav-disclosure-toggle .disclosure-icon {
+  transform: rotate(90deg);
+}
 .file-stats {
   float: right;
   display: inline-flex;
@@ -750,6 +753,25 @@ body[data-view="split"] .diff-row.add .new-code {
   padding: 6px var(--space-2);
   border-radius: 5px;
   cursor: pointer;
+}
+.nav-disclosure-toggle {
+  display: inline-grid;
+  width: 18px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.nav-disclosure-toggle:hover {
+  color: var(--text);
+}
+.nav-disclosure-toggle:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .nav-group > summary,
 .nav-step > summary,

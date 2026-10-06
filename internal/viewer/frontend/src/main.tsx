@@ -233,6 +233,24 @@ function DisclosureIcon() {
   );
 }
 
+function SidebarDisclosureToggle({ label }: { label: string }) {
+  return (
+    <button
+      className="nav-disclosure-toggle"
+      type="button"
+      aria-label={label}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const details = event.currentTarget.closest("details");
+        if (details) details.open = !details.open;
+      }}
+    >
+      <DisclosureIcon />
+    </button>
+  );
+}
+
 type FileLike = Pick<
   FileView,
   "directory" | "name" | "status" | "additions" | "deletions" | "diffstat"
@@ -1055,7 +1073,7 @@ function FilesGroup({
   );
 }
 
-function navigate(anchorID: string) {
+function navigate(anchorID: string, openTarget = true) {
   const target = document.getElementById(anchorID);
   if (!target) return;
   let parent = target.parentElement;
@@ -1063,7 +1081,7 @@ function navigate(anchorID: string) {
     if (parent instanceof HTMLDetailsElement) parent.open = true;
     parent = parent.parentElement;
   }
-  if (target instanceof HTMLDetailsElement) target.open = true;
+  if (openTarget && target instanceof HTMLDetailsElement) target.open = true;
   history.replaceState(null, "", `#${anchorID}`);
   target.scrollIntoView({ block: "start" });
 }
@@ -1215,8 +1233,14 @@ function GuidedSidebarGroup({
   );
   return (
     <details className="nav-group" open>
-      <summary>
-        <DisclosureIcon />
+      <summary
+        onClick={(event) => {
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          navigate(`guided-${group.anchor_id}`, false);
+        }}
+      >
+        <SidebarDisclosureToggle label={t(locale, "toggleGroup")} />
         <span>
           {t(locale, "groupNumber", { number })} {group.title}
         </span>
@@ -1233,8 +1257,14 @@ function GuidedSidebarGroup({
               setStepOpen(`${group.id}\0${step.id}`, event.currentTarget.open)
             }
           >
-            <summary>
-              <DisclosureIcon />
+            <summary
+              onClick={(event) => {
+                if (event.defaultPrevented) return;
+                event.preventDefault();
+                navigate(step.anchor_id, false);
+              }}
+            >
+              <SidebarDisclosureToggle label={t(locale, "toggleStep")} />
               <span>
                 {t(locale, "stepNumber", { number: step.number })} {step.title}
               </span>
@@ -1373,8 +1403,14 @@ function Sidebar({
           const tree = buildFileTree(files);
           return (
             <details className="nav-group" key={group.id} open>
-              <summary>
-                <DisclosureIcon />
+              <summary
+                onClick={(event) => {
+                  if (event.defaultPrevented) return;
+                  event.preventDefault();
+                  navigate(group.anchor_id, false);
+                }}
+              >
+                <SidebarDisclosureToggle label={t(locale, "toggleGroup")} />
                 <span>
                   {t(locale, "groupNumber", { number: index + 1 })}{" "}
                   {group.title}
