@@ -1544,7 +1544,7 @@ export function expandContext(
 }
 
 const elementHeight = (element: Element | null, fallback: number) =>
-  Math.max(fallback, Math.ceil(element?.getBoundingClientRect().height ?? 0));
+  Math.max(fallback, element?.getBoundingClientRect().height ?? 0);
 
 export function syncStickyOffsets(shell: HTMLElement): void {
   shell.style.setProperty(
@@ -1554,19 +1554,19 @@ export function syncStickyOffsets(shell: HTMLElement): void {
   shell.querySelectorAll<HTMLElement>(".group").forEach((group) => {
     group.style.setProperty(
       "--group-header-height",
-      `${elementHeight(group.querySelector(":scope > summary"), 44)}px`,
+      `${elementHeight(group.querySelector(":scope > summary"), 48)}px`,
     );
   });
   shell.querySelectorAll<HTMLElement>(".review-step").forEach((step) => {
     step.style.setProperty(
       "--step-header-height",
-      `${elementHeight(step.querySelector(":scope > summary"), 40)}px`,
+      `${elementHeight(step.querySelector(":scope > summary"), 44)}px`,
     );
   });
   shell.querySelectorAll<HTMLElement>(".category").forEach((category) => {
     category.style.setProperty(
       "--category-header-height",
-      `${elementHeight(category.querySelector(":scope > summary"), 40)}px`,
+      `${elementHeight(category.querySelector(":scope > summary"), 44)}px`,
     );
   });
 }

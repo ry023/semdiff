@@ -19,9 +19,9 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --page-header-height: 52px;
-  --group-header-height: 44px;
-  --step-header-height: 40px;
-  --category-header-height: 40px;
+  --group-header-height: 48px;
+  --step-header-height: 44px;
+  --category-header-height: 44px;
   font:
     14px/1.5 system-ui,
     sans-serif;

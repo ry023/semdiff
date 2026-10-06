@@ -430,29 +430,31 @@ describe("viewer regressions", () => {
         value: () => ({ height }),
       });
     };
-    setHeight(shell.querySelector(":scope > .page-header"), 76);
-    setHeight(shell.querySelector(".group > summary"), 68);
-    setHeight(shell.querySelector(".review-step > summary"), 52);
-    setHeight(shell.querySelector(".category > summary"), 48);
+    setHeight(shell.querySelector(":scope > .page-header"), 76.25);
+    setHeight(shell.querySelector(".group > summary"), 68.5);
+    setHeight(shell.querySelector(".review-step > summary"), 52.75);
+    setHeight(shell.querySelector(".category > summary"), 48.125);
 
     syncStickyOffsets(shell);
 
-    expect(shell.style.getPropertyValue("--page-header-height")).toBe("76px");
+    expect(shell.style.getPropertyValue("--page-header-height")).toBe(
+      "76.25px",
+    );
     expect(
       shell
         .querySelector<HTMLElement>(".group")
         ?.style.getPropertyValue("--group-header-height"),
-    ).toBe("68px");
+    ).toBe("68.5px");
     expect(
       shell
         .querySelector<HTMLElement>(".review-step")
         ?.style.getPropertyValue("--step-header-height"),
-    ).toBe("52px");
+    ).toBe("52.75px");
     expect(
       shell
         .querySelector<HTMLElement>(".category")
         ?.style.getPropertyValue("--category-header-height"),
-    ).toBe("48px");
+    ).toBe("48.125px");
   });
 
   it("limits giant lines and only mounts the selected diff layout", () => {
