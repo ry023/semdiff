@@ -825,6 +825,9 @@ body[data-view="split"] .diff-row.add .new-code {
   grid-template-columns: 20px 18px minmax(0, 1fr) auto;
   align-items: center;
 }
+.nav-guided-fragment {
+  grid-template-columns: 20px 19px minmax(0, 1fr) 18px;
+}
 .nav-group-file .file-status-icon {
   width: 20px;
   height: 20px;

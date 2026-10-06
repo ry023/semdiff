@@ -1277,7 +1277,7 @@ function GuidedSidebarGroup({
                 const { fragment, category } = entry;
                 return (
                   <button
-                    className={`nav-link nav-group-file ${activeKey === `${group.id}\0${fragment.path}` ? "is-active" : ""}`}
+                    className={`nav-link nav-group-file nav-guided-fragment ${activeKey === `${group.id}\0${fragment.path}` ? "is-active" : ""}`}
                     type="button"
                     onClick={() =>
                       navigate(`guided-${group.id}-${fragment.id}`)
@@ -1285,14 +1285,14 @@ function GuidedSidebarGroup({
                     key={fragment.id}
                   >
                     <StatusIcon status={fragment.status} />
-                    <CategoryIcon name={category.icon} title={category.name} />
+                    <Level value={fragment.review_level} />
                     <span className="nav-file-path">
                       <span className="nav-file-directory">
                         {fragment.directory}
                       </span>
                       <span className="nav-file-name">{fragment.name}</span>
                     </span>
-                    <Level value={fragment.review_level} />
+                    <CategoryIcon name={category.icon} title={category.name} />
                   </button>
                 );
               })}

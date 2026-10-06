@@ -293,6 +293,10 @@ describe("viewer regressions", () => {
     expect(
       container.querySelector(".nav-group-file .category-icon"),
     ).toHaveAttribute("title", "logic");
+    const sidebarFragment = container.querySelector(".nav-guided-fragment")!;
+    expect(sidebarFragment.children[1]).toHaveClass("review-level");
+    expect(sidebarFragment.children[2]).toHaveClass("nav-file-path");
+    expect(sidebarFragment.children[3]).toHaveClass("category-icon");
     expect(screen.getAllByText("App.tsx").length).toBeGreaterThan(0);
     expect(screen.queryByText("F1")).not.toBeInTheDocument();
     expect(screen.queryByText("L10-L20")).not.toBeInTheDocument();
