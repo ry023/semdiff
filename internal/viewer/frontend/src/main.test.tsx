@@ -385,6 +385,7 @@ describe("viewer regressions", () => {
     )!;
     const fragment = container.querySelector(".guided-file")!;
     expect(fragment).not.toHaveAttribute("open");
+    expect(getComputedStyle(fragment).marginTop).toBe("0");
     expect(getComputedStyle(fragment).padding).toBe("8px");
 
     fireEvent.click(
