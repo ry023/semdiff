@@ -468,6 +468,7 @@ describe("viewer regressions", () => {
     expect(fragment).toHaveClass("diff-view");
     expect(file).toHaveClass("diff-view");
     expect(file).toHaveAttribute("open");
+    expect(getComputedStyle(file).marginInline).toBe("20px");
     expect(getComputedStyle(file).scrollMarginTop).toBe(
       "var(--diff-header-top)",
     );

@@ -324,6 +324,7 @@ summary::-webkit-details-marker {
     var(--page-header-height) + var(--group-header-height) +
       var(--category-header-height)
   );
+  margin-inline: 20px;
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--line-subtle);
   scroll-margin-top: var(--diff-header-top);
