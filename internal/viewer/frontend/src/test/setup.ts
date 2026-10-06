@@ -21,10 +21,20 @@ class IntersectionObserverMock implements IntersectionObserver {
 
 vi.stubGlobal("IntersectionObserver", IntersectionObserverMock);
 
+class ResizeObserverMock implements ResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+
+vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   document.body.replaceChildren();
   document.body.removeAttribute("data-view");
+  document.documentElement.lang = "en";
+  document.title = "Semantic Review";
   history.replaceState(null, "", "/");
 });
