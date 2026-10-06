@@ -202,14 +202,33 @@ const categoryIcons: Record<string, LucideIcon> = {
 function CategoryIcon({ name, title }: { name: string; title?: string }) {
   const locale = useLocale();
   const Icon = categoryIcons[name] ?? Tag;
-  return (
+  const icon = (
     <span
       className="category-icon"
-      title={title ? categoryName(locale, title) : undefined}
-      aria-hidden="true"
+      tabIndex={title ? 0 : undefined}
+      aria-label={
+        title
+          ? t(locale, "categoryTooltip", {
+              category: categoryName(locale, title),
+            })
+          : undefined
+      }
+      aria-hidden={title ? undefined : "true"}
+      onClick={title ? (event) => event.preventDefault() : undefined}
     >
       <Icon size={18} />
     </span>
+  );
+  if (!title) return icon;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{icon}</TooltipTrigger>
+      <TooltipContent>
+        {t(locale, "categoryTooltip", {
+          category: categoryName(locale, title),
+        })}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -217,13 +236,24 @@ type CategoryLike = Pick<CategoryView, "name" | "icon">;
 
 function CategoryBadge({ category }: { category: CategoryLike }) {
   const locale = useLocale();
+  const label = categoryName(locale, category.name);
   return (
-    <span className="category-badge">
-      <CategoryIcon name={category.icon} />
-      <span className="category-badge-label">
-        {categoryName(locale, category.name)}
-      </span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="category-badge"
+          tabIndex={0}
+          aria-label={t(locale, "categoryTooltip", { category: label })}
+          onClick={(event) => event.preventDefault()}
+        >
+          <CategoryIcon name={category.icon} />
+          <span className="category-badge-label">{label}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {t(locale, "categoryTooltip", { category: label })}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

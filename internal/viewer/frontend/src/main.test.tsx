@@ -292,7 +292,7 @@ describe("viewer regressions", () => {
     ).toHaveTextContent("logic");
     expect(
       container.querySelector(".nav-group-file .category-icon"),
-    ).toHaveAttribute("title", "logic");
+    ).toHaveAttribute("aria-label", "Category: logic");
     const sidebarFragment = container.querySelector(".nav-guided-fragment")!;
     expect(sidebarFragment.children[1]).toHaveClass("review-level");
     expect(sidebarFragment.children[2]).toHaveClass("nav-file-path");
@@ -303,7 +303,7 @@ describe("viewer regressions", () => {
     expect(screen.queryByText(/diff --git/)).not.toBeInTheDocument();
   });
 
-  it("explains importance and review level on keyboard focus", async () => {
+  it("explains importance, review level, and category on keyboard focus", async () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
 
     const importance = container.querySelector<HTMLElement>(
@@ -322,6 +322,22 @@ describe("viewer regressions", () => {
       expect(screen.getByRole("tooltip")).toHaveTextContent(
         "Read this fragment closely.",
       ),
+    );
+
+    const categoryBadge = container.querySelector<HTMLElement>(
+      ".guided-file .category-badge",
+    )!;
+    categoryBadge.focus();
+    await waitFor(() =>
+      expect(screen.getByRole("tooltip")).toHaveTextContent("Category: logic"),
+    );
+
+    const sidebarCategory = container.querySelector<HTMLElement>(
+      ".nav-guided-fragment .category-icon",
+    )!;
+    sidebarCategory.focus();
+    await waitFor(() =>
+      expect(screen.getByRole("tooltip")).toHaveTextContent("Category: logic"),
     );
   });
 

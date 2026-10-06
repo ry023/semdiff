@@ -669,7 +669,9 @@ body[data-view="split"] .diff-row.add .new-code {
   cursor: help;
 }
 .importance:focus-visible,
-.review-level:focus-visible {
+.review-level:focus-visible,
+.category-badge:focus-visible,
+.category-icon:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
