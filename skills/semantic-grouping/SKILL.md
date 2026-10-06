@@ -26,7 +26,7 @@ Group（1 つの成果に対するレビュー判断）
 
 ## 実行手順
 
-以下の手順を実行します。構成中の説明は暫定で構いません。境界を見直した後は、関係する title・summary・description も更新し、古い説明を残さないでください。
+Group を先に仮置きし、差分を読んで Fragment を作り、最後に Step を確定します。draft は途中状態を許容します。境界を見直したら、関係する title・summary・description も更新してください。
 
 ### groups.json の言語
 
@@ -34,19 +34,89 @@ Group（1 つの成果に対するレビュー判断）
 
 言語を切り替えても Group ID、Step ID、Fragment ID、file path、enum 値、JSON field 名は変更しません。コード識別子や一般的な技術用語は、対象言語のソフトウェア開発者に自然で、レビュー判断を追跡できる表記を選びます。
 
-1. draft を作成する前に `semdiff resolve --json` を実行します。範囲を指定しない場合は `grouping init` と同じ pull request の範囲判定を使います。以下の必要な検索で再利用できるレビューが見つからなければ、`semdiff grouping init --json` で新しい draft を作成します。祖先レビューが見つかった場合（`exact: false`）は、`semdiff grouping init --from <groups_path> --force --json` でそのレビューを元にした現在の範囲の draft を新しく作成します。完全一致するレビューが見つかった場合は、ユーザーがグループ化の見直しを明示的に求めていない限り、その成果物を再利用します。
-   CI や共有済みレビューを引き継ぐ場合は `semdiff remote resolve --json` も実行します。ローカルとリモートの結果から完全一致、次に `commits_behind` が最小の祖先を優先し、同距離ならローカルを使います。リモートを選んだ場合は、同じ範囲で `semdiff remote resolve --pull --json` を実行し、必要に応じて `--force` または `--no-clobber` を指定します。返された `groups_path` を同じ `--from` に渡せます。`found: false` は新規作成可能ですが、通信・認証・成果物検証エラーを一致なしとして扱わないでください。共有対象は確定済みレビューで、ローカルで作ったものを CI から使うには `remote push` が必要です。
-2. 既存レビューを引き継いだ draft は既存の Groups、summary、レビュー metadata、Fragment 定義を引き継ぎますが、Git の変更マップと suggestions は現在の範囲について必ず再計算されます。`review_head_sha` より後のすべてのコミットと、影響を受けたパスにある既存のすべての Fragment を再確認が必要な対象として扱います。古い行範囲が意味的に正しいとは仮定しないでください。CLI は、source の Base が異なる場合、または Head が現在の first-parent history 上にない場合、その source を拒否します。
-3. `grouping init` が返した SHA を使って `semdiff commits <base-sha>..<head-sha> --json` を実行し、範囲内のすべてのコミットの件名・時系列・変更ファイル数を確認します。祖先レビューの場合は、まず `semdiff commits <review_head_sha>..<head-sha> --json` も確認します。件名だけでは意図を判断できないコミットは `git show -s --format=%B <sha>` で本文を確認します。完全な diff を最初から読み込まないでください。
-4. コミット全体と引き継いだレビューから、独立してレビュー可能な成果を棚卸しし、候補 Group を先に決めます。最初に確認したコミットだけで決めず、件名が示す作業単位をそのまま Group にしないでください。`semdiff grouping apply <operations-file|-> --json` の `upsert_group` で候補を draft に保存します。この時点の title・summary は暫定でよく、根拠のない説明を埋める必要はありません。関心事が変わっていない引き継ぎ元の Group は維持し、新しい変更によって変わった場合は修正・分割・統合します。Groups の数に目標は設けません。判断材料が乏しい成果には `mechanical-changes` や `unclassified` のような意味の明確な fallback を使います。
-5. 各候補 Group について、レビュアーがどの順番で何を判断するかを、短い Step の仮説として考えます。詳細な境界、ファイル数、title・summary はまだ確定しません。CLI の `set_review_steps` は割り当て済み Fragment ID を必要とするため、ここでは実行しません。
-6. `semdiff grouping inspect --suggestions --json` で変更パスと Git hunk 由来の候補を範囲全体にわたって確認し、候補 Group の不足や重複を見直します。既存レビューを引き継いだ場合は、新しい変更と、その変更が触れたパスの既存 Fragment を優先して確認します。各 Group に関係する候補の差分と周辺コードを必要に応じて読み、`semdiff show --draft .semdiff/grouping-draft.json <id> --json` を使います。suggestion やコミットの境界を、そのまま Group・Step・Fragment の境界とは見なしません。
-7. 各 Group の判断を支える具体的な変更について、suggestions から `merge_fragments` で authored fragments を構成します。1 つの `member` は意味的に完結した suggestion を昇格し、同じパスの複数の `members` は 1 つの複数範囲 Fragment になります。明示的な範囲が必要なら `add_fragment`、`update_fragment`、`delete_fragments` を使います。作成した Fragment は `assign_fragments` で主たる Group に割り当て、差分から分かったことに応じて Group と Step の仮説も修正します。status に表示され、割り当てが必要なのは authored fragments だけです。
-8. 新規または修正した各 Fragment には、注目すべき 1 つの変更を表す短い description と `review_level` を設定します。目的、制約、関係が diff から明らかでなく、その点がレビュー判断を変える場合にだけ理由を加えます。`review_level` は `careful`、`normal`、`skim` から選び、明確な理由がなければ `normal` にします。Group の Fragment が参照する各ファイルには、`file_categories` の entry をちょうど 1 つ設定します。まず `classify` の出力を使い、コミットの意図、パスの意味、関連する Fragment の内容で確認または修正します。
-9. `status`、`inspect`、`apply` を繰り返し、全ファイルで Fragment の不足や細分化を確認します。大きな suggestion や新規ファイルでは、トップレベルの責務を確認し、関数、型、handler、test を独立して説明・検討できる場合は `add_fragment` と明示的な範囲を使います。ファイル境界、Git hunk、テストの境界、import、コメント、整形の変更だけを理由に分割しないでください。意味を独立して説明できない Fragment、特に区切り記号だけの Fragment や構文だけの Fragment、隣接する構造を完成させるだけの Fragment は統合します。draft は途中状態を許容するため、1 回の batch で未割り当ての Fragment が残っても作業を続けます。
-10. Fragment を割り当てた後、Step の仮説を実際の変更に照らして見直し、`set_review_steps` で各 Group の `review_steps` を確定します。各 Step の具体的な結論と理解負荷を確認し、主に理解する実装ファイルが 3 個を超える場合は「Step」の目安に従って分割を検討します。ファイル数を満たすためだけには分割しません。各 Group Fragment をその Group の Step にちょうど 1 回だけ配置します。
-11. Group の `importance` を PR 全体に対する相対的な位置づけとして `core`、`supporting`、`side` から選び、`order` は前提となる Group が先に来るよう設定します。Group の成果全体、Step の具体的な段階、Fragment の変更内容に合わせて title・summary・description を通読し、仮説の修正で古くなった説明を更新します。
-12. `semdiff grouping finalize --json` を実行します。明示的な出力パスがない場合、finalize は結果を Git の追跡対象外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に書き込みます。ユーザーまたは周辺の作業手順から必要とされる場合だけ明示的な path を使います。すべての authored fragment が割り当てられ、説明され、完全な review Step に配置され、すべての Group に完全な summary とファイル分類があり、変更されたすべての行とメタデータ変更がちょうど 1 回選択されている場合にだけ finalize は成功します。
+### 1. レビューを探して draft を作る
+
+まずローカルのレビューを探します。範囲省略時は `grouping init` と同じ pull request の範囲を使います。
+
+```text
+semdiff resolve --json
+```
+
+CI や共有済みレビューを使う場合は、リモートも探します。
+
+```text
+semdiff remote resolve --json
+```
+
+ローカルとリモートの完全一致を優先します。祖先同士なら `commits_behind` が少ないもの、同距離ならローカルを選びます。リモートを選んだら同じ範囲で `semdiff remote resolve --pull --json` を実行し、返された `groups_path` を使います。pull に `--force` または `--no-clobber` が必要な場合は指定します。通信・認証・検証エラーを `found: false` と同一視しないでください。
+
+選んだ結果から作業を進めます。
+
+| 結果 | 操作 |
+| --- | --- |
+| 完全一致 | 見直しを求められていなければ再利用する |
+| 祖先レビュー | `semdiff grouping init --from <groups_path> --force --json` |
+| 再利用候補なし | `semdiff grouping init --json` |
+
+ローカルの完成済みレビューを CI から使うには `remote push` が必要です。
+
+引き継いだ Group、説明、Fragment は再確認の対象です。CLI は現在の変更マップと suggestions を再計算します。source の Base が違う、または Head が現在の first-parent history 上にない場合は拒否します。
+
+### 2. コミットから Group を仮置きする
+
+`grouping init` が返した SHA で全コミットを確認します。祖先レビューを引き継いだ場合は、前回レビュー以降のコミットを先に確認します。
+
+```text
+semdiff commits <review_head_sha>..<head-sha> --json  # 祖先レビューの場合
+semdiff commits <base-sha>..<head-sha> --json
+```
+
+件名・時系列・変更ファイル数から成果の全体像をつかみます。件名だけでは意図が不明なコミットは本文を確認します。
+
+```text
+git show -s --format=%B <sha>  # 必要なコミットのみ
+```
+
+独立した成果ごとに候補 Group を決め、`upsert_group` で draft に保存します。コミット単位や Group 数を目標にしないでください。引き継いだ Group も変更された成果に合わせて見直し、説明の根拠が足りなければ空のままにします。各 Group の Step は、何をどの順に判断するかだけを短く仮置きします。
+
+### 3. 差分を確認して Fragment を割り当てる
+
+全パスの suggestion を一覧し、Group の不足・重複を確認します。差分と周辺コードは必要な候補から読みます。引き継ぎ時は、追加コミットと、その影響を受けたパスの既存 Fragment を優先します。
+
+```text
+semdiff grouping inspect --suggestions --json
+semdiff show --draft .semdiff/grouping-draft.json <id> --json  # 必要な候補のみ
+```
+
+suggestion は Git hunk 由来です。`merge_fragments` で authored Fragment に昇格・統合し、必要なら `add_fragment`、`update_fragment`、`delete_fragments` で境界を直します。各 Fragment を主たる Group に `assign_fragments` で割り当てます。詳細が分かったら Group と Step の仮説も直します。
+
+各 Fragment に具体的な `description` と `review_level` を付けます。根拠がなければ `review_level` は `normal` にします。Group が参照する各パスには、`classify` の提案を内容と照合して `file_categories` を設定します。
+
+### 4. Step と説明を確定する
+
+draft の状態を見ながら境界を調整します。
+
+```text
+semdiff grouping status --json
+semdiff grouping inspect --group <group-id> --json  # 必要な Group のみ
+semdiff grouping apply <operations-file|-> --json  # 修正時
+```
+
+全ファイルで Fragment の不足・過分割を確認します。大きな suggestion や新規ファイルでは複数の責務がないか調べます。hunk、ファイル、import、区切り記号だけを境界にしないでください。途中で未割り当ての Fragment が残っても作業を続けます。
+
+Fragment の割り当て後に Step の仮説を見直し、`set_review_steps` で確定します。各 Fragment をちょうど 1 回参照します。主に理解する実装ファイルが 3 個を超える Step は分割を検討しますが、3 個は上限や目標ではありません。詳しい判断基準は「Step」に従います。
+
+各 Group の `importance` と `order` を決めます。Group、Step、Fragment の説明を通読し、確認できた理由・変更・効果と整合させます。
+
+### 5. 検証して確定する
+
+現在の Git change map で coverage と所属・説明・分類を再検証して確定します。
+
+```text
+semdiff grouping finalize --json
+```
+
+出力先を指定しなければ、追跡対象外の `.semdiff/reviews/<base-sha>...<head-sha>/groups.json` に保存されます。明示的な path は必要な場合だけ使います。
 
 ## 共通の原則
 
