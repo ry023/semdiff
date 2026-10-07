@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.4](https://github.com/ry023/semdiff/compare/v0.4.3...v0.4.4) - 2026-10-06
+
+- viewを改善する by @ry023 in https://github.com/ry023/semdiff/pull/18
+
 ## [v0.4.3](https://github.com/ry023/semdiff/compare/v0.4.2...v0.4.3) - 2026-10-02
 
 - configの読み込みパスを修正 by @ry023 in https://github.com/ry023/semdiff/pull/13
