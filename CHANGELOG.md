@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.5](https://github.com/ry023/semdiff/compare/v0.4.4...v0.4.5) - 2026-10-20
+
+- 共通サンプルと基準レビューを開発検証に追加 by @ry023 in https://github.com/ry023/semdiff/pull/21
+
 ## [v0.4.4](https://github.com/ry023/semdiff/compare/v0.4.3...v0.4.4) - 2026-10-06
 
 - viewを改善する by @ry023 in https://github.com/ry023/semdiff/pull/18
