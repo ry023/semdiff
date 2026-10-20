@@ -1,0 +1,3 @@
+[submodule "samples/todo-app"]
+	path = samples/todo-app
+	url = https://github.com/ry023/semdiff-sample-app.git
