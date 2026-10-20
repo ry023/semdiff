@@ -80,3 +80,24 @@ CLI の表示、viewer、静的 HTML を変更した場合は、該当 test に�
 ## semdiff 自身を使う場合
 
 このリポジトリの変更を semantic grouping するときは `skills/semantic-grouping/SKILL.md` に従います。`groups.json` を直接編集せず、CLI の grouping draft workflow を使って coverage を検証してください。
+
+## 共通サンプルを使った開発検証
+
+共通の検証対象は `samples/todo-app`（`semdiff-sample-app` の Submodule）です。未取得なら repository root で `git submodule update --init --recursive` を実行します。検証のためにサンプルのコードや Submodule の固定 commit を変更しないでください。
+
+対象範囲は `a4fcef4b6bfddbd2f6760fa1a8c20d8f3364822d..670499d5eb3b1ba97ddc85c008cf7998f0912f25`（Todo アプリ追加）です。後続の `sample.html` 追加は含めません。基準レビューは親 repository の `samples/reviews/todo-app/groups.json` で管理します。
+
+CLI・viewer の変更では、関連する自動テストに加えて、必要に応じてこの基準レビューで実際の出力を確認します。インストール済み CLI ではなく現在の作業ツリーからビルドした CLI を使います。repository root からの例:
+
+```sh
+go build -o .semdiff/bin/semdiff .
+(
+  cd samples/todo-app
+  ../../.semdiff/bin/semdiff validate ../reviews/todo-app/groups.json --json
+  ../../.semdiff/bin/semdiff view ../reviews/todo-app/groups.json --no-open
+)
+```
+
+Skill の変更では、この作業ツリーの `skills/semantic-grouping/SKILL.md` を使い、上記の固定範囲から grouping して意味的な品質を確認します。保存済みの基準レビューを再利用して検証を省略しないでください。試行用 draft・出力は `.semdiff/` 内に置き、基準レビューは明示的に更新するときだけ CLI の draft/finalize workflow で生成し直します。基準レビューとの JSON 完全一致や Group・Step・Fragment 数の一致は合格条件にしません。
+
+基準レビューの更新時は `samples/todo-app` を作業ディレクトリにし、`grouping finalize ../reviews/todo-app/groups.json --json` で保存します。更新後は同じ場所で上記の `validate` を実行します。サンプルの履歴や remote に変更を加える必要はありません。

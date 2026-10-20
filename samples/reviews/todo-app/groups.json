@@ -1,0 +1,979 @@
+{
+  "format": "semdiff.groups",
+  "format_version": "1.0.0",
+  "base_sha": "a4fcef4b6bfddbd2f6760fa1a8c20d8f3364822d",
+  "head_sha": "670499d5eb3b1ba97ddc85c008cf7998f0912f25",
+  "groups": [
+    {
+      "id": "auth",
+      "title": "登録・ログインしてセッションを維持できるようにする",
+      "summary": "- ユーザーを識別するため、新規の users・sessions テーブルと登録・ログイン・ログアウト API を追加する。\n- 新規コンポーネント AuthContext・AuthPage と ProtectedRoute により、ログイン状態を保持して認証画面と Todo 画面を切り替える。",
+      "importance": "core",
+      "order": 1,
+      "file_categories": [
+        {
+          "path": "api/internal/database/database.go",
+          "category": "implementation"
+        },
+        {
+          "path": "api/internal/database/store.go",
+          "category": "implementation"
+        },
+        {
+          "path": "api/internal/server/server.go",
+          "category": "implementation"
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "category": "component"
+        },
+        {
+          "path": "frontend/src/api.ts",
+          "category": "logic"
+        },
+        {
+          "path": "frontend/src/types.ts",
+          "category": "logic"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "auth-storage",
+          "title": "ユーザーと期限付きセッションを保存する",
+          "summary": "- 新規の users・sessions テーブルと Store 型のユーザー・セッション操作を追加する。セッション取得では有効期限を確認する。",
+          "fragment_ids": [
+            "auth-schema",
+            "user-store",
+            "session-store"
+          ]
+        },
+        {
+          "id": "register",
+          "title": "認証情報を検証してアカウントを登録する",
+          "summary": "- 新規メソッド Server.register で入力長とユーザー名の重複を検証する。パスワードは単純な SHA-256 で保存・照合し、本番向けのハッシュ方式ではない。",
+          "fragment_ids": [
+            "register-handler"
+          ]
+        },
+        {
+          "id": "session-api",
+          "title": "Cookie でログイン状態を復元・解除する",
+          "summary": "- 新規メソッド Server.login・logout・me と withUser により、ランダムトークンを Cookie と保存済みセッションに関連付ける。",
+          "fragment_ids": [
+            "session-handlers"
+          ]
+        },
+        {
+          "id": "auth-ui",
+          "title": "登録・ログイン画面と認証状態を連動させる",
+          "summary": "- 新規コンポーネント AuthContext・AuthPage・ProtectedRoute で、認証 API の結果を状態と画面遷移に反映する。新規関数 request は Cookie 付き通信と応答処理を共通化する。",
+          "fragment_ids": [
+            "user-type",
+            "auth-client",
+            "auth-state",
+            "auth-form"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "auth-schema",
+          "path": "api/internal/database/database.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 33,
+                "lines": 16
+              }
+            }
+          ],
+          "description": "新規定数 schema に users・sessions テーブルと有効期限の索引を定義する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "user-store",
+          "path": "api/internal/database/store.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 17
+              }
+            },
+            {
+              "new": {
+                "start": 25,
+                "lines": 43
+              }
+            },
+            {
+              "new": {
+                "start": 196,
+                "lines": 12
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規の User・Store 型と CreateUser・FindUserByUsername メソッドを追加し、ユーザー名の重複を ErrConflict に変換する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "session-store",
+          "path": "api/internal/database/store.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 68,
+                "lines": 30
+              }
+            }
+          ],
+          "description": "新規の Store.CreateSession・DeleteSession・FindUserBySession メソッドでセッションを保存・削除し、有効期限内のユーザーを取得する。",
+          "review_level": "careful"
+        },
+        {
+          "id": "register-handler",
+          "path": "api/internal/server/server.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 55,
+                "lines": 36
+              }
+            },
+            {
+              "new": {
+                "start": 296,
+                "lines": 9
+              }
+            }
+          ],
+          "description": "新規メソッド Server.register で認証情報を検証してユーザーを登録し、新規関数 hashPassword・passwordMatches で単純な SHA-256 照合を行う。",
+          "review_level": "careful"
+        },
+        {
+          "id": "session-handlers",
+          "path": "api/internal/server/server.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 19,
+                "lines": 5
+              }
+            },
+            {
+              "new": {
+                "start": 29,
+                "lines": 4
+              }
+            },
+            {
+              "new": {
+                "start": 91,
+                "lines": 81
+              }
+            },
+            {
+              "new": {
+                "start": 280,
+                "lines": 16
+              }
+            },
+            {
+              "new": {
+                "start": 305,
+                "lines": 8
+              }
+            }
+          ],
+          "description": "新規メソッド Server.login・logout・me と withUser で、有効期限付きセッションを Cookie と関連付ける。新規関数 newToken は乱数トークンを生成する。",
+          "review_level": "careful"
+        },
+        {
+          "id": "user-type",
+          "path": "frontend/src/types.ts",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 4
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規の User 型で認証 API の応答を表す。",
+          "review_level": "normal"
+        },
+        {
+          "id": "auth-client",
+          "path": "frontend/src/api.ts",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 40
+              }
+            },
+            {
+              "new": {
+                "start": 53,
+                "lines": 2
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規関数 request と api オブジェクトの認証メソッドで、Cookie を含めた JSON 通信とエラー・204 応答の処理を行う。",
+          "review_level": "normal"
+        },
+        {
+          "id": "auth-state",
+          "path": "frontend/src/App.tsx",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 108
+              }
+            },
+            {
+              "new": {
+                "start": 346,
+                "lines": 2
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規コンポーネント AuthContext・App・ProtectedRoute と関数 useAuth で、ログイン状態の復元と認証に応じたルーティングを実装する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "auth-form",
+          "path": "frontend/src/App.tsx",
+          "ranges": [
+            {
+              "new": {
+                "start": 109,
+                "lines": 94
+              }
+            }
+          ],
+          "description": "新規コンポーネント AuthPage で登録・ログインフォームを表示し、登録後にもログインして Todo 画面へ移動する。",
+          "review_level": "normal"
+        }
+      ]
+    },
+    {
+      "id": "todos",
+      "title": "ログインしたユーザーの Todo を管理できるようにする",
+      "summary": "- 新規の todos テーブルと Store 型のメソッドで、ユーザー別に Todo を保存・取得・更新・削除する。\n- 新規コンポーネント TodoPage から API を呼び出し、一覧・追加・完了切り替え・削除を行えるようにする。",
+      "importance": "core",
+      "order": 2,
+      "file_categories": [
+        {
+          "path": "api/internal/database/database.go",
+          "category": "implementation"
+        },
+        {
+          "path": "api/internal/database/store.go",
+          "category": "implementation"
+        },
+        {
+          "path": "api/internal/server/server.go",
+          "category": "implementation"
+        },
+        {
+          "path": "api/internal/server/server_test.go",
+          "category": "test"
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "category": "component"
+        },
+        {
+          "path": "frontend/src/api.ts",
+          "category": "logic"
+        },
+        {
+          "path": "frontend/src/types.ts",
+          "category": "logic"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "todo-storage",
+          "title": "ユーザーに紐づく Todo を保存・更新する",
+          "summary": "- 新規の Todo 型と todos テーブル、Store の CRUD メソッドを追加する。読み取り・更新・削除に user_id を渡して他ユーザーのレコードを対象外にする。",
+          "fragment_ids": [
+            "todo-schema",
+            "todo-store"
+          ]
+        },
+        {
+          "id": "todo-api",
+          "title": "認証済みリクエストから Todo を操作する",
+          "summary": "- 新規メソッド Server.todos・todoByID で認証・ID・タイトルを検証して Store を呼ぶ。新規テストでは認証から Todo 操作までの応答と未認証時の拒否を確認する。",
+          "fragment_ids": [
+            "todo-handlers",
+            "todo-tests"
+          ]
+        },
+        {
+          "id": "todo-ui",
+          "title": "画面から Todo の追加・完了・削除を行う",
+          "summary": "- 新規コンポーネント TodoPage と api オブジェクトの Todo 操作メソッドを追加し、通信結果を一覧と未完了件数に反映する。",
+          "fragment_ids": [
+            "todo-type",
+            "todo-client",
+            "todo-page"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "todo-schema",
+          "path": "api/internal/database/database.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 49,
+                "lines": 11
+              }
+            }
+          ],
+          "description": "新規の todos テーブルにユーザー ID と完了状態・日時を保存し、ユーザー ID の索引を作成する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "todo-store",
+          "path": "api/internal/database/store.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 18,
+                "lines": 7
+              }
+            },
+            {
+              "new": {
+                "start": 98,
+                "lines": 98
+              }
+            }
+          ],
+          "description": "新規の Todo 型と Store の CRUD メソッドを追加し、取得・更新・削除の SQL を user_id で制限する。",
+          "review_level": "careful"
+        },
+        {
+          "id": "todo-handlers",
+          "path": "api/internal/server/server.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 172,
+                "lines": 101
+              }
+            }
+          ],
+          "description": "新規メソッド Server.todos・todoByID で認証と入力検証を行い、現在のユーザー ID を Store に渡して Todo を操作する。",
+          "review_level": "careful"
+        },
+        {
+          "id": "todo-tests",
+          "path": "api/internal/server/server_test.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 112
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規テスト TestAuthAndTodoFlow と TestTodoRequiresAuthentication で、登録から Todo の追加・更新・一覧取得までの応答と未認証時の拒否を検証する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "todo-type",
+          "path": "frontend/src/types.ts",
+          "ranges": [
+            {
+              "new": {
+                "start": 5,
+                "lines": 9
+              }
+            }
+          ],
+          "description": "新規の Todo 型でタイトル・完了状態・作成日時・更新日時を表す。",
+          "review_level": "normal"
+        },
+        {
+          "id": "todo-client",
+          "path": "frontend/src/api.ts",
+          "ranges": [
+            {
+              "new": {
+                "start": 41,
+                "lines": 12
+              }
+            }
+          ],
+          "description": "新規の api.listTodos・createTodo・updateTodo・deleteTodo メソッドで Todo API を呼び出す。",
+          "review_level": "normal"
+        },
+        {
+          "id": "todo-page",
+          "path": "frontend/src/App.tsx",
+          "ranges": [
+            {
+              "new": {
+                "start": 203,
+                "lines": 143
+              }
+            }
+          ],
+          "description": "新規コンポーネント TodoPage で Todo の読み込み・追加・完了切り替え・削除と未完了件数を表示する。",
+          "review_level": "normal"
+        }
+      ]
+    },
+    {
+      "id": "runtime",
+      "title": "サンプルをローカルと Docker で起動できるようにする",
+      "summary": "- API とフロントエンドを実行するため、新規の起動処理・ビルド設定・依存関係を追加する。\n- Docker Compose と Nginx の設定で API への転送と SQLite の永続化を構成し、README に起動手順とサンプルの制約を記載する。",
+      "importance": "supporting",
+      "order": 3,
+      "file_categories": [
+        {
+          "path": ".gitignore",
+          "category": "config"
+        },
+        {
+          "path": "README.md",
+          "category": "docs"
+        },
+        {
+          "path": "api/.dockerignore",
+          "category": "config"
+        },
+        {
+          "path": "api/Dockerfile",
+          "category": "config"
+        },
+        {
+          "path": "api/cmd/server/main.go",
+          "category": "implementation"
+        },
+        {
+          "path": "api/go.mod",
+          "category": "config"
+        },
+        {
+          "path": "api/go.sum",
+          "category": "config"
+        },
+        {
+          "path": "api/internal/database/database.go",
+          "category": "implementation"
+        },
+        {
+          "path": "api/internal/server/server.go",
+          "category": "implementation"
+        },
+        {
+          "path": "docker-compose.yml",
+          "category": "config"
+        },
+        {
+          "path": "frontend/.dockerignore",
+          "category": "config"
+        },
+        {
+          "path": "frontend/Dockerfile",
+          "category": "config"
+        },
+        {
+          "path": "frontend/index.html",
+          "category": "component"
+        },
+        {
+          "path": "frontend/nginx.conf",
+          "category": "config"
+        },
+        {
+          "path": "frontend/package-lock.json",
+          "category": "config"
+        },
+        {
+          "path": "frontend/package.json",
+          "category": "config"
+        },
+        {
+          "path": "frontend/src/main.tsx",
+          "category": "component"
+        },
+        {
+          "path": "frontend/src/theme.ts",
+          "category": "logic"
+        },
+        {
+          "path": "frontend/src/vite-env.d.ts",
+          "category": "logic"
+        },
+        {
+          "path": "frontend/tsconfig.app.json",
+          "category": "config"
+        },
+        {
+          "path": "frontend/tsconfig.json",
+          "category": "config"
+        },
+        {
+          "path": "frontend/tsconfig.node.json",
+          "category": "config"
+        },
+        {
+          "path": "frontend/vite.config.ts",
+          "category": "config"
+        }
+      ],
+      "review_steps": [
+        {
+          "id": "api-start",
+          "title": "SQLite と HTTP API を起動・停止する",
+          "summary": "- 新規関数 Open・New・main で DB 初期化、API 登録、HTTP サーバーの起動と終了処理を組み立てる。Go の依存関係も定義する。",
+          "fragment_ids": [
+            "sqlite-open",
+            "http-server",
+            "api-main",
+            "go-module",
+            "go-checksums"
+          ]
+        },
+        {
+          "id": "web-build",
+          "title": "React を型チェックしてビルドできるようにする",
+          "summary": "- 新規の package.json と TypeScript・Vite 設定で依存関係・ビルド・開発時の API 転送を構成する。",
+          "fragment_ids": [
+            "web-deps",
+            "web-lock",
+            "vite-types",
+            "ts-app",
+            "ts-project",
+            "ts-node",
+            "vite-config"
+          ]
+        },
+        {
+          "id": "web-start",
+          "title": "共通テーマを適用して画面を起動する",
+          "summary": "- 新規の React エントリーで HTML の root に App を描画し、新規定数 theme と BrowserRouter を適用する。",
+          "fragment_ids": [
+            "web-entry",
+            "react-start",
+            "theme"
+          ]
+        },
+        {
+          "id": "docker",
+          "title": "API と画面の配信用イメージを作る",
+          "summary": "- 新規の Dockerfile で API とフロントエンドをそれぞれビルドし、実行用イメージへ配置する。",
+          "fragment_ids": [
+            "api-image",
+            "api-ignore",
+            "web-image",
+            "web-ignore"
+          ]
+        },
+        {
+          "id": "compose",
+          "title": "API 転送と DB 永続化を含めてサービスを起動する",
+          "summary": "- 新規の Compose 設定と Nginx 設定で二つのサービスを起動し、API 転送・画面 URL のフォールバック・SQLite ボリュームを構成する。",
+          "fragment_ids": [
+            "nginx",
+            "compose"
+          ]
+        },
+        {
+          "id": "usage",
+          "title": "起動方法と検証用サンプルの制約を示す",
+          "summary": "- README に環境構築とサンプルのセキュリティ上の制約を記載する。レビュー例は現行 CLI と異なる旧コマンド表記のため、そのまま実行できない。ローカル生成物は .gitignore で除外する。",
+          "fragment_ids": [
+            "readme",
+            "ignore"
+          ]
+        }
+      ],
+      "fragments": [
+        {
+          "id": "sqlite-open",
+          "path": "api/internal/database/database.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 32
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規関数 Open で SQLite を開き、PRAGMA 設定とテーブル作成を実行する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "http-server",
+          "path": "api/internal/server/server.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 18
+              }
+            },
+            {
+              "new": {
+                "start": 24,
+                "lines": 5
+              }
+            },
+            {
+              "new": {
+                "start": 33,
+                "lines": 22
+              }
+            },
+            {
+              "new": {
+                "start": 273,
+                "lines": 7
+              }
+            },
+            {
+              "new": {
+                "start": 313,
+                "lines": 30
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規の Server 型と New 関数で API を登録し、health メソッドと JSON 応答・エラー処理を提供する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "api-main",
+          "path": "api/cmd/server/main.go",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 73
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規関数 main で環境変数から API を起動し、終了シグナル時に HTTP サーバーを停止する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "go-module",
+          "path": "api/go.mod",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 21
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "SQLite ドライバーを含む Go API のモジュールと依存バージョンを定義する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "go-checksums",
+          "path": "api/go.sum",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 49
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Go API の依存モジュールのチェックサムを記録する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "web-deps",
+          "path": "frontend/package.json",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 28
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "React・MUI・Router と Vite・TypeScript の依存関係およびビルドコマンドを定義する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "web-lock",
+          "path": "frontend/package-lock.json",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 2572
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "フロントエンド依存関係の解決結果を固定する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "web-entry",
+          "path": "frontend/index.html",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 14
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Todo Garden の HTML エントリーに root 要素と React の起動スクリプトを配置する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "react-start",
+          "path": "frontend/src/main.tsx",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 18
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規の React エントリーで App を BrowserRouter と ThemeProvider 配下に描画する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "theme",
+          "path": "frontend/src/theme.ts",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 51
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "新規定数 theme で配色・文字・角丸と MUI コンポーネントの共通スタイルを設定する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "vite-types",
+          "path": "frontend/src/vite-env.d.ts",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 2
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Vite クライアントの型定義を参照する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "ts-app",
+          "path": "frontend/tsconfig.app.json",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 22
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "React ソースの厳密な型チェックと JSX・モジュール解決を設定する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "ts-project",
+          "path": "frontend/tsconfig.json",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 8
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "アプリと Vite 設定の TypeScript プロジェクトを参照する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "ts-node",
+          "path": "frontend/tsconfig.node.json",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 17
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Vite 設定ファイルの TypeScript 型チェックを設定する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "vite-config",
+          "path": "frontend/vite.config.ts",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 14
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Vite の React ビルドと開発サーバーから API へのプロキシを設定する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "api-image",
+          "path": "api/Dockerfile",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 19
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Go API をビルドし、非 root ユーザーで実行するコンテナを作る。",
+          "review_level": "normal"
+        },
+        {
+          "id": "api-ignore",
+          "path": "api/.dockerignore",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 5
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "API の Docker ビルドからローカルデータ・バイナリ等を除外する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "web-image",
+          "path": "frontend/Dockerfile",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 12
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "フロントエンドをビルドし、生成物を Nginx で配信するコンテナを作る。",
+          "review_level": "normal"
+        },
+        {
+          "id": "web-ignore",
+          "path": "frontend/.dockerignore",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 4
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "フロントエンドの Docker ビルドから依存パッケージと生成物等を除外する。",
+          "review_level": "skim"
+        },
+        {
+          "id": "nginx",
+          "path": "frontend/nginx.conf",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 19
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "Nginx で API リクエストを転送し、画面 URL には index.html を返す。",
+          "review_level": "normal"
+        },
+        {
+          "id": "compose",
+          "path": "docker-compose.yml",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 23
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "API とフロントエンドのポート・接続先および SQLite の永続ボリュームを構成する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "readme",
+          "path": "README.md",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 56
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "構成・Docker とローカルの起動手順・レビュー例と、認証実装が検証用である制約を記載する。",
+          "review_level": "normal"
+        },
+        {
+          "id": "ignore",
+          "path": ".gitignore",
+          "ranges": [
+            {
+              "new": {
+                "start": 1,
+                "lines": 17
+              }
+            }
+          ],
+          "file_metadata": true,
+          "description": "ローカル設定・DB・依存パッケージ・生成物・semdiff の作業状態を Git の追跡対象から除外する。",
+          "review_level": "skim"
+        }
+      ]
+    }
+  ]
+}
