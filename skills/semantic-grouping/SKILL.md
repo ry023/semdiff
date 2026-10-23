@@ -124,19 +124,15 @@ semdiff grouping finalize --json
 
 #### 位置付け
 
-Group と Step の `summary` は、変更の理由・内容・効果を Markdown の箇条書きで伝える説明です。
+Group と Step の `summary` は Markdown の箇条書きです。Group は成果の全体像を説明し、Step はその中の具体的な段階を説明します。
 
 #### 原則
 
 各箇条書き項目では一つの主張を述べます。子の箇条書きは、親の理由、具体的な内容、結果、依存関係だけを補足します。通常は入れ子を一段までとし、二段目は依存関係を明確にする場合だけ使います。項目数を揃えるために内容を増やさないでください。
 
-原則として、次の順番で説明します。
+説明を組み立てる際は、変更前の不足や制約、今回の主要な変更とその関係、変更後に可能になることや防げることを確認します。理解に必要な識別子の種別と新規／既存も示します。これらは確認する観点であり、固定の見出しや項目数ではありません。
 
-- Why: 変更前のどの不足・制約が、今回の変更を必要にするか。
-- What: 何をどう変えるか。理解に必要な識別子の種別と新規／既存を示す。
-- So what: その結果、何が可能になるか、どの挙動が変わるか、何を防げるか。
-
-同じ内容を三項目に引き延ばさないでください。So what が What の言い換えにしかならない場合は統合します。変更の動機が不明な場合は、コードから確認できる必要条件や前後の処理との関係を Why として説明します。それも確認できなければ、理由を作らないでください。
+Group では背景から成果までのつながりが分かるだけの内容を書き、重要な変更や関係は複数の項目に分けて説明します。Step では Group の背景を繰り返さず、その段階に必要な情報だけを書きます。同じ内容を項目数のために引き延ばさないでください。変更の動機が不明な場合は、コードから確認できる必要条件や前後の処理との関係を説明します。それも確認できなければ、理由を作らないでください。
 
 背景の主な根拠には `semdiff commits` の件名・時系列を使います。必要なコミットの本文や変更ファイルは別途確認し、実装内容は Fragment と関連コードで検証します。コミットやコードに裏付けのない製品要件、障害、ユーザー報告、設計判断を作らないでください。
 
@@ -144,12 +140,13 @@ Group と Step の `summary` は、変更の理由・内容・効果を Markdown
 
 #### 例
 
-以下は、既存コードで状態更新が二箇所に分散していることを確認できた場合の例です。
+以下は、既存コードで状態更新が二箇所に分散していることを確認できた場合の Group summary の例です。
 
 ```markdown
-- Why: 状態の更新処理が二箇所に分散し、呼び出し元によって更新内容が食い違う可能性がある。
-- What: 新規関数 `ApplyTransition` に状態更新をまとめ、既存関数 `SwitchMode` から呼び出す。この処理は、動作モードと停止状態を一緒に更新する。
-- So what: 両方の呼び出し元が同じ処理を使い、状態の組み合わせを統一できる。
+- 変更前は状態の更新処理が二箇所に分散し、呼び出し元によって更新内容が食い違う可能性がある。
+- 新規関数 `ApplyTransition` に、動作モードと停止状態を一緒に更新する処理をまとめる。
+- 既存関数 `SwitchMode` を含む両方の呼び出し元から、この関数を使うように変更する。
+- 更新の入口が同じ処理を通るため、呼び出し元によらず状態の組み合わせを統一できる。
 ```
 
 「古い implementation を command layer に置き換え、cache と test を追加する」のように、複数の変更を一つの項目へ詰め込まないでください。
@@ -301,7 +298,7 @@ Group の title と summary は、一つの成果について何を判断する�
 
 title は「保存済みレコードを ID で取得できるようにする」のように、具体的な成果を動作の表現で示します。「implementation」「tests」「backend」「cleanup」のような広い分類や、抽象的な名詞句は使いません。
 
-summary は成果全体の Why・What・So what を説明します。すべての Fragment を言い換えて列挙せず、それらが一つの成果をどう成立させるかを示します。
+summary は、その Group だけを先に読んでも成果を把握できる説明にします。変更前の状態や制約、主要な変更がどう連携するか、外から見える挙動や後続処理への効果を、根拠のある範囲で具体的に説明してください。理解に必要なら、データの流れ、判断条件、互換性上の制約、テストで確かめる重要な性質も含めます。項目数や長さは成果の複雑さに合わせ、短い変更を水増しせず、複雑な変更を3項目に押し込めないでください。すべての Fragment を言い換えて列挙せず、変更同士の関係を示します。
 
 ### file_categories
 
@@ -464,7 +461,7 @@ apply request は operation の batch を含みます。例:
       "op": "upsert_group",
       "group_id": "repository-lookup",
       "title": "保存済みレコードを ID で取得できるようにする",
-      "summary": "- Why: 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には取得メソッドがない。\n- What: 新規メソッド `FindByID` を追加し、ID による取得処理を実装する。\n- So what: 呼び出し元で、保存済みの値に基づく更新可否の判断を組み立てられる。",
+      "summary": "- 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には ID で取得するメソッドがない。\n- 既存の `Repository` interface に新規メソッド `FindByID` を追加し、呼び出し元が ID による取得を要求できるようにする。\n- 対応する実装にも取得処理を追加し、interface と実装の両方で保存済みレコードを返せるようにする。\n- これにより、呼び出し元が保存済みの値に基づく更新可否の判断を組み立てられる。",
       "importance": "core",
       "order": 1
     },
@@ -529,7 +526,7 @@ apply request は operation の batch を含みます。例:
 必須の形は次のとおりです。以下は、更新前の照合に取得メソッドが不足していることをコードで確認できた場合の例です。呼び出し元の更新処理の実装まで完了したとは主張しません。
 
 ```json
-{"format":"semdiff.groups","format_version":"1.0.0","base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- Why: 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には取得メソッドがない。\n- What: 新規メソッド `FindByID` を追加し、ID による取得処理を実装する。\n- So what: 呼び出し元で、保存済みの値に基づく更新可否の判断を組み立てられる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"normal"}]}]}
+{"format":"semdiff.groups","format_version":"1.0.0","base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には ID で取得するメソッドがない。\n- 既存の `Repository` interface に新規メソッド `FindByID` を追加し、呼び出し元が ID による取得を要求できるようにする。\n- 対応する実装にも取得処理を追加し、interface と実装の両方で保存済みレコードを返せるようにする。\n- これにより、呼び出し元が保存済みの値に基づく更新可否の判断を組み立てられる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"normal"}]}]}
 ```
 
 ## 最終確認
