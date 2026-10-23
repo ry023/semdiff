@@ -132,6 +132,8 @@ A Group collects Fragments that together explain one review concern, even when t
 
 Each Group also has ordered review steps. A step gives a reader the next question or prerequisite to understand, a short connection to the next stage, and the Fragments to inspect. The guided viewer follows these steps; the Files view keeps file and source order for verification.
 
+The `semantic-grouping` skill writes each Group summary as structured Markdown: Explanation (change overview, behavior, implementation and structure, design decisions), Impact analysis (backward compatibility, security, data, performance, reliability, operations and release), and Verification and evidence. All sections remain present, while their length follows the change. Impact statements distinguish confirmed effects, no impact, non-applicable concerns, and unverified matters. The goal is understanding the change and its consequences, rather than grading its quality or deciding whether to merge. These are authoring rules for the existing `summary` field; the CLI validates coverage and structure, not these headings or the truth of the prose.
+
 ## Using semdiff with an AI agent
 
 The two bundled skills serve different stages of a review:

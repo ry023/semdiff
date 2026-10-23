@@ -7,6 +7,8 @@ description: semdiff CLI を使って Git のコミット範囲をレビュー�
 
 `groups.json` を、レビューのために導出されるレイヤーとして作成します。コミットとリポジトリの履歴は保持します。事実の抽出・保存・検証は CLI に任せ、グループ化、タイトル、要約、説明、レビュー順だけに意味的な判断を使います。最終 JSON を直接書かず、再開可能な grouping draft を作って結果を構築します。
 
+目的は、人間がソフトウェアの変更を、責任を負うために必要な深さまで理解できるようにすることです。変更の説明と具体的な影響の分析を行い、品質評価、問題検出、マージ可否の判断を主目的にしません。
+
 ## 互換性の事前確認
 
 他の `semdiff` commandより先に `semdiff version --json` を実行します。このplugin 0.4.xには、versionが `>=0.4.0, <0.5.0` のCLIが必要です。commandが見つからない、JSONを解析できない、またはversionが範囲外の場合は作業を開始せず、READMEの手順でCLIをインストールまたは更新するよう報告します。
@@ -106,7 +108,7 @@ semdiff grouping apply <operations-file|-> --json  # 修正時
 
 `set_review_steps` の前に、候補 Step ごとに Fragment の path を重複なく並べ、主に理解する実装ファイルと付随する変更を区別します。実装ファイルが 3 個を超える場合は、依存関係や処理段階に沿った分割案を作って比較します。付随するファイルも含めて一度に読み切れるか確認し、複数の判断が混在する Step は分けます。分割しない場合も、一つの結論として読める理由を確かめます。その後 `set_review_steps` で各 Fragment をちょうど 1 回参照します。3 個は固定上限ではありません。詳しい判断基準は「Step」に従います。
 
-各 Group の `importance` と `order` を決めます。Group、Step、Fragment の説明を通読し、確認できた理由・変更・効果と整合させます。
+各 Group の `importance` と `order` を決めます。[Group summary の作成規則](references/group-summary.md) を読んで固定セクションを埋め、Group、Step、Fragment の説明を通読します。Group は説明・影響分析・検証と根拠を、Step は具体的な実装の理解順序を担います。
 
 ### 5. 検証して確定する
 
@@ -124,32 +126,15 @@ semdiff grouping finalize --json
 
 #### 位置付け
 
-Group と Step の `summary` は Markdown の箇条書きです。Group は成果の全体像を説明し、Step はその中の具体的な段階を説明します。
+Group の `summary` は固定セクションを持つ Markdown 文書です。Step の `summary` は、その段階の具体的な変更を短い Markdown の箇条書きで説明します。
 
 #### 原則
 
-各箇条書き項目では一つの主張を述べます。子の箇条書きは、親の理由、具体的な内容、結果、依存関係だけを補足します。通常は入れ子を一段までとし、二段目は依存関係を明確にする場合だけ使います。項目数を揃えるために内容を増やさないでください。
+背景はコミットの件名・本文・時系列、実装は Fragment と関連コードを根拠にします。確認できた事実、根拠のある推論、未確認の事項を区別してください。推論には根拠を添え、コードから確認できない動機や設計意図は断定しません。テストコードの存在と、実行して成功した事実も分けます。
 
-説明を組み立てる際は、変更前の不足や制約、今回の主要な変更とその関係、変更後に可能になることや防げることを確認します。理解に必要な識別子の種別と新規／既存も示します。これらは確認する観点であり、固定の見出しや項目数ではありません。
+具体的な帰結は説明しますが、「セキュアである」「設計が不適切」「修正必須」のような品質評価や採否判断は積極的に生成しません。説明に必要な事実と影響を記述してください。
 
-Group では背景から成果までのつながりが分かるだけの内容を書き、重要な変更や関係は複数の項目に分けて説明します。Step では Group の背景を繰り返さず、その段階に必要な情報だけを書きます。同じ内容を項目数のために引き延ばさないでください。変更の動機が不明な場合は、コードから確認できる必要条件や前後の処理との関係を説明します。それも確認できなければ、理由を作らないでください。
-
-背景の主な根拠には `semdiff commits` の件名・時系列を使います。必要なコミットの本文や変更ファイルは別途確認し、実装内容は Fragment と関連コードで検証します。コミットやコードに裏付けのない製品要件、障害、ユーザー報告、設計判断を作らないでください。
-
-ファイル名や Fragment description の列挙ではなく、Fragment 同士の関係を説明します。最上位の箇条書きには `- `、子の箇条書きには二つのスペースの後に `- ` を使い、JSON 内の改行は `\n` としてエンコードします。必要に応じてインラインコードと強調を使えますが、生の HTML には依存しません。
-
-#### 例
-
-以下は、既存コードで状態更新が二箇所に分散していることを確認できた場合の Group summary の例です。
-
-```markdown
-- 変更前は状態の更新処理が二箇所に分散し、呼び出し元によって更新内容が食い違う可能性がある。
-- 新規関数 `ApplyTransition` に、動作モードと停止状態を一緒に更新する処理をまとめる。
-- 既存関数 `SwitchMode` を含む両方の呼び出し元から、この関数を使うように変更する。
-- 更新の入口が同じ処理を通るため、呼び出し元によらず状態の組み合わせを統一できる。
-```
-
-「古い implementation を command layer に置き換え、cache と test を追加する」のように、複数の変更を一つの項目へ詰め込まないでください。
+Group では段落、表、箇条書きを内容に応じて使い、Step と Fragment に同じ文章を繰り返しません。ファイルや Fragment の列挙で済ませず、変更同士の関係を説明します。箇条書きは一項目一主張とし、子項目は親の具体化に使います。JSON 内の改行は `\n` としてエンコードし、生の HTML には依存しません。
 
 ### 認知単位と同一ルールの反復変更
 
@@ -226,7 +211,7 @@ Step title は「保存済みレコードを ID で取得できるようにす�
 
 ## Group
 
-Group は、PR の一つの成果についてレビュー判断をまとめる単位です。Fragment の定義、Fragment を読む順序を示す Step、`importance`、`order`、`file_categories`、title、summary を持ちます。
+Group は、PR の一つの成果について変更内容と影響を理解する単位です。Fragment の定義、Fragment を読む順序を示す Step、`importance`、`order`、`file_categories`、title、summary を持ちます。
 
 ### 境界
 
@@ -292,13 +277,15 @@ Group が独立している場合は、文脈の切り替えを最小化し、�
 
 #### 位置付け
 
-Group の title と summary は、一つの成果について何を判断するのかを示します。
+Group の title と summary は、一つの成果の仕様・構造・影響と、その説明の根拠を示します。
 
 #### 原則
 
 title は「保存済みレコードを ID で取得できるようにする」のように、具体的な成果を動作の表現で示します。「implementation」「tests」「backend」「cleanup」のような広い分類や、抽象的な名詞句は使いません。
 
-summary は、その Group だけを先に読んでも成果を把握できる説明にします。変更前の状態や制約、主要な変更がどう連携するか、外から見える挙動や後続処理への効果を、根拠のある範囲で具体的に説明してください。理解に必要なら、データの流れ、判断条件、互換性上の制約、テストで確かめる重要な性質も含めます。項目数や長さは成果の複雑さに合わせ、短い変更を水増しせず、複雑な変更を3項目に押し込めないでください。すべての Fragment を言い換えて列挙せず、変更同士の関係を示します。
+summary を書く前に、[Group summary の作成規則](references/group-summary.md) を必ず読みます。すべての Group で「説明」4 項目、「影響分析」6 観点、「検証・根拠」の固定構造を使います。各見出しを残し、内容の量は成果に合わせて変えます。小さな変更は一行で完結してよく、一般論で埋めません。影響分析では、調査した範囲と根拠に応じて「影響あり」「影響なし」「該当なし」「未確認」を区別します。
+
+Group の意味的な境界や `importance` はこの構造によって変えません。他 Group にまたがる影響は関係する Group を示し、PR 全体用の分析階層は追加しません。保存先は既存の `summary` 文字列であり、見出し構造は skill の作成規則です。CLI の coverage 検証を文章の根拠や品質の保証と混同しないでください。
 
 ### file_categories
 
@@ -354,7 +341,7 @@ Step の title と summary は、Group を理解するための一段階を示�
 
 title は、その段階で何ができるようになるか、または何を実装するかを動作の表現で示します。ファイル名、層、テスト分類、一般的な工程、読解の指示は使いません。
 
-summary は、その段階の具体的な変更と、前後の Step との関係を説明します。PR 全体の動機や Group の Why を各 Step で繰り返さないでください。単一 Step の Group でも Group summary を全文複製せず、Step では具体的な変更とその効果だけを短く示します。
+summary は、その段階の具体的な変更と、前後の Step との関係を説明します。Group の背景・仕様・影響分析を各 Step で繰り返さないでください。単一 Step の Group でも Group summary を全文複製せず、Step では具体的な変更とその効果だけを短く示します。
 
 ## Fragment
 
@@ -413,7 +400,7 @@ Fragment description は、注目すべき 1 つの具体的な変更を短く�
 
 独立したレビュー上の意味を持たない import、comment、整形、生成物、テストの準備、その他の補助的な編集を列挙しないでください。それらは、それを支える behavior を所有する Fragment に含めます。そのような変更を分ける必要がある場合は、最小限の直接的なラベルを付け、必要に応じて `skim` を使います。
 
-Fragment では What と、その変更の役割・効果が伝わるように書きます。名前で役割が伝わる場合は補足を省きます。Group・Step と違い、Why を独立した項目にする必要はありません。自明でない制約や防ぐ不具合など、理解に必要な理由だけを加え、Group の背景を繰り返さないでください。`skim` でも、理解に必要な補足は残します。根拠のない理由は作りません。
+Fragment では具体的な変更と、その役割・効果が伝わるように書きます。名前で役割が伝わる場合は補足を省きます。自明でない制約や防ぐ不具合など、理解に必要な理由だけを加え、Group の背景や影響分析を繰り返さないでください。`skim` でも、理解に必要な補足は残します。根拠のない理由は作りません。
 
 #### 例
 
@@ -452,7 +439,7 @@ Grouping draft は、最終化前のグループ化作業を保持する中間�
 
 #### 例
 
-apply request は operation の batch を含みます。例:
+apply request は operation の batch を含みます。以下は構成途中の例で、Group summary は省略しています。最終化前に、固定構造の全文を `upsert_group` の `summary` に渡してください。完成例は [Group summary の作成規則](references/group-summary.md) にあります。
 
 ```json
 {
@@ -461,7 +448,6 @@ apply request は operation の batch を含みます。例:
       "op": "upsert_group",
       "group_id": "repository-lookup",
       "title": "保存済みレコードを ID で取得できるようにする",
-      "summary": "- 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には ID で取得するメソッドがない。\n- 既存の `Repository` interface に新規メソッド `FindByID` を追加し、呼び出し元が ID による取得を要求できるようにする。\n- 対応する実装にも取得処理を追加し、interface と実装の両方で保存済みレコードを返せるようにする。\n- これにより、呼び出し元が保存済みの値に基づく更新可否の判断を組み立てられる。",
       "importance": "core",
       "order": 1
     },
@@ -491,7 +477,7 @@ apply request は operation の batch を含みます。例:
         {
           "id": "repository-method",
           "title": "保存済みレコードを ID で取得できるようにする",
-          "summary": "- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。",
+          "summary": "- 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。",
           "fragment_ids": [
             "repository-find-by-id"
           ]
@@ -521,14 +507,6 @@ apply request は operation の batch を含みます。例:
 
 すべての Group に `importance` として `core`、`supporting`、`side` のいずれかを設定します。すべての Fragment に `review_level` として `careful`、`normal`、`skim` のいずれかを設定します。draft で省略された値は `normal` が既定値になります。すべての Fragment には `id`、`path`、少なくとも 1 つの `ranges` entry（または `file_metadata: true`）、空でない `description` が必要です。すべての Group には 1 つ以上の `review_steps` が必要で、Group の各 Fragment は順序付き `fragment_ids` の中にちょうど 1 回だけ現れる必要があります。変更されたすべての old/new line とファイルのメタデータ変更は、ちょうど 1 回選択する必要があります。Group が参照するすべてのファイルは、その Group の `file_categories` にちょうど 1 回現れる必要があります。
 
-#### 例
-
-必須の形は次のとおりです。以下は、更新前の照合に取得メソッドが不足していることをコードで確認できた場合の例です。呼び出し元の更新処理の実装まで完了したとは主張しません。
-
-```json
-{"format":"semdiff.groups","format_version":"1.0.0","base_sha":"<full SHA>","head_sha":"<full SHA>","groups":[{"id":"repository-lookup","title":"保存済みレコードを ID で取得できるようにする","summary":"- 更新前に保存済みの値と照合する必要があるが、既存の `Repository` interface には ID で取得するメソッドがない。\n- 既存の `Repository` interface に新規メソッド `FindByID` を追加し、呼び出し元が ID による取得を要求できるようにする。\n- 対応する実装にも取得処理を追加し、interface と実装の両方で保存済みレコードを返せるようにする。\n- これにより、呼び出し元が保存済みの値に基づく更新可否の判断を組み立てられる。","importance":"core","order":1,"file_categories":[{"path":"src/repository.go","category":"logic"}],"review_steps":[{"id":"repository-method","title":"保存済みレコードを ID で取得できるようにする","summary":"- What: 既存の `Repository` interface とその実装に、新規メソッド `FindByID` を追加する。","fragment_ids":["repository-find-by-id"]}],"fragments":[{"id":"repository-find-by-id","path":"src/repository.go","ranges":[{"old":{"start":10,"lines":4},"new":{"start":10,"lines":7}},{"old":{"start":80,"lines":2},"new":{"start":83,"lines":4}}],"description":"既存の `Repository` interface に、新規メソッド `FindByID` を追加し、取得処理を実装する。","review_level":"normal"}]}]}
-```
-
 ## 最終確認
 
 最終化の前に、数を目標にせず、実際の境界を監査します。
@@ -539,6 +517,7 @@ apply request は operation の batch を含みます。例:
 - 作成した Group を成果の全体棚卸しの結果と比較し、最初に確認した順序が後の関心事を隠していないか確認します。
 
 - コードをまだ読んでいない人の視点で title・summary・description を通読し、理由・変更・効果がつながるか確認します。
+- すべての Group summary に固定見出しが順番どおりあり、影響分析の 6 観点に状態と根拠があるか確認します。事実・推論・未確認、テストの存在・実行結果を区別し、品質評価や採否判断が説明に紛れていないか確認します。
 - 識別子の種別と新規／既存がわかるか確認します。
 - 名前の言い換えや括弧の補足で文章が膨らんでいないか確認します。
 - 最大の Step が一つの結論として理解できるか確認し、複数の独立した問いを同時に保持する必要があれば分割します。

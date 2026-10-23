@@ -62,6 +62,8 @@ The finalized artifact uses format `semdiff.groups`. This CLI writes format vers
 
 Each group has one or more ordered review steps. Every fragment in the group appears exactly once in a step's `fragment_ids`; the order is the Guided view's reading order. A step's summary explains why it comes next without encoding a separate dependency graph.
 
+Group and step summaries remain Markdown strings. The semantic-grouping skill authors Group summaries with fixed Explanation, Impact analysis, and Verification and evidence sections; step summaries describe the concrete reading stages without duplicating that document. Heading structure and evidence distinctions are skill authoring rules, not a schema change or additional CLI validation. The viewer renders the existing string as Markdown, including headings, paragraphs, and tables.
+
 ### Range semantics
 
 `start` is a one-based file line number and `lines` is a positive count. A range may contain:

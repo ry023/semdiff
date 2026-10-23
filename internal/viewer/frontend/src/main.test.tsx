@@ -144,6 +144,51 @@ describe("expandContext", () => {
 });
 
 describe("viewer regressions", () => {
+  it("renders structured group Markdown in guided and files views", () => {
+    const data = bootstrap();
+    data.page.groups![0].summary = [
+      "### Explanation",
+      "",
+      "#### Behavior",
+      "",
+      "Returns the saved record.",
+      "",
+      "### Impact analysis",
+      "",
+      "#### Data",
+      "",
+      "| Status | Evidence |",
+      "| --- | --- |",
+      "| No impact | Read-only query |",
+      "",
+      "### Verification and evidence",
+      "",
+      "Tests were not run. See `FindByID`.",
+    ].join("\n");
+    const { container } = render(<App bootstrap={data} />);
+
+    const expectStructuredSummary = () => {
+      const summary = container.querySelector(".group-summary")!;
+      expect(summary.querySelectorAll("h3")).toHaveLength(3);
+      expect(summary.querySelectorAll("h4")).toHaveLength(2);
+      expect(summary.querySelector("p")).toHaveTextContent(
+        "Returns the saved record.",
+      );
+      expect(summary.querySelector("table")).toHaveTextContent(
+        "Read-only query",
+      );
+      expect(summary).toHaveTextContent("Tests were not run.");
+      expect(summary.querySelector("code")).toHaveTextContent("FindByID");
+      for (const step of container.querySelectorAll(".step-summary")) {
+        expect(step).not.toHaveTextContent("Read-only query");
+      }
+    };
+
+    expectStructuredSummary();
+    fireEvent.click(screen.getByRole("button", { name: "Files" }));
+    expectStructuredSummary();
+  });
+
   it("renders guided and sidebar category markers without fragment internals", () => {
     const { container } = render(<App bootstrap={bootstrap()} />);
 
